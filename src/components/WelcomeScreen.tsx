@@ -16,11 +16,11 @@ export const WelcomeScreen = ({
   <div className="flex items-center justify-center flex-1 px-4">
     <div className="w-full max-w-3xl mx-auto text-center">
       <h1 className="mb-4 text-6xl font-bold text-transparent uppercase bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text">
-        <span className="text-white">TanStack</span> Chat
+        <span className="text-white">AI</span> Chat
       </h1>
       <p className="w-2/3 mx-auto mb-6 text-lg text-gray-400">
-        You can ask me about anything, I might or might not have a good
-        answer, but you can still ask.
+        Вы можете спросить меня о чем угодно, у меня может быть хороший ответ,
+         а может и не быть, но вы все равно можете спросить.
       </p>
       <form onSubmit={handleSubmit}>
         <div className="relative max-w-xl mx-auto">
@@ -33,7 +33,7 @@ export const WelcomeScreen = ({
                 handleSubmit(e)
               }
             }}
-            placeholder="Type something clever (or don't, we won't judge)..."
+            placeholder="Напишите что-нибудь умное (или не пишите, мы не будем судить)..."
             className="w-full py-3 pl-4 pr-12 overflow-hidden text-sm text-white placeholder-gray-400 border rounded-lg resize-none border-orange-500/20 bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent"
             rows={1}
             style={{ minHeight: '88px' }}
