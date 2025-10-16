@@ -1,55 +1,17 @@
 import { createServerFn } from '@tanstack/react-start'
-import { Anthropic } from '@anthropic-ai/sdk'
+// --- ИЗМЕНЕНИЕ 1: Импортируем SDK от Google ---
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 
 export interface Message {
   id: string
-  role: 'user' | 'assistant'
+  // --- ИЗМЕНЕНИЕ 2: Gemini использует 'model' для роли ассистента ---
+  role: 'user' | 'assistant' | 'model' 
   content: string
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are TanStack Chat, an AI assistant using Markdown for clear and structured responses. Format your responses following these guidelines:
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant using Markdown for clear and structured responses. Please format your responses using Markdown.`
 
-1. Use headers for sections:
-   # For main topics
-   ## For subtopics
-   ### For subsections
-
-2. For lists and steps:
-   - Use bullet points for unordered lists
-   - Number steps when sequence matters
-   
-3. For code:
-   - Use inline \`code\` for short snippets
-   - Use triple backticks with language for blocks:
-   \`\`\`python
-   def example():
-       return "like this"
-   \`\`\`
-
-4. For emphasis:
-   - Use **bold** for important points
-   - Use *italics* for emphasis
-   - Use > for important quotes or callouts
-
-5. For structured data:
-   | Use | Tables |
-   |-----|---------|
-   | When | Needed |
-
-6. Break up long responses with:
-   - Clear section headers
-   - Appropriate spacing between sections
-   - Bullet points for better readability
-   - Short, focused paragraphs
-
-7. For technical content:
-   - Always specify language for code blocks
-   - Use inline \`code\` for technical terms
-   - Include example usage where helpful
-
-Keep responses concise and well-structured. Use appropriate Markdown formatting to enhance readability and understanding.`
-
-// Non-streaming implementation
+// --- ИЗМЕНЕНИЕ 3: Переписываем всю серверную функцию ---
 export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
   .validator(
     (d: {
@@ -57,90 +19,84 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
       systemPrompt?: { value: string; enabled: boolean }
     }) => d,
   )
-  // .middleware([loggingMiddleware])
   .handler(async ({ data }) => {
-    // Check for API key in environment variables
-    const apiKey = process.env.ANTHROPIC_API_KEY || import.meta.env.VITE_ANTHROPIC_API_KEY
-
+    // 1. Получаем API ключ
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error(
-        'Missing API key: Please set VITE_ANTHROPIC_API_KEY in your environment variables or VITE_ANTHROPIC_API_KEY in your .env file.'
-      )
+      console.error('ERROR: GEMINI_API_KEY is not defined in the server environment.');
+      return new Response(JSON.stringify({ error: 'Missing API key on the server.' }), { status: 500 });
     }
+
+    // 2. Инициализируем клиент Google
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash", // Используем быструю и современную модель
+    });
     
-    // Create Anthropic client with proper configuration
-    const anthropic = new Anthropic({
-      apiKey,
-      // Add proper timeout to avoid connection issues
-      timeout: 30000 // 30 seconds timeout
-    })
-
-    // Filter out error messages and empty messages
-    const formattedMessages = data.messages
-      .filter(
-        (msg) =>
-          msg.content.trim() !== '' &&
-          !msg.content.startsWith('Sorry, I encountered an error'),
-      )
-      .map((msg) => ({
-        role: msg.role,
-        content: msg.content.trim(),
-      }))
-
-    if (formattedMessages.length === 0) {
-      return new Response(JSON.stringify({ error: 'No valid messages to send' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    // 3. Адаптируем историю сообщений под формат Gemini
+    // Gemini требует чередования ролей user -> model -> user ...
+    // Также, роль ассистента у них называется 'model'
+    const history = data.messages.map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }],
+    }));
+    
+    // Последнее сообщение от пользователя - это текущий промпт
+    const lastMessage = history.pop();
+    if (!lastMessage || lastMessage.role !== 'user') {
+      return new Response(JSON.stringify({ error: 'The last message must be from the user.' }), { status: 400 });
     }
+    const prompt = lastMessage.parts[0].text;
 
-    const systemPrompt = data.systemPrompt?.enabled
+    // 4. Настраиваем системный промпт и безопасность
+    const systemInstruction = data.systemPrompt?.enabled
       ? `${DEFAULT_SYSTEM_PROMPT}\n\n${data.systemPrompt.value}`
-      : DEFAULT_SYSTEM_PROMPT
-
-    // Debug log to verify prompt layering
-    console.log('System Prompt Configuration:', {
-      hasCustomPrompt: data.systemPrompt?.enabled,
-      customPromptValue: data.systemPrompt?.value,
-      finalPrompt: systemPrompt,
-    })
+      : DEFAULT_SYSTEM_PROMPT;
+      
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    ];
 
     try {
-      const response = await anthropic.messages.stream({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: formattedMessages,
-      })
-
-      return new Response(response.toReadableStream())
-    } catch (error) {
-      console.error('Error in genAIResponse:', error)
-      
-      // Error handling with specific messages
-      let errorMessage = 'Failed to get AI response'
-      let statusCode = 500
-      
-      if (error instanceof Error) {
-        if (error.message.includes('rate limit')) {
-          errorMessage = 'Rate limit exceeded. Please try again in a moment.'
-        } else if (error.message.includes('Connection error') || error.name === 'APIConnectionError') {
-          errorMessage = 'Connection to Anthropic API failed. Please check your internet connection and API key.'
-          statusCode = 503 // Service Unavailable
-        } else if (error.message.includes('authentication')) {
-          errorMessage = 'Authentication failed. Please check your Anthropic API key.'
-          statusCode = 401 // Unauthorized
-        } else {
-          errorMessage = error.message
+      // 5. Запускаем чат и потоковую генерацию
+      const chat = model.startChat({
+        history: history,
+        generationConfig: {
+          maxOutputTokens: 4096,
+        },
+        safetySettings,
+        systemInstruction: {
+          role: 'system', // Gemini 1.5 поддерживает системный промпт!
+          parts: [{ text: systemInstruction }]
         }
-      }
+      });
       
-      return new Response(JSON.stringify({ 
-        error: errorMessage,
-        details: error instanceof Error ? error.name : undefined
-      }), {
-        status: statusCode,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      const result = await chat.sendMessageStream(prompt);
+
+      // 6. Преобразуем поток от Gemini в стандартный ReadableStream
+      const stream = new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder();
+          for await (const chunk of result.stream) {
+            const text = chunk.text();
+            if (text) {
+              // Оборачиваем текст в JSON, чтобы клиент мог его парсить
+              const jsonChunk = JSON.stringify({ text: text });
+              controller.enqueue(encoder.encode(jsonChunk));
+            }
+          }
+          controller.close();
+        },
+      });
+
+      return new Response(stream);
+    } catch (error) {
+      console.error('--- GEMINI API ERROR ---');
+      console.error(error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      return new Response(JSON.stringify({ error: `Failed to get AI response: ${errorMessage}` }), { status: 500 });
     }
-  }) 
+  });

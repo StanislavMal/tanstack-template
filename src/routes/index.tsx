@@ -90,24 +90,43 @@ function Home() {
       let done = false
       let newMessage = {
         id: (Date.now() + 1).toString(),
-        role: 'assistant' as const,
+        role: 'assistant' as const, 
         content: '',
-      }
+      };
+
       while (!done) {
-        const out = await reader.read()
-        done = out.done
+        const out = await reader.read();
+        done = out.done;
         if (!done) {
           try {
-            const json = JSON.parse(decoder.decode(out.value))
-            if (json.type === 'content_block_delta') {
+            // Декодируем и парсим наш JSON чанк
+            const jsonChunk = decoder.decode(out.value);
+            const parsed = JSON.parse(jsonChunk);
+            
+            // Добавляем текст к сообщению
+            if (parsed.text) {
               newMessage = {
                 ...newMessage,
-                content: newMessage.content + json.delta.text,
-              }
-              setPendingMessage(newMessage)
+                content: newMessage.content + parsed.text,
+              };
+              setPendingMessage(newMessage);
             }
           } catch (e) {
-            console.error('Error parsing streaming response:', e)
+            console.error('Error parsing streaming response:', e);
+            // Если парсинг не удался, возможно, в потоке несколько JSON-объектов
+            // Пробуем их разделить. Это делает код более устойчивым.
+            const rawText = decoder.decode(out.value, { stream: true });
+            rawText.replace(/}\{/g, '}\n{').split('\n').forEach(chunkStr => {
+              if (chunkStr) {
+                try {
+                  const parsed = JSON.parse(chunkStr);
+                  if (parsed.text) {
+                    newMessage = { ...newMessage, content: newMessage.content + parsed.text };
+                    setPendingMessage(newMessage);
+                  }
+                } catch (parseError) { /* игнорируем ошибки парсинга неполных чанков */ }
+              }
+            });
           }
         }
       }
