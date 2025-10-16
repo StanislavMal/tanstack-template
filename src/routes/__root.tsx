@@ -5,32 +5,21 @@ import {
   Scripts,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
-import { ConvexClientProvider } from '../convex'
+// Убираем Convex, добавляем наш AuthProvider
+import { AuthProvider } from '../providers/AuthProvider' 
 
 import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
-      {
-        charSet: 'utf-8',
-      },
-      {
-        name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
-      },
-      {
-        title: 'TanStack Chat Starter',
-      },
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      { title: 'AI Chat (Supabase & Gemini)' }, // Можете поменять заголовок
     ],
-    links: [
-      {
-        rel: 'stylesheet',
-        href: appCss,
-      },
-    ],
+    links: [{ rel: 'stylesheet', href: appCss }],
   }),
-
+  // Компонент верхнего уровня остается без изменений, он вызывает RootDocument
   component: () => (
     <RootDocument>
       <Outlet />
@@ -46,9 +35,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <ConvexClientProvider>
+        {/* Оборачиваем все дочерние компоненты в AuthProvider */}
+        <AuthProvider>
           {children}
-        </ConvexClientProvider>
+        </AuthProvider>
         <Scripts />
       </body>
     </html>

@@ -2,6 +2,7 @@ import { useStore } from '@tanstack/react-store';
 import { actions, selectors, store, type Conversation } from './store';
 import type { Message } from '../utils/ai';
 import { supabase } from '../utils/supabase';
+import { useAuth } from '../providers/AuthProvider'; // импортируем useAuth
 
 // Этот хук остается без изменений, он просто дает доступ к AppState
 export function useAppState() {
@@ -26,9 +27,11 @@ export function useAppState() {
 
 // --- ПЕРЕПИСЫВАЕМ ХУК ДЛЯ РАБОТЫ С SUPABASE ---
 export function useConversations() {
+  const { user } = useAuth();
   const conversations = useStore(store, s => selectors.getConversations(s));
   const currentConversationId = useStore(store, s => selectors.getCurrentConversationId(s));
   const currentConversation = useStore(store, s => selectors.getCurrentConversation(s));
+  
 
   return {
     conversations,
@@ -41,10 +44,13 @@ export function useConversations() {
 
     // Загрузка всех чатов из Supabase
     loadConversations: async () => {
-        const { data, error } = await supabase
-            .from('conversations')
-            .select('*')
-            .order('created_at', { ascending: false });
+      if (!user) return; // Если пользователя нет, ничего не делаем
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', user.id) // <--- ВАЖНОЕ ИЗМЕНЕНИЕ
+        .order('created_at', { ascending: false });
 
         if (error) {
             console.error('Error loading conversations:', error);
@@ -60,12 +66,13 @@ export function useConversations() {
     },
 
     createNewConversation: async (title: string = 'New Conversation') => {
-      // 1. Создаем чат в Supabase
+      if (!user) return null; // Защита
+
       const { data, error } = await supabase
         .from('conversations')
-        .insert({ title, messages: [] })
+        .insert({ title, messages: [], user_id: user.id }) // <--- ВАЖНОЕ ИЗМЕНЕНИЕ
         .select()
-        .single(); // .single() чтобы получить объект, а не массив
+        .single();
 
       if (error || !data) {
         console.error('Failed to create conversation in Supabase:', error);
