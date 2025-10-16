@@ -60,12 +60,15 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
   // .middleware([loggingMiddleware])
   .handler(async ({ data }) => {
     // Check for API key in environment variables
-    const apiKey = process.env.ANTHROPIC_API_KEY || import.meta.env.VITE_ANTHROPIC_API_KEY
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+
+    // Debugging: Log the key to see what the server is getting.
+    // Be careful not to commit this line with your real key visible in logs.
+    console.log(`Server-side ANTHROPIC_API_KEY: ${apiKey ? 'found' : 'NOT FOUND'}`);
 
     if (!apiKey) {
-      throw new Error(
-        'Missing API key: Please set VITE_ANTHROPIC_API_KEY in your environment variables or VITE_ANTHROPIC_API_KEY in your .env file.'
-      )
+      console.error('ERROR: ANTHROPIC_API_KEY is not defined in the server environment.');
+      throw new Error('Missing API key on the server.');
     }
     
     // Create Anthropic client with proper configuration
@@ -107,7 +110,7 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
 
     try {
       const response = await anthropic.messages.stream({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 4096,
         system: systemPrompt,
         messages: formattedMessages,
