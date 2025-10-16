@@ -6,9 +6,19 @@ import { supabase } from '../utils/supabase';
 // Этот хук остается без изменений, он просто дает доступ к AppState
 export function useAppState() {
   const isLoading = useStore(store, s => selectors.getIsLoading(s));
+  const prompts = useStore(store, s => selectors.getPrompts(s)); // Добавляем prompts
+  
   return {
     isLoading,
+    prompts, // Возвращаем prompts
+    
+    // Actions
     setLoading: actions.setLoading,
+    createPrompt: actions.createPrompt, // Возвращаем action
+    deletePrompt: actions.deletePrompt, // Возвращаем action
+    setPromptActive: actions.setPromptActive, // Возвращаем action
+    
+    // Selectors
     getActivePrompt: selectors.getActivePrompt,
   };
 }
