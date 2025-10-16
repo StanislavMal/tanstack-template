@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 
 export interface Message {
+  id: string // Возвращаем ID
   role: 'user' | 'assistant' | 'model' 
   content: string
 }
