@@ -1,1 +1,1 @@
-export * from './ai.edge'; 
+export * from './ai'; 

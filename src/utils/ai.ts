@@ -1,4 +1,4 @@
-// 📄 src/utils/ai.edge.ts
+// 📄 src/utils/ai.ts
 
 import { createServerFn } from '@tanstack/react-start'
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
