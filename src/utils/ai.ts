@@ -1,19 +1,21 @@
+// 📄 utils/ai.ts
 import { createServerFn } from '@tanstack/react-start'
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 
 export interface Message {
-  id: string // Возвращаем ID
+  id: string
   role: 'user' | 'assistant' | 'model' 
   content: string
 }
-
-const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant using Markdown for clear and structured responses. Please format your responses using Markdown.`
 
 export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
   .validator(
     (d: {
       messages: Array<Message>
-      systemPrompt?: { value: string; enabled: boolean }
+      // --- ИЗМЕНЕНИЯ ---
+      model: string 
+      mainSystemInstruction: string
+      activePromptContent?: string
     }) => d,
   )
   .handler(async ({ data }) => {
@@ -24,8 +26,9 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
+    // --- ИЗМЕНЕНИЕ: Используем модель, переданную с клиента ---
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash", // Используем самую последнюю flash-модель
+      model: data.model || "gemini-2.5-flash", // Запасной вариант
     });
     
     const history = data.messages.map(msg => ({
@@ -39,9 +42,11 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
     }
     const prompt = lastMessage.parts[0].text;
 
-    const systemInstruction = data.systemPrompt?.enabled
-      ? `${DEFAULT_SYSTEM_PROMPT}\n\n${data.systemPrompt.value}`
-      : DEFAULT_SYSTEM_PROMPT;
+    // --- ИЗМЕНЕНИЕ: Формируем финальную системную инструкцию ---
+    const finalSystemInstruction = [
+      data.mainSystemInstruction,
+      data.activePromptContent
+    ].filter(Boolean).join('\n\n'); // filter(Boolean) уберет пустые значения
       
     const safetySettings = [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
@@ -57,9 +62,10 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
           maxOutputTokens: 4096,
         },
         safetySettings,
+        // --- ИЗМЕНЕНИЕ: Используем новую, составную инструкцию ---
         systemInstruction: {
           role: 'system', 
-          parts: [{ text: systemInstruction }]
+          parts: [{ text: finalSystemInstruction }]
         }
       });
       
