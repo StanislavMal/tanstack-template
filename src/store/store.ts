@@ -1,13 +1,18 @@
+// 📄 store/store.ts
 import { Store } from '@tanstack/store'
 import type { Message } from '../utils/ai'
 
-// Types
+// --- ИЗМЕНЕНИЯ: Обновленные типы ---
 export interface Prompt {
-  id: string
+  id: string // UUID из БД
   name: string
   content: string
   is_active: boolean
-  created_at: number
+}
+
+export interface UserSettings {
+  model: 'gemini-2.5-flash' | 'gemini-2.5-pro'
+  system_instruction: string
 }
 
 export interface Conversation {
@@ -18,6 +23,7 @@ export interface Conversation {
 
 export interface State {
   prompts: Prompt[]
+  settings: UserSettings | null // Настройки будут загружаться
   conversations: Conversation[]
   currentConversationId: string | null
   isLoading: boolean
@@ -25,6 +31,7 @@ export interface State {
 
 const initialState: State = {
   prompts: [],
+  settings: null, // Изначально настроек нет
   conversations: [],
   currentConversationId: null,
   isLoading: false
@@ -33,57 +40,16 @@ const initialState: State = {
 export const store = new Store<State>(initialState)
 
 export const actions = {
-  // Prompt actions
-  createPrompt: (name: string, content: string) => {
-    const id = Date.now().toString()
-    store.setState(state => {
-      const updatedPrompts = state.prompts.map(p => ({ ...p, is_active: false }))
-      return {
-        ...state,
-        prompts: [
-          ...updatedPrompts,
-          {
-            id,
-            name,
-            content,
-            is_active: true,
-            created_at: Date.now()
-          }
-        ]
-      }
-    })
+  // --- НОВЫЕ ACTIONS ---
+  setSettings: (settings: UserSettings) => {
+    store.setState(state => ({ ...state, settings }));
+  },
+  
+  setPrompts: (prompts: Prompt[]) => {
+    store.setState(state => ({ ...state, prompts }));
   },
 
-  deletePrompt: (id: string) => {
-    store.setState(state => ({
-      ...state,
-      prompts: state.prompts.filter(p => p.id !== id)
-    }))
-  },
-
-  setPromptActive: (id: string, shouldActivate: boolean) => {
-    store.setState(state => {
-      if (shouldActivate) {
-        return {
-          ...state,
-          prompts: state.prompts.map(p => ({
-            ...p,
-            is_active: p.id === id ? true : false
-          }))
-        };
-      } else {
-        return {
-          ...state,
-          prompts: state.prompts.map(p => ({
-            ...p,
-            is_active: p.id === id ? false : p.is_active
-          }))
-        };
-      }
-    });
-  },
-
-  // Chat actions
+  // --- ACTIONS ДЛЯ ЧАТОВ (без изменений) ---
   setConversations: (conversations: Conversation[]) => {
     store.setState(state => ({ ...state, conversations }))
   },
@@ -97,16 +63,6 @@ export const actions = {
       ...state,
       conversations: [...state.conversations, conversation],
       currentConversationId: conversation.id
-    }))
-  },
-
-  updateConversationId: (oldId: string, newId: string) => {
-    store.setState(state => ({
-      ...state,
-      conversations: state.conversations.map(conv =>
-        conv.id === oldId ? { ...conv, id: newId } : conv
-      ),
-      currentConversationId: state.currentConversationId === oldId ? newId : state.currentConversationId
     }))
   },
 
@@ -145,10 +101,13 @@ export const actions = {
 
 // Selectors
 export const selectors = {
+  // --- НОВЫЕ И ОБНОВЛЕННЫЕ SELECTORS ---
+  getSettings: (state: State) => state.settings,
   getActivePrompt: (state: State) => state.prompts.find(p => p.is_active),
+  getPrompts: (state: State) => state.prompts,
+  // --- Старые селекторы без изменений ---
   getCurrentConversation: (state: State) => 
     state.conversations.find(c => c.id === state.currentConversationId),
-  getPrompts: (state: State) => state.prompts,
   getConversations: (state: State) => state.conversations,
   getCurrentConversationId: (state: State) => state.currentConversationId,
   getIsLoading: (state: State) => state.isLoading

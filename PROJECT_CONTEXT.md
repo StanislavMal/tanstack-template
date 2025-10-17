@@ -241,9 +241,11 @@ export const LoadingIndicator = () => (
 
   📄 SettingsDialog.tsx
   --- BEGIN SettingsDialog.tsx ---
-import { useState } from 'react'
+// 📄 components/SettingsDialog.tsx
+import { useState, useEffect } from 'react'
 import { PlusCircle, Trash2 } from 'lucide-react'
-import { useAppState } from '../store/hooks'
+import { usePrompts, useSettings } from '../store/hooks' // Импортируем новые хуки
+import { actions, type UserSettings } from '../store' // Нужны actions для мгновенного обновления UI
 
 interface SettingsDialogProps {
   isOpen: boolean
@@ -253,11 +255,22 @@ interface SettingsDialogProps {
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [promptForm, setPromptForm] = useState({ name: '', content: '' })
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
-  const { prompts, createPrompt, deletePrompt, setPromptActive } = useAppState()
 
-  const handleAddPrompt = () => {
+  // --- ИЗМЕНЕНИЯ: Используем новые хуки ---
+  const { prompts, createPrompt, deletePrompt, setPromptActive, loadPrompts } = usePrompts();
+  const { settings, updateSettings, loadSettings } = useSettings();
+
+  // Загружаем данные при открытии диалога
+  useEffect(() => {
+    if (isOpen) {
+      loadPrompts();
+      loadSettings();
+    }
+  }, [isOpen, loadPrompts, loadSettings]);
+
+  const handleAddPrompt = async () => {
     if (!promptForm.name.trim() || !promptForm.content.trim()) return
-    createPrompt(promptForm.name, promptForm.content)
+    await createPrompt(promptForm.name, promptForm.content)
     setPromptForm({ name: '', content: '' })
     setIsAddingPrompt(false)
   }
@@ -268,7 +281,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setPromptForm({ name: '', content: '' })
   }
 
-  if (!isOpen) return null
+  // --- ИЗМЕНЕНИЕ: Ждем загрузки настроек ---
+  if (!isOpen || !settings) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={(e) => {
@@ -278,60 +292,57 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-semibold text-white">Settings</h2>
-            <button
-              onClick={handleClose}
-              className="text-gray-400 hover:text-white focus:outline-none"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+            <button onClick={handleClose} className="text-gray-400 hover:text-white focus:outline-none">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
           
           <div className="space-y-6">
+            {/* --- НОВЫЙ БЛОК: ОБЩИЕ НАСТРОЙКИ --- */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-medium text-white">General Settings</h3>
+                <div className="p-3 rounded-lg bg-gray-700/50">
+                <label htmlFor="model-select" className="block text-sm font-medium text-gray-300 mb-2">AI Model</label>
+                <select
+                    id="model-select"
+                    value={settings.model}
+                    onChange={(e) => updateSettings({ model: e.target.value as UserSettings['model'] })}
+                    className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                >
+                    <option value="gemini-1.5-flash">Gemini 2.5 Flash (Fast & Cost-Effective)</option>
+                    <option value="gemini-1.5-pro">Gemini 2.5 Pro (Advanced & Powerful)</option>
+                </select>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-700/50">
+                <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300 mb-2">System Instruction</label>
+                <textarea
+                    id="system-instruction"
+                    value={settings.system_instruction}
+                    onChange={(e) => actions.setSettings({ ...settings, system_instruction: e.target.value })}
+                    onBlur={(e) => updateSettings({ system_instruction: e.target.value })}
+                    placeholder="e.g., You are a helpful assistant that speaks like a pirate."
+                    className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                />
+                <p className="text-xs text-gray-400 mt-1">This is the base instruction for the AI. An active prompt (if any) will be added to this.</p>
+                </div>
+            </div>
+
             {/* Prompts Management */}
             <div className="space-y-2">
               <div className="flex items-center justify-between mb-4">
-                <label className="block text-sm font-medium text-white">
-                  System Prompts
-                </label>
-                <button
-                  onClick={() => setIsAddingPrompt(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-600 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  Add Prompt
+                <h3 className="text-lg font-medium text-white">Custom Prompts</h3>
+                <button onClick={() => setIsAddingPrompt(true)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-600 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">
+                  <PlusCircle className="w-4 h-4" /> Add Prompt
                 </button>
               </div>
 
-              {isAddingPrompt && (
+              {isAddingPrompt && ( /* ...форма добавления промпта без изменений в JSX... */
                 <div className="p-3 mb-4 space-y-3 rounded-lg bg-gray-700/50">
-                  <input
-                    type="text"
-                    value={promptForm.name}
-                    onChange={(e) => setPromptForm(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Prompt name..."
-                    className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                  />
-                  <textarea
-                    value={promptForm.content}
-                    onChange={(e) => setPromptForm(prev => ({ ...prev, content: e.target.value }))}
-                    placeholder="Enter prompt content..."
-                    className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                  />
+                  <input type="text" value={promptForm.name} onChange={(e) => setPromptForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Prompt name..." className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
+                  <textarea value={promptForm.content} onChange={(e) => setPromptForm(prev => ({ ...prev, content: e.target.value }))} placeholder="Enter prompt content..." className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
                   <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setIsAddingPrompt(false)}
-                      className="px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-white focus:outline-none"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleAddPrompt}
-                      className="px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-600 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    >
-                      Save Prompt
-                    </button>
+                    <button onClick={() => setIsAddingPrompt(false)} className="px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">Cancel</button>
+                    <button onClick={handleAddPrompt} className="px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-600 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">Save Prompt</button>
                   </div>
                 </div>
               )}
@@ -345,50 +356,28 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     </div>
                     <div className="flex items-center gap-2">
                       <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="sr-only peer"
-                          checked={prompt.is_active}
-                          onChange={() => setPromptActive(prompt.id, !prompt.is_active)}
-                        />
+                        <input type="checkbox" className="sr-only peer" checked={prompt.is_active} onChange={() => setPromptActive(prompt.id, !prompt.is_active)} />
                         <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
                       </label>
-                      <button
-                        onClick={() => deletePrompt(prompt.id)}
-                        className="p-1 text-gray-400 hover:text-red-500"
-                      >
+                      <button onClick={() => deletePrompt(prompt.id)} className="p-1 text-gray-400 hover:text-red-500">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-gray-400">
-                Create and manage custom system prompts. Only one prompt can be active at a time.
-              </p>
+              <p className="text-xs text-gray-400">Manage custom prompts. Activating one will automatically deactivate others.</p>
             </div>
-
           </div>
 
           <div className="flex justify-end gap-3 mt-6">
-            <button
-              onClick={handleClose}
-              className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white focus:outline-none"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleClose}
-              className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              Close
-            </button>
+            <button onClick={handleClose} className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">Close</button>
           </div>
         </div>
       </div>
     </div>
   )
-} 
+}
   --- END SettingsDialog.tsx ---
 
   📄 Sidebar.tsx
@@ -673,6 +662,7 @@ declare module '@tanstack/react-router' {
 📁 routes/
   📄 index.tsx
   --- BEGIN index.tsx ---
+// 📄 routes/index.tsx
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { Settings } from 'lucide-react'
@@ -684,62 +674,39 @@ import {
   Sidebar,
   WelcomeScreen,
 } from '../components'
-import { useConversations, useAppState, store } from '../store'
+import { useConversations, usePrompts, useSettings, useAppState } from '../store'
 import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
-import { useAuth } from '../providers/AuthProvider' // Важный импорт для получения юзера
+import { useAuth } from '../providers/AuthProvider'
 
-// --- Защита маршрута ---
+// --- Защита маршрута (без изменений) ---
 export const Route = createFileRoute('/')({
-  // Эта функция выполнится ПЕРЕД загрузкой компонента
   beforeLoad: async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    if (!session) {
-      // Если сессии нет, перенаправляем на страницу входа
-      throw redirect({
-        to: '/login',
-      })
-    }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { throw redirect({ to: '/login' }) }
   },
-  // Компонент будет отрендерен только если сессия есть
   component: Home,
 })
 
-// --- Основной компонент страницы ---
 function Home() {
   const navigate = useNavigate()
-  const { user } = useAuth() // Получаем текущего пользователя
+  const { user } = useAuth()
 
-  const {
-    conversations,
-    currentConversationId,
-    currentConversation,
-    setCurrentConversationId,
-    loadConversations,
-    createNewConversation,
-    updateConversationTitle,
-    deleteConversation,
-    addMessage,
-  } = useConversations()
+  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation } = useConversations()
+  const { isLoading, setLoading } = useAppState()
+  const { settings, loadSettings } = useSettings()
+  const { activePrompt, loadPrompts } = usePrompts()
 
-  const { isLoading, setLoading, getActivePrompt } = useAppState()
-
-  // Загружаем чаты из Supabase, когда пользователь становится известен
   useEffect(() => {
     if (user) {
       loadConversations()
+      loadPrompts()
+      loadSettings()
     }
-  }, [user, loadConversations])
+  }, [user, loadConversations, loadPrompts, loadSettings])
 
-  // Memoize messages to prevent unnecessary re-renders
-  const messages = useMemo(
-    () => currentConversation?.messages || [],
-    [currentConversation],
-  )
-
-  // Local state
+  const messages = useMemo(() => currentConversation?.messages || [], [currentConversation])
+  
   const [input, setInput] = useState('')
   const [editingChatId, setEditingChatId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
@@ -750,15 +717,12 @@ function Home() {
 
   const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop =
-        messagesContainerRef.current.scrollHeight
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
     }
   }, [])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, isLoading, scrollToBottom])
-
+  
+  useEffect(() => { scrollToBottom() }, [messages, isLoading, scrollToBottom])
+  
   const createTitleFromInput = useCallback((text: string) => {
     const words = text.trim().split(/\s+/)
     const firstThreeWords = words.slice(0, 3).join(' ')
@@ -767,20 +731,18 @@ function Home() {
 
   const processAIResponse = useCallback(
     async (conversationId: string, userMessage: Message) => {
-      try {
-        const activePrompt = getActivePrompt(store.state)
-        let systemPrompt
-        if (activePrompt) {
-          systemPrompt = {
-            value: activePrompt.content,
-            enabled: true,
-          }
-        }
+      if (!settings) {
+        setError("User settings not loaded. Please try again.");
+        return;
+      }
 
+      try {
         const response = await genAIResponse({
           data: {
             messages: [...messages, userMessage],
-            systemPrompt,
+            model: settings.model,
+            mainSystemInstruction: settings.system_instruction,
+            activePromptContent: activePrompt?.content,
           },
         })
 
@@ -789,56 +751,38 @@ function Home() {
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         let done = false
-        let newMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant' as const,
-          content: '',
-        }
-
+        let newMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant' as const, content: '' }
         while (!done) {
           const { value, done: readerDone } = await reader.read()
           done = readerDone
           if (value) {
             const rawText = decoder.decode(value, { stream: true })
-            rawText
-              .replace(/}\{/g, '}\n{')
-              .split('\n')
-              .forEach((chunkStr) => {
-                if (chunkStr) {
-                  try {
-                    const parsed = JSON.parse(chunkStr)
-                    if (parsed.text) {
-                      newMessage = {
-                        ...newMessage,
-                        content: newMessage.content + parsed.text,
-                      }
-                      setPendingMessage({ ...newMessage })
-                    }
-                  } catch (e) {
-                    /* ignore */
+            rawText.replace(/}\{/g, '}\n{').split('\n').forEach((chunkStr) => {
+              if (chunkStr) {
+                try {
+                  const parsed = JSON.parse(chunkStr)
+                  if (parsed.text) {
+                    newMessage = { ...newMessage, content: newMessage.content + parsed.text, }
+                    setPendingMessage({ ...newMessage })
                   }
-                }
-              })
+                } catch (e) { /* ignore */ }
+              }
+            })
           }
         }
-
         setPendingMessage(null)
-        if (newMessage.content.trim()) {
-          await addMessage(conversationId, newMessage)
-        }
+        if (newMessage.content.trim()) { await addMessage(conversationId, newMessage) }
+        
       } catch (error) {
         console.error('Error in AI response:', error)
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant' as const,
-          content: 'Sorry, I encountered an error generating a response.',
-        }
+        const errorMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant' as const, content: 'Sorry, I encountered an error generating a response.' }
         await addMessage(conversationId, errorMessage)
       }
     },
-    [messages, getActivePrompt, addMessage],
+    [messages, addMessage, settings, activePrompt],
   )
 
+  // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ handleSubmit ---
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
@@ -859,29 +803,27 @@ function Home() {
       try {
         let conversationId = currentConversationId
 
+        // Если это новый чат
         if (!conversationId) {
-          try {
-            const newConvId = await createNewConversation(conversationTitle)
-            if (newConvId) {
-              conversationId = newConvId
-              await addMessage(conversationId, userMessage)
-            } else {
-              throw new Error('Failed to create conversation in Supabase')
-            }
-          } catch (error) {
-            console.error('Error creating conversation:', error)
-            setError('Failed to start a new conversation.')
-            setLoading(false)
-            return
+          const newConvId = await createNewConversation(conversationTitle)
+          if (newConvId) {
+            conversationId = newConvId
           }
-        } else {
-          await addMessage(conversationId, userMessage)
+        }
+        
+        // --- ИСПРАВЛЕНИЕ ---
+        // Добавляем проверку, что ID чата существует, прежде чем продолжать
+        if (!conversationId) {
+          throw new Error('Failed to create or find conversation ID.')
         }
 
+        // Теперь мы уверены, что conversationId - это строка
+        await addMessage(conversationId, userMessage)
         await processAIResponse(conversationId, userMessage)
+
       } catch (error) {
         console.error('Error in handleSubmit:', error)
-        setError('An unexpected error occurred.')
+        setError(error instanceof Error ? error.message : 'An unexpected error occurred.')
       } finally {
         setLoading(false)
       }
@@ -898,104 +840,38 @@ function Home() {
     ],
   )
 
-  const handleNewChat = useCallback(() => {
-    setCurrentConversationId(null)
-  }, [setCurrentConversationId])
-
-  const handleDeleteChat = useCallback(
-    async (id: string) => {
-      await deleteConversation(id)
-    },
-    [deleteConversation],
-  )
-
-  const handleUpdateChatTitle = useCallback(
-    async (id: string, title: string) => {
-      await updateConversationTitle(id, title)
-      setEditingChatId(null)
-      setEditingTitle('')
-    },
-    [updateConversationTitle],
-  )
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    navigate({ to: '/login' })
-  }
+  const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId])
+  const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation])
+  const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle])
+  const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
 
   return (
     <div className="relative flex h-screen bg-gray-900">
       <div className="absolute z-50 top-5 right-5 flex gap-2">
-        <button
-          onClick={handleLogout}
-          className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600"
-        >
-          Logout
-        </button>
-        <button
-          onClick={() => setIsSettingsOpen(true)}
-          className="flex items-center justify-center w-10 h-10 text-white transition-opacity rounded-full bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"
-        >
-          <Settings className="w-5 h-5" />
-        </button>
+        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
+        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white transition-opacity rounded-full bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"><Settings className="w-5 h-5" /></button>
       </div>
 
-      <Sidebar
-        conversations={conversations}
-        currentConversationId={currentConversationId}
-        handleNewChat={handleNewChat}
-        setCurrentConversationId={setCurrentConversationId}
-        handleDeleteChat={handleDeleteChat}
-        editingChatId={editingChatId}
-        setEditingChatId={setEditingChatId}
-        editingTitle={editingTitle}
-        setEditingTitle={setEditingTitle}
-        handleUpdateChatTitle={handleUpdateChatTitle}
-      />
+      <Sidebar conversations={conversations} currentConversationId={currentConversationId} handleNewChat={handleNewChat} setCurrentConversationId={setCurrentConversationId} handleDeleteChat={handleDeleteChat} editingChatId={editingChatId} setEditingChatId={setEditingChatId} editingTitle={editingTitle} setEditingTitle={setEditingTitle} handleUpdateChatTitle={handleUpdateChatTitle} />
 
       <div className="flex flex-col flex-1">
-        {error && (
-          <p className="w-full max-w-3xl p-4 mx-auto font-bold text-orange-500">
-            {error}
-          </p>
-        )}
+        {error && <p className="w-full max-w-3xl p-4 mx-auto font-bold text-orange-500">{error}</p>}
         {currentConversationId ? (
           <>
-            <div
-              ref={messagesContainerRef}
-              className="flex-1 pb-24 overflow-y-auto"
-            >
+            <div ref={messagesContainerRef} className="flex-1 pb-24 overflow-y-auto">
               <div className="w-full max-w-3xl px-4 mx-auto">
-                {[...messages, pendingMessage]
-                  .filter((message): message is Message => message !== null)
-                  .map((message) => (
-                    <ChatMessage key={message.id} message={message} />
-                  ))}
+                {[...messages, pendingMessage].filter((message): message is Message => message !== null).map((message) => <ChatMessage key={message.id} message={message} />)}
                 {isLoading && <LoadingIndicator />}
               </div>
             </div>
-
-            <ChatInput
-              input={input}
-              setInput={setInput}
-              handleSubmit={handleSubmit}
-              isLoading={isLoading}
-            />
+            <ChatInput input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
           </>
         ) : (
-          <WelcomeScreen
-            input={input}
-            setInput={setInput}
-            handleSubmit={handleSubmit}
-            isLoading={isLoading}
-          />
+          <WelcomeScreen input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
         )}
       </div>
 
-      <SettingsDialog
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
+      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   )
 }
@@ -1402,133 +1278,160 @@ export default createStartHandler({
 📁 store/
   📄 hooks.ts
   --- BEGIN hooks.ts ---
+// 📄 store/hooks.ts
 import { useStore } from '@tanstack/react-store';
-import { actions, selectors, store, type Conversation } from './store';
+import { actions, selectors, store, type Conversation, type Prompt, type UserSettings } from './store';
 import type { Message } from '../utils/ai';
 import { supabase } from '../utils/supabase';
-import { useAuth } from '../providers/AuthProvider'; // импортируем useAuth
+import { useAuth } from '../providers/AuthProvider';
 
-// Этот хук остается без изменений, он просто дает доступ к AppState
+// --- НОВЫЙ ХУК ДЛЯ НАСТРОЕК ПОЛЬЗОВАТЕЛЯ ---
+export function useSettings() {
+    const { user } = useAuth();
+    const settings = useStore(store, s => selectors.getSettings(s));
+
+    const loadSettings = async () => {
+        if (!user) return;
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('settings')
+            .eq('id', user.id)
+            .single();
+
+        if (error) console.error("Error loading settings:", error);
+        if (data && data.settings) {
+            actions.setSettings(data.settings as UserSettings);
+        }
+    };
+
+    const updateSettings = async (newSettings: Partial<UserSettings>) => {
+        if (!user || !settings) return;
+
+        const updated = { ...settings, ...newSettings };
+        actions.setSettings(updated); // Оптимистичное обновление UI
+
+        const { error } = await supabase
+            .from('profiles')
+            .update({ settings: updated })
+            .eq('id', user.id);
+
+        if (error) {
+            console.error("Error updating settings:", error);
+            // Можно откатить изменения в UI, если нужно
+            actions.setSettings(settings); 
+        }
+    };
+
+    return { settings, loadSettings, updateSettings };
+}
+
+// --- НОВЫЙ ХУК ДЛЯ ПРОМПТОВ ---
+export function usePrompts() {
+    const { user } = useAuth();
+    const prompts = useStore(store, s => selectors.getPrompts(s));
+    const activePrompt = useStore(store, s => selectors.getActivePrompt(s));
+
+    const loadPrompts = async () => {
+        if (!user) return;
+        const { data, error } = await supabase.from('prompts').select('*').eq('user_id', user.id).order('created_at');
+        if (error) console.error("Error loading prompts:", error);
+        if (data) actions.setPrompts(data as Prompt[]);
+    };
+
+    const createPrompt = async (name: string, content: string) => {
+        if (!user) return;
+        const { data, error } = await supabase
+            .from('prompts')
+            .insert({ name, content, user_id: user.id })
+            .select()
+            .single();
+        if (error) console.error("Error creating prompt:", error);
+        if (data) await loadPrompts(); // Перезагружаем список
+    };
+
+    const deletePrompt = async (id: string) => {
+        if (!user) return;
+        const { error } = await supabase.from('prompts').delete().eq('id', id);
+        if (error) console.error("Error deleting prompt:", error);
+        else await loadPrompts(); // Перезагружаем список
+    };
+
+    const setPromptActive = async (id: string, isActive: boolean) => {
+        if (!user) return;
+        // 1. Деактивируем все промпты
+        const { error: deactivateError } = await supabase.from('prompts').update({ is_active: false }).eq('user_id', user.id);
+        if (deactivateError) {
+            console.error("Error deactivating prompts:", deactivateError);
+            return;
+        }
+
+        // 2. Активируем нужный, если требуется
+        if (isActive) {
+            const { error: activateError } = await supabase.from('prompts').update({ is_active: true }).eq('id', id);
+            if (activateError) console.error("Error activating prompt:", activateError);
+        }
+        
+        await loadPrompts(); // Перезагружаем список в любом случае
+    };
+    
+    return { prompts, activePrompt, loadPrompts, createPrompt, deletePrompt, setPromptActive };
+}
+
+// Упрощенный хук для состояния приложения
 export function useAppState() {
   const isLoading = useStore(store, s => selectors.getIsLoading(s));
-  const prompts = useStore(store, s => selectors.getPrompts(s)); // Добавляем prompts
-  
   return {
     isLoading,
-    prompts, // Возвращаем prompts
-    
-    // Actions
-    setLoading: actions.setLoading,
-    createPrompt: actions.createPrompt, // Возвращаем action
-    deletePrompt: actions.deletePrompt, // Возвращаем action
-    setPromptActive: actions.setPromptActive, // Возвращаем action
-    
-    // Selectors
-    getActivePrompt: selectors.getActivePrompt,
+    setLoading: actions.setLoading
   };
 }
 
-
-// --- ПЕРЕПИСЫВАЕМ ХУК ДЛЯ РАБОТЫ С SUPABASE ---
+// Хук useConversations остается без изменений
 export function useConversations() {
   const { user } = useAuth();
   const conversations = useStore(store, s => selectors.getConversations(s));
   const currentConversationId = useStore(store, s => selectors.getCurrentConversationId(s));
   const currentConversation = useStore(store, s => selectors.getCurrentConversation(s));
-  
 
   return {
     conversations,
     currentConversationId,
     currentConversation,
-
     setCurrentConversationId: (id: string | null) => {
       actions.setCurrentConversationId(id);
     },
-
-    // Загрузка всех чатов из Supabase
     loadConversations: async () => {
-      if (!user) return; // Если пользователя нет, ничего не делаем
-
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('user_id', user.id) // <--- ВАЖНОЕ ИЗМЕНЕНИЕ
-        .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error('Error loading conversations:', error);
-            return;
-        }
-        // Убедимся, что messages не null
-        const formattedConversations = data.map(conv => ({
-            ...conv,
-            messages: conv.messages || []
-        }));
-
-        actions.setConversations(formattedConversations as Conversation[]);
+      if (!user) return;
+      const { data, error } = await supabase.from('conversations').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+      if (error) { console.error('Error loading conversations:', error); return; }
+      const formattedConversations = data.map(conv => ({ ...conv, messages: conv.messages || [] }));
+      actions.setConversations(formattedConversations as Conversation[]);
     },
-
     createNewConversation: async (title: string = 'New Conversation') => {
-      if (!user) return null; // Защита
-
-      const { data, error } = await supabase
-        .from('conversations')
-        .insert({ title, messages: [], user_id: user.id }) // <--- ВАЖНОЕ ИЗМЕНЕНИЕ
-        .select()
-        .single();
-
-      if (error || !data) {
-        console.error('Failed to create conversation in Supabase:', error);
-        return null;
-      }
-      
-      const newConversation: Conversation = { 
-          id: data.id, 
-          title: data.title, 
-          messages: data.messages || [] 
-      };
-
-      // 2. Обновляем локальное состояние
+      if (!user) return null;
+      const { data, error } = await supabase.from('conversations').insert({ title, messages: [], user_id: user.id }).select().single();
+      if (error || !data) { console.error('Failed to create conversation in Supabase:', error); return null; }
+      const newConversation: Conversation = { id: data.id, title: data.title, messages: data.messages || [] };
       actions.addConversation(newConversation);
       actions.setCurrentConversationId(newConversation.id);
       return newConversation.id;
     },
-
     updateConversationTitle: async (id: string, title: string) => {
-      actions.updateConversationTitle(id, title); // Оптимистичное обновление
-      const { error } = await supabase
-        .from('conversations')
-        .update({ title })
-        .eq('id', id);
+      actions.updateConversationTitle(id, title);
+      const { error } = await supabase.from('conversations').update({ title }).eq('id', id);
       if (error) console.error('Failed to update title in Supabase:', error);
     },
-
     deleteConversation: async (id: string) => {
-      actions.deleteConversation(id); // Оптимистичное обновление
-      const { error } = await supabase
-        .from('conversations')
-        .delete()
-        .eq('id', id);
+      actions.deleteConversation(id);
+      const { error } = await supabase.from('conversations').delete().eq('id', id);
       if (error) console.error('Failed to delete conversation from Supabase:', error);
     },
-
     addMessage: async (conversationId: string, message: Message) => {
-      // 1. Получаем текущие сообщения из локального стора
       const conversation = selectors.getCurrentConversation(store.state);
       if (!conversation) return;
-      
       const updatedMessages = [...conversation.messages, message];
-
-      // 2. Оптимистично обновляем UI
       actions.addMessage(conversationId, message);
-
-      // 3. Отправляем обновленный массив сообщений в Supabase
-      const { error } = await supabase
-        .from('conversations')
-        .update({ messages: updatedMessages })
-        .eq('id', conversationId);
-        
+      const { error } = await supabase.from('conversations').update({ messages: updatedMessages }).eq('id', conversationId);
       if (error) console.error('Failed to add message to Supabase:', error);
     },
   };
@@ -1543,16 +1446,21 @@ export * from './hooks';
 
   📄 store.ts
   --- BEGIN store.ts ---
+// 📄 store/store.ts
 import { Store } from '@tanstack/store'
 import type { Message } from '../utils/ai'
 
-// Types
+// --- ИЗМЕНЕНИЯ: Обновленные типы ---
 export interface Prompt {
-  id: string
+  id: string // UUID из БД
   name: string
   content: string
   is_active: boolean
-  created_at: number
+}
+
+export interface UserSettings {
+  model: 'gemini-2.5-flash' | 'gemini-2.5-pro'
+  system_instruction: string
 }
 
 export interface Conversation {
@@ -1563,6 +1471,7 @@ export interface Conversation {
 
 export interface State {
   prompts: Prompt[]
+  settings: UserSettings | null // Настройки будут загружаться
   conversations: Conversation[]
   currentConversationId: string | null
   isLoading: boolean
@@ -1570,6 +1479,7 @@ export interface State {
 
 const initialState: State = {
   prompts: [],
+  settings: null, // Изначально настроек нет
   conversations: [],
   currentConversationId: null,
   isLoading: false
@@ -1578,57 +1488,16 @@ const initialState: State = {
 export const store = new Store<State>(initialState)
 
 export const actions = {
-  // Prompt actions
-  createPrompt: (name: string, content: string) => {
-    const id = Date.now().toString()
-    store.setState(state => {
-      const updatedPrompts = state.prompts.map(p => ({ ...p, is_active: false }))
-      return {
-        ...state,
-        prompts: [
-          ...updatedPrompts,
-          {
-            id,
-            name,
-            content,
-            is_active: true,
-            created_at: Date.now()
-          }
-        ]
-      }
-    })
+  // --- НОВЫЕ ACTIONS ---
+  setSettings: (settings: UserSettings) => {
+    store.setState(state => ({ ...state, settings }));
+  },
+  
+  setPrompts: (prompts: Prompt[]) => {
+    store.setState(state => ({ ...state, prompts }));
   },
 
-  deletePrompt: (id: string) => {
-    store.setState(state => ({
-      ...state,
-      prompts: state.prompts.filter(p => p.id !== id)
-    }))
-  },
-
-  setPromptActive: (id: string, shouldActivate: boolean) => {
-    store.setState(state => {
-      if (shouldActivate) {
-        return {
-          ...state,
-          prompts: state.prompts.map(p => ({
-            ...p,
-            is_active: p.id === id ? true : false
-          }))
-        };
-      } else {
-        return {
-          ...state,
-          prompts: state.prompts.map(p => ({
-            ...p,
-            is_active: p.id === id ? false : p.is_active
-          }))
-        };
-      }
-    });
-  },
-
-  // Chat actions
+  // --- ACTIONS ДЛЯ ЧАТОВ (без изменений) ---
   setConversations: (conversations: Conversation[]) => {
     store.setState(state => ({ ...state, conversations }))
   },
@@ -1642,16 +1511,6 @@ export const actions = {
       ...state,
       conversations: [...state.conversations, conversation],
       currentConversationId: conversation.id
-    }))
-  },
-
-  updateConversationId: (oldId: string, newId: string) => {
-    store.setState(state => ({
-      ...state,
-      conversations: state.conversations.map(conv =>
-        conv.id === oldId ? { ...conv, id: newId } : conv
-      ),
-      currentConversationId: state.currentConversationId === oldId ? newId : state.currentConversationId
     }))
   },
 
@@ -1690,10 +1549,13 @@ export const actions = {
 
 // Selectors
 export const selectors = {
+  // --- НОВЫЕ И ОБНОВЛЕННЫЕ SELECTORS ---
+  getSettings: (state: State) => state.settings,
   getActivePrompt: (state: State) => state.prompts.find(p => p.is_active),
+  getPrompts: (state: State) => state.prompts,
+  // --- Старые селекторы без изменений ---
   getCurrentConversation: (state: State) => 
     state.conversations.find(c => c.id === state.currentConversationId),
-  getPrompts: (state: State) => state.prompts,
   getConversations: (state: State) => state.conversations,
   getCurrentConversationId: (state: State) => state.currentConversationId,
   getIsLoading: (state: State) => state.isLoading
@@ -1703,22 +1565,24 @@ export const selectors = {
 📁 utils/
   📄 ai.ts
   --- BEGIN ai.ts ---
+// 📄 utils/ai.ts
 import { createServerFn } from '@tanstack/react-start'
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 
 export interface Message {
-  id: string // Возвращаем ID
+  id: string
   role: 'user' | 'assistant' | 'model' 
   content: string
 }
-
-const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant using Markdown for clear and structured responses. Please format your responses using Markdown.`
 
 export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
   .validator(
     (d: {
       messages: Array<Message>
-      systemPrompt?: { value: string; enabled: boolean }
+      // --- ИЗМЕНЕНИЯ ---
+      model: string 
+      mainSystemInstruction: string
+      activePromptContent?: string
     }) => d,
   )
   .handler(async ({ data }) => {
@@ -1729,8 +1593,9 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
+    // --- ИЗМЕНЕНИЕ: Используем модель, переданную с клиента ---
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash", // Используем самую последнюю flash-модель
+      model: data.model || "gemini-2.5-flash", // Запасной вариант
     });
     
     const history = data.messages.map(msg => ({
@@ -1744,9 +1609,11 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
     }
     const prompt = lastMessage.parts[0].text;
 
-    const systemInstruction = data.systemPrompt?.enabled
-      ? `${DEFAULT_SYSTEM_PROMPT}\n\n${data.systemPrompt.value}`
-      : DEFAULT_SYSTEM_PROMPT;
+    // --- ИЗМЕНЕНИЕ: Формируем финальную системную инструкцию ---
+    const finalSystemInstruction = [
+      data.mainSystemInstruction,
+      data.activePromptContent
+    ].filter(Boolean).join('\n\n'); // filter(Boolean) уберет пустые значения
       
     const safetySettings = [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
@@ -1762,9 +1629,10 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
           maxOutputTokens: 4096,
         },
         safetySettings,
+        // --- ИЗМЕНЕНИЕ: Используем новую, составную инструкцию ---
         systemInstruction: {
           role: 'system', 
-          parts: [{ text: systemInstruction }]
+          parts: [{ text: finalSystemInstruction }]
         }
       });
       
