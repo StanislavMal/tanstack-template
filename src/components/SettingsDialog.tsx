@@ -66,8 +66,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     onChange={(e) => updateSettings({ model: e.target.value as UserSettings['model'] })}
                     className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                 >
-                    <option value="gemini-1.5-flash">Gemini 2.5 Flash (Fast & Cost-Effective)</option>
-                    <option value="gemini-1.5-pro">Gemini 2.5 Pro (Advanced & Powerful)</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Cost-Effective)</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Advanced & Powerful)</option>
                 </select>
                 </div>
                 <div className="p-3 rounded-lg bg-gray-700/50">
