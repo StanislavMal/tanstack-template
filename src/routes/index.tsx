@@ -1,4 +1,4 @@
-// 📄 routes/index.tsx
+// 📄 src/routes/index.tsx
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { Settings } from 'lucide-react'
@@ -15,7 +15,6 @@ import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
 
-// --- Защита маршрута (без изменений) ---
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -73,6 +72,7 @@ function Home() {
       }
 
       try {
+        // ← ИСПОЛЬЗУЕМ `data`, А НЕ `body`
         const response = await genAIResponse({
           data: {
             messages: [...messages, userMessage],
@@ -118,7 +118,6 @@ function Home() {
     [messages, addMessage, settings, activePrompt],
   )
 
-  // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ handleSubmit ---
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
@@ -139,7 +138,6 @@ function Home() {
       try {
         let conversationId = currentConversationId
 
-        // Если это новый чат
         if (!conversationId) {
           const newConvId = await createNewConversation(conversationTitle)
           if (newConvId) {
@@ -147,13 +145,10 @@ function Home() {
           }
         }
         
-        // --- ИСПРАВЛЕНИЕ ---
-        // Добавляем проверку, что ID чата существует, прежде чем продолжать
         if (!conversationId) {
           throw new Error('Failed to create or find conversation ID.')
         }
 
-        // Теперь мы уверены, что conversationId - это строка
         await addMessage(conversationId, userMessage)
         await processAIResponse(conversationId, userMessage)
 

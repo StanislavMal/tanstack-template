@@ -1,4 +1,5 @@
-// 📄 utils/ai.ts
+// 📄 src/utils/ai.edge.ts
+
 import { createServerFn } from '@tanstack/react-start'
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 
@@ -8,17 +9,19 @@ export interface Message {
   content: string
 }
 
-export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
+export const genAIResponse = createServerFn({
+  method: 'POST',
+  response: 'raw'
+})
   .validator(
     (d: {
       messages: Array<Message>
-      // --- ИЗМЕНЕНИЯ ---
       model: string 
       mainSystemInstruction: string
       activePromptContent?: string
     }) => d,
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data }) => { // ← ИСПОЛЬЗУЕМ `data`, А НЕ `body`
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       console.error('ERROR: GEMINI_API_KEY is not defined in the server environment.');
@@ -26,12 +29,12 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // --- ИЗМЕНЕНИЕ: Используем модель, переданную с клиента ---
     const model = genAI.getGenerativeModel({ 
-      model: data.model || "gemini-2.5-flash", // Запасной вариант
+      model: data.model || "gemini-1.5-flash", // ← `data`
     });
     
-    const history = data.messages.map(msg => ({
+    // Тип `msg` теперь будет выведен правильно из `data.messages`
+    const history = data.messages.map((msg: Message) => ({ // ← `data` и явный тип для `msg`
       role: msg.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: msg.content }],
     }));
@@ -42,11 +45,10 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
     }
     const prompt = lastMessage.parts[0].text;
 
-    // --- ИЗМЕНЕНИЕ: Формируем финальную системную инструкцию ---
     const finalSystemInstruction = [
-      data.mainSystemInstruction,
-      data.activePromptContent
-    ].filter(Boolean).join('\n\n'); // filter(Boolean) уберет пустые значения
+      data.mainSystemInstruction, // ← `data`
+      data.activePromptContent   // ← `data`
+    ].filter(Boolean).join('\n\n');
       
     const safetySettings = [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
@@ -59,10 +61,9 @@ export const genAIResponse = createServerFn({ method: 'GET', response: 'raw' })
       const chat = model.startChat({
         history: history,
         generationConfig: {
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
         },
         safetySettings,
-        // --- ИЗМЕНЕНИЕ: Используем новую, составную инструкцию ---
         systemInstruction: {
           role: 'system', 
           parts: [{ text: finalSystemInstruction }]
