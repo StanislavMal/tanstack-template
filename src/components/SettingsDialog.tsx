@@ -1,8 +1,8 @@
 // 📄 components/SettingsDialog.tsx
 import { useState, useEffect } from 'react'
 import { PlusCircle, Trash2 } from 'lucide-react'
-import { usePrompts, useSettings } from '../store/hooks' // Импортируем новые хуки
-import { actions, type UserSettings } from '../store' // Нужны actions для мгновенного обновления UI
+import { usePrompts, useSettings } from '../store/hooks'
+import { type UserSettings } from '../store'
 
 interface SettingsDialogProps {
   isOpen: boolean
@@ -13,17 +13,26 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [promptForm, setPromptForm] = useState({ name: '', content: '' })
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
 
-  // --- ИЗМЕНЕНИЯ: Используем новые хуки ---
   const { prompts, createPrompt, deletePrompt, setPromptActive, loadPrompts } = usePrompts();
   const { settings, updateSettings, loadSettings } = useSettings();
 
-  // Загружаем данные при открытии диалога
+  // Локальное состояние для полей формы, чтобы избежать "мерцания"
+  const [localSettings, setLocalSettings] = useState<UserSettings | null>(null);
+
   useEffect(() => {
     if (isOpen) {
+      // Загружаем актуальные данные из БД при каждом открытии диалога
       loadPrompts();
       loadSettings();
     }
   }, [isOpen, loadPrompts, loadSettings]);
+
+  // Синхронизируем локальное состояние с глобальным, когда оно загрузится или обновится
+  useEffect(() => {
+    if (settings) {
+      setLocalSettings(settings);
+    }
+  }, [settings]);
 
   const handleAddPrompt = async () => {
     if (!promptForm.name.trim() || !promptForm.content.trim()) return
@@ -32,14 +41,28 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setIsAddingPrompt(false)
   }
 
+  // Сохраняем все изменения и закрываем окно
+  const handleSaveChanges = () => {
+    if (localSettings) {
+      // Сравниваем, были ли изменения, чтобы не делать лишних запросов к API
+      if (JSON.stringify(localSettings) !== JSON.stringify(settings)) {
+          updateSettings(localSettings);
+      }
+    }
+    onClose();
+  };
+
+  // Закрываем окно, не сохраняя изменения
   const handleClose = () => {
+    // Сбрасываем локальные изменения на те, что сейчас в глобальном сторе
+    setLocalSettings(settings);
     onClose()
     setIsAddingPrompt(false)
     setPromptForm({ name: '', content: '' })
   }
 
-  // --- ИЗМЕНЕНИЕ: Ждем загрузки настроек ---
-  if (!isOpen || !settings) return null
+  // Не рендерим компонент, пока данные не загружены и не синхронизированы
+  if (!isOpen || !localSettings) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={(e) => {
@@ -55,32 +78,33 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
           </div>
           
           <div className="space-y-6">
-            {/* --- НОВЫЙ БЛОК: ОБЩИЕ НАСТРОЙКИ --- */}
+            {/* Общие настройки */}
             <div className="space-y-4">
                 <h3 className="text-lg font-medium text-white">General Settings</h3>
                 <div className="p-3 rounded-lg bg-gray-700/50">
-                <label htmlFor="model-select" className="block text-sm font-medium text-gray-300 mb-2">AI Model</label>
-                <select
-                    id="model-select"
-                    value={settings.model}
-                    onChange={(e) => updateSettings({ model: e.target.value as UserSettings['model'] })}
-                    className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                >
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Cost-Effective)</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Advanced & Powerful)</option>
-                </select>
+                  <label htmlFor="model-select" className="block text-sm font-medium text-gray-300 mb-2">AI Model</label>
+                  <select
+                      id="model-select"
+                      value={localSettings.model}
+                      // Обновляем локальное состояние, а не глобальное
+                      onChange={(e) => setLocalSettings(prev => prev ? { ...prev, model: e.target.value as UserSettings['model'] } : null)}
+                      className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  >
+                      <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Cost-Effective)</option>
+                      <option value="gemini-2.5-pro">Gemini 2.5 Pro (Advanced & Powerful)</option>
+                  </select>
                 </div>
                 <div className="p-3 rounded-lg bg-gray-700/50">
-                <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300 mb-2">System Instruction</label>
-                <textarea
-                    id="system-instruction"
-                    value={settings.system_instruction}
-                    onChange={(e) => actions.setSettings({ ...settings, system_instruction: e.target.value })}
-                    onBlur={(e) => updateSettings({ system_instruction: e.target.value })}
-                    placeholder="e.g., You are a helpful assistant that speaks like a pirate."
-                    className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                />
-                <p className="text-xs text-gray-400 mt-1">This is the base instruction for the AI. An active prompt (if any) will be added to this.</p>
+                  <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300 mb-2">System Instruction</label>
+                  <textarea
+                      id="system-instruction"
+                      value={localSettings.system_instruction}
+                      // Обновляем локальное состояние, а не глобальное
+                      onChange={(e) => setLocalSettings(prev => prev ? { ...prev, system_instruction: e.target.value } : null)}
+                      placeholder="e.g., You are a helpful assistant that speaks like a pirate."
+                      className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">This is the base instruction for the AI. An active prompt (if any) will be added to this.</p>
                 </div>
             </div>
 
@@ -93,7 +117,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                 </button>
               </div>
 
-              {isAddingPrompt && ( /* ...форма добавления промпта без изменений в JSX... */
+              {isAddingPrompt && (
                 <div className="p-3 mb-4 space-y-3 rounded-lg bg-gray-700/50">
                   <input type="text" value={promptForm.name} onChange={(e) => setPromptForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Prompt name..." className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
                   <textarea value={promptForm.content} onChange={(e) => setPromptForm(prev => ({ ...prev, content: e.target.value }))} placeholder="Enter prompt content..." className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
@@ -128,7 +152,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
           </div>
 
           <div className="flex justify-end gap-3 mt-6">
-            <button onClick={handleClose} className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">Close</button>
+            <button onClick={handleClose} className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">Cancel</button>
+            <button onClick={handleSaveChanges} className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">Save & Close</button>
           </div>
         </div>
       </div>
