@@ -1,235 +1,159 @@
-# TanStack Template
+# AI-чат на TanStack
 
-A modern chat application template built with TanStack Router and AI integration, featuring a clean and responsive interface.
+Чат-приложение с интеграцией Google Gemini и базой данных Supabase. Отлично подходит для быстрого старта проекта с искусственным интеллектом.
 
-**⚡ View demo:** [https://tanstack-starter.netlify.app/](https://tanstack-starter.netlify.app/)
+**⚡ Посмотреть демо:** [https://tanstack-starter.netlify.app/](https://tanstack-starter.netlify.app/)
 
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/StanislavMal/tanstack-template)
 
-## Features
+## Особенности
 
-- Powered by AI (configured for DeepSeek API)
-- Rich markdown formatting with syntax highlighting
-- Customizable system prompts for tailored AI behavior
-- Real-time message updates and streaming responses
-- Modern UI with Tailwind CSS and Lucide icons
-- Conversation management
-- API key management
-- Responsive design for all devices
-- PostgreSQL database integration via Supabase
+- 🤖 Работает с **Google Gemini API**
+- ✨ Поддержка Markdown с подсветкой кода
+- ⚡ Потоковая передача ответов (эффект "печатной машинки")
+- 🔐 Безопасные серверные вызовы (ключ Gemini не попадает в браузер)
+- 💬 Управление диалогами через **Supabase PostgreSQL**
+- 🔑 Управление API-ключами
+- 📱 Адаптивный интерфейс для всех устройств
+- 🎨 Современный UI на Tailwind CSS
+- 🧠 Централизованное управление состоянием через TanStack Store
 
-## Architecture
+## Архитектура
 
-- **Frontend Framework**: React 19 with Vite
-- **Routing**: TanStack Router (file-based routing)
-- **State Management**: TanStack Store
-- **Database**: Supabase PostgreSQL (primary), Convex (optional)
-- **Styling**: Tailwind CSS
-- **AI Integration**: DeepSeek API
-- **Build Tool**: Vite
-- **Deployment**: Netlify
+- **Фронтенд**: React 19 + Vite 6 + Vinxi
+- **Маршрутизация**: TanStack Router (file-based)
+- **Состояние**: TanStack Store
+- **База данных**: Supabase PostgreSQL
+- **AI-интеграция**: Google Gemini (через серверные функции)
+- **Сборка**: Vite + Vinxi
+- **Стили**: Tailwind CSS 4
+- **Деплой**: Netlify
 
-## Project Structure
+## Структура проекта
 
-```
 tanstack-template/
-├── convex/                  # Optional Convex database configuration
-│   ├── _generated/          # Auto-generated Convex types
-│   ├── conversations.ts     # Conversation logic
-│   ├── schema.ts            # Database schema
-│   └── ...
-├── public/                  # Static assets
-│   ├── favicon.ico
-│   ├── logo192.png
-│   ├── logo512.png
-│   ├── manifest.json
-│   └── robots.txt
+├── public/                  # Статические файлы (иконки, manifest)
 ├── src/
-│   ├── components/          # Reusable UI components
-│   │   ├── ChatInput.tsx
-│   │   ├── ChatMessage.tsx
-│   │   ├── LoadingIndicator.tsx
-│   │   ├── SettingsDialog.tsx
-│   │   ├── Sidebar.tsx
-│   │   └── WelcomeScreen.tsx
-│   ├── providers/           # Context providers
-│   │   └── AuthProvider.tsx
-│   ├── routes/              # Route definitions
-│   │   ├── __root.tsx       # Root layout
-│   │   ├── index.tsx        # Home route
-│   │   ├── login.tsx        # Login page
-│   │   └── signup.tsx       # Signup page
-│   ├── store/               # State management
-│   │   ├── store.ts         # Main store
-│   │   ├── hooks.ts         # Custom hooks
-│   │   └── index.ts
-│   ├── utils/               # Utility functions
-│   │   ├── ai.ts            # AI integration logic
-│   │   ├── supabase.ts      # Supabase client
-│   │   └── index.ts
-│   ├── api.ts               # API client configuration
-│   ├── router.tsx           # Router setup
-│   ├── routeTree.gen.ts     # Auto-generated route tree
-│   ├── client.tsx           # Client entry point
-│   ├── ssr.tsx              # Server-side rendering
-│   ├── sentry.ts            # Error monitoring
-│   └── styles.css           # Global styles
-├── .env.example             # Environment variables template
-├── app.config.ts            # Application configuration
-├── netlify.toml             # Netlify configuration
-├── postcss.config.ts        # PostCSS configuration
-├── renovate.json            # Dependency update configuration
-├── tsconfig.json            # TypeScript configuration
-└── vite.config.js           # Vite configuration
+│   ├── api/                 # Серверные функции (Vinxi)
+│   │   └── genAIResponse    # Обработчик запросов к Gemini
+│   ├── components/          # Переиспользуемые компоненты
+│   │   ├── ChatInput.tsx    # Поле ввода сообщения
+│   │   ├── ChatMessage.tsx  # Отображение сообщения
+│   │   ├── Sidebar.tsx      # Боковая панель
+│   │   └── ...
+│   ├── providers/           # Контексты и провайдеры
+│   │   └── AuthProvider.tsx # Авторизация через Supabase
+│   ├── routes/              # Маршруты приложения
+│   │   ├── __root.tsx       # Главный макет
+│   │   ├── index.tsx        # Главная страница
+│   │   └── ...
+│   ├── store/               # Локальное состояние
+│   │   ├── store.ts         # Основной store
+│   │   └── hooks.ts         # Кастомные хуки
+│   ├── utils/               # Вспомогательные функции
+│   │   ├── ai.ts            # Логика взаимодействия с AI
+│   │   └── supabase.ts      # Клиент Supabase
+│   ├── client.tsx           # Точка входа (клиент)
+│   ├── router.tsx           # Конфигурация маршрутизатора
+│   ├── sentry.ts            # Настройка Sentry (опционально)
+│   ├── styles.css           # Глобальные стили
+│   └── app.config.ts        # Конфигурация приложения
+├── .env                     # Переменные окружения (локально)
+├── .env.example             # Шаблон переменных
+├── netlify.toml             # Конфигурация Netlify
+├── package.json             # Зависимости и скрипты
+├── postcss.config.ts        # Конфигурация PostCSS/Tailwind
+├── tsconfig.json            # TypeScript
+└── vite.config.js           # Конфигурация Vite/Vinxi
 ```
 
-## Getting Started
+## Начало работы
 
-### Prerequisites
+### Предварительные требования
 
 - Node.js v20.9+
-- (Optional) nvm for Node version management
-- DeepSeek API account
-- (Optional) Supabase account for database storage
-- (Optional) Convex account for alternative database storage
+- npm или yarn
+- Аккаунт на [Google AI Studio](https://aistudio.google.com/) (для ключа Gemini)
+- Аккаунт на [Supabase](https://supabase.com/) (для базы данных)
 
-### Installation
+### Установка
 
-1. **Clone the repository:**
+1. **Клонируйте репозиторий:**
    ```bash
    git clone https://github.com/StanislavMal/tanstack-template.git
    cd tanstack-template
    ```
 
-2. **Install dependencies:**
+2. **Установите зависимости:**
    ```bash
    npm install
    ```
 
-3. **Set up environment variables:**
+3. **Настройте переменные окружения:**
    ```bash
    cp .env.example .env
    ```
    
-   Edit the `.env` file with your credentials:
-   ```
-   # Required: Add your DeepSeek API key
-   VITE_DEEPSEEK_API_KEY=your_deepseek_api_key
+   Отредактируйте `.env`:
+   ```env
+   # Ключ Gemini (серверный, НЕ попадает в браузер!)
+   GEMINI_API_KEY=ваш_ключ_от_gemini
    
-   # Optional: Add Supabase URL for database features
-   VITE_SUPABASE_URL=your_supabase_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   # Supabase (клиентские переменные)
+   VITE_SUPABASE_URL=https://ваш-проект.supabase.co
+   VITE_SUPABASE_ANON_KEY=ваш_anon_key
    
-   # Optional: Add Convex URL if using database features
-   VITE_CONVEX_URL=your_convex_deployment_url
-   
-   # Optional: Add Sentry credentials for error monitoring
-   VITE_SENTRY_DSN=your-sentry-dsn-here
-   SENTRY_AUTH_TOKEN=your-sentry-auth-token-here
+   # Sentry (опционально)
+   VITE_SENTRY_DSN=ваш-dsn
+   SENTRY_AUTH_TOKEN=ваш-auth-token
    ```
 
-4. **Start the development server:**
+   > 🔒 **Важно**: Файл `.env` добавлен в `.gitignore`. Никогда не коммитьте его!
+
+4. **Запустите сервер разработки:**
    ```bash
    npm run dev
    ```
-   
-   The application will be running at [http://localhost:3000](http://localhost:3000)
+   Приложение будет доступно по адресу: [http://localhost:3000](http://localhost:3000)
 
-### Using Netlify Dev
-
-For full Netlify functionality locally:
-
-1. **Install Netlify CLI:**
+5. **Или используйте Netlify Dev:**
    ```bash
    npm install -g netlify-cli
-   ```
-
-2. **Link your Netlify site (optional):**
-   ```bash
-   netlify link
-   ```
-
-3. **Start with Netlify Dev:**
-   ```bash
    netlify dev
    ```
-   
-   The application will be available at [http://localhost:8888](http://localhost:8888)
+   Доступно по: [http://localhost:8888](http://localhost:8888)
 
-## Configuration
+## Настройка базы данных (Supabase)
 
-### Node.js Version
+1. Создайте проект на [supabase.com](https://supabase.com/)
+2. Получите URL проекта и anon-ключ
+3. Добавьте их в `.env` как `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`
+4. В `src/providers/AuthProvider.tsx` уже используется `@supabase/supabase-js` — всё готово к работе
 
-Ensure you're using Node.js v20.9 or higher:
-```bash
-node -v
-```
+## Интеграция с Google Gemini
 
-Using nvm:
-```bash
-nvm install 20.9
-nvm use 20.9
-```
+- Все вызовы к Gemini происходят **на сервере** через `createServerFn`.
+- Ключ `GEMINI_API_KEY` используется только на сервере — это безопасно.
+- Логика находится в `utils/ai.ts` → `genAIResponse`.
 
-### Environment Variables
-
-Never commit your `.env` file to version control. It's already included in `.gitignore`.
-
-### Database Setup
-
-**Supabase (Primary):**
-1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Add your Supabase URL and anon key to `.env`
-
-**Convex (Optional):**
-```bash
-npx convex dev
-```
-
-## Troubleshooting
-
-- **API Key Issues**: Verify your DeepSeek API key is correctly set in `.env` and that you have sufficient credits.
-- **Port Conflicts**: If port 3000 is in use, the server will automatically use the next available port.
-- **Missing Dependencies**: Run `npm install` if you encounter module not found errors.
-
-## Building for Production
+## Сборка и деплой
 
 ```bash
-# Build the application
+# Сборка для production
 npm run build
 
-# Preview production build
+# Просмотр сборки локально
 npm run serve
 ```
 
-## Styling
+После этого вы можете задеплоить проект на Netlify одним кликом (кнопка вверху) или через CLI.
 
-This project uses Tailwind CSS for styling. Customize the design by modifying:
-- `src/styles.css` - Global styles
-- Tailwind configuration in `postcss.config.ts`
+## Лицензия
 
-## Error Monitoring
+Проект распространяется под лицензией MIT.
 
-Sentry integration is optional. Add your Sentry credentials to enable error tracking.
+---
 
-## Routing
+Хотите адаптировать этот шаблон под свои нужды? Просто замените логику в `utils/ai.ts` или добавьте новые компоненты в `src/components/`.
 
-This project uses TanStack Router with file-based routing in `src/routes/`. To add a new route, create a new file in this directory.
-
-The root layout is defined in `src/routes/__root.tsx` and appears on all pages. Use `<Outlet />` to render route content.
-
-## Data Fetching
-
-Use TanStack Router's loader functionality to fetch data before rendering routes.
-
-## State Management
-
-This project uses TanStack Store for local state management in `src/store/`. For persistent storage, it supports both Supabase and optional Convex integration.
-
-## Learn More
-
-- [Netlify Documentation](https://docs.netlify.com/)
-- [TanStack Documentation](https://tanstack.com/)
-- [DeepSeek API Documentation](https://platform.deepseek.com/docs)
-- [Supabase Documentation](https://supabase.com/docs)
-- [Convex Documentation](https://docs.convex.dev/)
+Удачи в разработке! 🚀
