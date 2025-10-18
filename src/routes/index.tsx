@@ -2,7 +2,7 @@
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { Settings, Menu } from 'lucide-react' // -> ИЗМЕНЕНИЕ: Добавлена иконка Menu
+import { Settings, Menu } from 'lucide-react'
 import {
   SettingsDialog,
   ChatMessage,
@@ -47,7 +47,7 @@ function Home() {
   const [editingChatId, setEditingChatId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false) // ++ НОВОЕ: Состояние для мобильного сайдбара
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -221,10 +221,8 @@ function Home() {
   const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
 
   return (
-    // -> ИЗМЕНЕНИЕ: Добавлен `overflow-hidden` для исправления бага с прокруткой
     <div className="relative flex h-screen bg-gray-900 overflow-hidden">
       
-      {/* ++ НОВОЕ: Оверлей для затемнения фона на мобильных при открытом сайдбаре */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 z-20 bg-black/50 md:hidden"
@@ -232,14 +230,13 @@ function Home() {
         ></div>
       )}
 
-      {/* -> ИЗМЕНЕНИЕ: Передаем новые props в Sidebar */}
       <Sidebar
         conversations={conversations}
         currentConversationId={currentConversationId}
         handleNewChat={handleNewChat}
         setCurrentConversationId={(id) => {
           setCurrentConversationId(id);
-          setIsSidebarOpen(false); // Закрываем сайдбар при выборе чата на мобильном
+          setIsSidebarOpen(false);
         }}
         handleDeleteChat={handleDeleteChat}
         editingChatId={editingChatId}
@@ -251,24 +248,41 @@ function Home() {
         setIsOpen={setIsSidebarOpen}
       />
 
-      <div className="flex flex-col flex-1">
-        {/* -> ИЗМЕНЕНИЕ: Добавлена кнопка-бургер */}
-        <div className="absolute top-5 right-5 z-10 flex gap-2 items-center">
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="p-2 text-white rounded-lg md:hidden hover:bg-gray-700"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
-          
-          <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
-          <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white transition-opacity rounded-full bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"><Settings className="w-5 h-5" /></button>
+      <div className="flex flex-col flex-1 relative overflow-hidden">
+        
+        {/* -> ИЗМЕНЕНИЕ: Это новый мобильный хедер. Он виден только на мобильных (`md:hidden`),
+            имеет полупрозрачный фон и паддинги. Кнопки теперь внутри него. */}
+        <div className="absolute top-0 left-0 right-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 md:hidden">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 text-white rounded-lg hover:bg-gray-700"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            
+            <div className="flex items-center gap-2">
+              <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
+              {/* -> ИЗМЕНЕНИЕ: Уменьшаем размер кнопки настроек на мобильных */}
+              <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white transition-opacity rounded-full bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">
+                  <Settings className="w-5 h-5" />
+              </button>
+            </div>
         </div>
 
+        {/* -> ИЗМЕНЕНИЕ: Десктопная версия панели с кнопками. Видна только на десктопе (`hidden md:flex`). */}
+        <div className="absolute top-4 right-4 z-10 hidden md:flex gap-2 items-center">
+            <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
+            <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white transition-opacity rounded-full bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">
+                <Settings className="w-5 h-5" />
+            </button>
+        </div>
+        
         {error && <p className="w-full max-w-3xl p-4 mx-auto font-bold text-orange-500">{error}</p>}
+        
         {currentConversationId ? (
           <>
-            <div ref={messagesContainerRef} className="flex-1 pb-24 overflow-y-auto">
+            {/* -> ИЗМЕНЕНИЕ: Добавляем отступ сверху `pt-20` на мобильных, чтобы контент не залезал под хедер */}
+            <div ref={messagesContainerRef} className="flex-1 pb-24 overflow-y-auto pt-20 md:pt-0">
               <div className="w-full max-w-3xl px-4 mx-auto">
                 {messages.map((message) => <ChatMessage key={message.id} message={message} />)}
                 {pendingMessage && <ChatMessage message={pendingMessage} />}
@@ -278,7 +292,10 @@ function Home() {
             <ChatInput input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
           </>
         ) : (
-          <WelcomeScreen input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
+          // -> ИЗМЕНЕНИЕ: Добавляем отступ сверху `pt-16` и для стартового экрана.
+          <div className="flex-1 flex items-center justify-center pt-16 md:pt-0">
+            <WelcomeScreen input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
+          </div>
         )}
       </div>
 
