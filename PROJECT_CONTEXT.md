@@ -4,7 +4,6 @@
 📁 .vscode/
 └── 📄 settings.json
 📄 app.config.ts
-📄 generate-context-optimized.mjs
 📄 netlify.toml
 📄 package.json
 📄 postcss.config.ts
@@ -94,7 +93,6 @@ export default defineConfig({
 
 --- END app.config.ts ---
 
-📄 generate-context-optimized.mjs (skipped)
 📄 netlify.toml
 --- BEGIN netlify.toml ---
 [template.environment]
@@ -123,6 +121,7 @@ VITE_ANTHROPIC_API_KEY="Add your Anthropic API key here"
   "react",
   "react-dom",
   "react-markdown",
+  "react-resizable-panels",
   "tailwindcss"
 ],
   "devDependencies": [
@@ -226,6 +225,8 @@ hydrateRoot(document, <AppComponent router={router} />)
 📁 components/
   📄 ChatInput.tsx
   --- BEGIN ChatInput.tsx ---
+// 📄 src/components/ChatInput.tsx
+
 import { Send } from 'lucide-react';
 
 interface ChatInputProps {
@@ -241,73 +242,71 @@ export const ChatInput = ({
   handleSubmit, 
   isLoading 
 }: ChatInputProps) => (
-  <div className="absolute bottom-0 right-0 border-t left-64 bg-gray-900/80 backdrop-blur-sm border-orange-500/10">
-    <div className="w-full max-w-3xl px-4 py-3 mx-auto">
-      <form onSubmit={handleSubmit}>
-        <div className="relative">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleSubmit(e)
-              }
-            }}
-            placeholder="Type something clever (or don't, we won't judge)..."
-            className="w-full py-3 pl-4 pr-12 overflow-hidden text-sm text-white placeholder-gray-400 border rounded-lg shadow-lg resize-none border-orange-500/20 bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent"
-            rows={1}
-            style={{ minHeight: '44px', maxHeight: '200px' }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement
-              target.style.height = 'auto'
-              target.style.height =
-                Math.min(target.scrollHeight, 200) + 'px'
-            }}
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="absolute p-2 text-orange-500 transition-colors -translate-y-1/2 right-2 top-1/2 hover:text-orange-400 disabled:text-gray-500 focus:outline-none"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-      </form>
-    </div>
+  <div className="bg-gray-900/80 backdrop-blur-sm border-t border-orange-500/10 p-4">
+    <form onSubmit={handleSubmit}>
+      <div className="relative flex items-center">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              handleSubmit(e)
+            }
+          }}
+          placeholder="Напишите что-нибудь умное..."
+          className="w-full pl-4 pr-12 py-2.5 overflow-y-auto text-sm text-white placeholder-gray-400 border rounded-lg shadow-lg resize-none border-orange-500/20 bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent"
+          rows={1}
+          style={{ maxHeight: '200px' }}
+          onInput={(e) => {
+            const target = e.target as HTMLTextAreaElement
+            target.style.height = 'auto'
+            target.style.height = (target.scrollHeight) + 'px'
+          }}
+        />
+        <button
+          type="submit"
+          disabled={!input.trim() || isLoading}
+          className="absolute p-2 text-orange-500 transition-colors right-3 hover:text-orange-400 disabled:text-gray-500 focus:outline-none"
+        >
+          <Send className="w-4 h-4" />
+        </button>
+      </div>
+    </form>
   </div>
-); 
+);
   --- END ChatInput.tsx ---
 
   📄 ChatMessage.tsx
   --- BEGIN ChatMessage.tsx ---
+// 📄 src/components/ChatMessage.tsx
+
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeHighlight from 'rehype-highlight'
 import type { Message } from '../utils/ai'
 
-export const ChatMessage = ({ message }: { message: Message }) => (
-  <div
-    className={`py-6 ${
-      message.role === 'assistant'
-        ? 'bg-gradient-to-r from-orange-500/5 to-red-600/5'
-        : 'bg-transparent'
-    }`}
-  >
-    <div className="flex items-start w-full max-w-3xl gap-4 mx-auto">
-      {message.role === 'assistant' ? (
-        <div className="flex items-center justify-center flex-shrink-0 w-8 h-8 ml-4 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600">
-          AI
-        </div>
-      ) : (
-        <div className="flex items-center justify-center flex-shrink-0 w-8 h-8 text-sm font-medium text-white bg-gray-700 rounded-lg">
-          Y
-        </div>
-      )}
-      <div className="flex-1 min-w-0 mr-4">
+export const ChatMessage = ({ message }: { message: Message }) => {
+  const isAssistant = message.role === 'assistant';
+
+  return (
+    // -> ИЗМЕНЕНИЕ: Внешний div-обертка для выравнивания пузыря влево или вправо
+    <div className={`flex w-full ${isAssistant ? 'justify-start' : 'justify-end'}`}>
+      
+      {/* -> ИЗМЕНЕНИЕ: Сам "пузырь" сообщения */}
+      <div
+        className={`rounded-lg px-4 py-2 ${
+          // -> ИЗМЕНЕНИЕ: Правильные цвета и ширина
+          isAssistant
+            ? 'bg-gradient-to-r from-orange-500/5 to-red-600/5' // AI: Оригинальный градиент, вся доступная ширина
+            : 'bg-gray-700/50 max-w-2xl'                          // User: Серый, ограниченная ширина
+        }`}
+        // -> ИЗМЕНЕНИЕ: Добавляем overflow: 'hidden', чтобы скругленные углы обрезали внутренний контент, например, таблицы
+        style={{ overflow: 'hidden' }}
+      >
         <ReactMarkdown
-          className="prose dark:prose-invert max-w-none"
+          className="prose dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-pre:bg-gray-800/50 prose-pre:overflow-x-auto prose-pre:p-4 prose-pre:rounded-md"
           rehypePlugins={[
             rehypeRaw,
             rehypeSanitize,
@@ -317,9 +316,10 @@ export const ChatMessage = ({ message }: { message: Message }) => (
           {message.content}
         </ReactMarkdown>
       </div>
+
     </div>
-  </div>
-); 
+  );
+};
   --- END ChatMessage.tsx ---
 
   📄 index.ts
@@ -540,7 +540,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
   📄 Sidebar.tsx
   --- BEGIN Sidebar.tsx ---
-import { PlusCircle, MessageCircle, Trash2, Edit2 } from 'lucide-react';
+// 📄 src/components/Sidebar.tsx
+
+import { PlusCircle, MessageCircle, Trash2, Edit2, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string }>;
@@ -553,6 +556,9 @@ interface SidebarProps {
   editingTitle: string;
   setEditingTitle: (title: string) => void;
   handleUpdateChatTitle: (id: string, title: string) => void;
+  isOpen: boolean; // Для мобильных
+  setIsOpen: (isOpen: boolean) => void; // Для мобильных
+  isCollapsed: boolean; // Для десктопа
 }
 
 export const Sidebar = ({ 
@@ -565,141 +571,163 @@ export const Sidebar = ({
   setEditingChatId, 
   editingTitle, 
   setEditingTitle, 
-  handleUpdateChatTitle 
-}: SidebarProps) => (
-  <div className="flex flex-col w-64 bg-gray-800 border-r border-gray-700">
-    <div className="p-4 border-b border-gray-700">
-      <button
-        onClick={handleNewChat}
-        className="flex items-center justify-center w-full gap-2 px-3 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"
-      >
-        <PlusCircle className="w-4 h-4" />
-        New Chat
-      </button>
-    </div>
+  handleUpdateChatTitle,
+  isOpen,
+  setIsOpen,
+  isCollapsed,
+}: SidebarProps) => {
 
-    {/* Chat List */}
-    <div className="flex-1 overflow-y-auto">
-      {conversations.map((chat) => (
-        <div
-          key={chat.id}
-          className={`group flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-700/50 ${
-            chat.id === currentConversationId ? 'bg-gray-700/50' : ''
-          }`}
-          onClick={() => setCurrentConversationId(chat.id)}
+  const [contextMenuChatId, setContextMenuChatId] = useState<string | null>(null);
+  // -> ИЗМЕНЕНИЕ: Добавляем тип и начальное значение null
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
+
+  const handleTouchStart = (chatId: string) => {
+    if (contextMenuChatId !== chatId) {
+      setContextMenuChatId(null);
+    }
+    
+    longPressTimer.current = setTimeout(() => {
+      setContextMenuChatId(chatId);
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+    }
+  };
+
+  if (isCollapsed) {
+    return null;
+  }
+
+  return (
+    <div className={`
+      w-full h-full bg-gray-800 border-r border-gray-700 flex flex-col
+      md:relative
+      fixed inset-y-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
+      ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
+    `}>
+      <div className="flex items-center justify-between p-4 border-b border-gray-700">
+        <button
+          onClick={handleNewChat}
+          className="flex items-center justify-center w-full gap-2 px-3 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90"
         >
-          <MessageCircle className="w-4 h-4 text-gray-400" />
-          {editingChatId === chat.id ? (
-            <input
-              type="text"
-              value={editingTitle}
-              onChange={(e) => setEditingTitle(e.target.value)}
-              onFocus={(e) => e.target.select()}
-              onBlur={() => {
-                if (editingTitle.trim()) {
-                  handleUpdateChatTitle(chat.id, editingTitle)
-                }
-                setEditingChatId(null)
-                setEditingTitle('')
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && editingTitle.trim()) {
-                  handleUpdateChatTitle(chat.id, editingTitle)
-                } else if (e.key === 'Escape') {
-                  setEditingChatId(null)
-                  setEditingTitle('')
-                }
-              }}
-              className="flex-1 text-sm text-white bg-transparent focus:outline-none"
-              autoFocus
-            />
-          ) : (
-            <span className="flex-1 text-sm text-gray-300 truncate">
-              {chat.title}
-            </span>
-          )}
-          <div className="items-center hidden gap-1 group-hover:flex">
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setEditingChatId(chat.id)
-                setEditingTitle(chat.title)
-              }}
-              className="p-1 text-gray-400 hover:text-white"
-            >
-              <Edit2 className="w-3 h-3" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleDeleteChat(chat.id)
-              }}
-              className="p-1 text-gray-400 hover:text-red-500"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      ))}
+          <PlusCircle className="w-4 h-4" />
+          New Chat
+        </button>
+        <button 
+          onClick={() => setIsOpen(false)}
+          className="p-1 ml-2 text-gray-400 rounded-full md:hidden hover:bg-gray-700"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto" onTouchMove={handleTouchEnd}>
+        {conversations.map((chat) => {
+            const showMobileMenu = contextMenuChatId === chat.id;
+
+            return (
+              <div
+                key={chat.id}
+                className={`group flex items-center justify-between gap-3 px-3 py-2 cursor-pointer hover:bg-gray-700/50 ${
+                  chat.id === currentConversationId ? 'bg-gray-700/50' : ''
+                }`}
+                onClick={() => {
+                  if (contextMenuChatId) {
+                    setContextMenuChatId(null);
+                    return; 
+                  }
+                  setCurrentConversationId(chat.id);
+                }}
+                onTouchStart={() => handleTouchStart(chat.id)}
+                onTouchEnd={handleTouchEnd}
+              >
+                <div className="flex items-center flex-1 min-w-0 gap-3">
+                  <MessageCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  {editingChatId === chat.id ? (
+                    <input
+                      type="text"
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      onBlur={() => {
+                        if (editingTitle.trim()) {
+                          handleUpdateChatTitle(chat.id, editingTitle)
+                        }
+                        setEditingChatId(null)
+                        setEditingTitle('')
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && editingTitle.trim()) {
+                          handleUpdateChatTitle(chat.id, editingTitle)
+                        } else if (e.key === 'Escape') {
+                          setEditingChatId(null)
+                          setEditingTitle('')
+                        }
+                      }}
+                      className="flex-1 text-sm text-white bg-transparent focus:outline-none"
+                      autoFocus
+                    />
+                  ) : (
+                    <span className="flex-1 text-sm text-gray-300 truncate">
+                      {chat.title}
+                    </span>
+                  )}
+                </div>
+
+                <div className={`
+                    items-center gap-1
+                    md:group-hover:flex ${showMobileMenu ? 'flex' : 'hidden'}
+                `}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingChatId(chat.id);
+                        setEditingTitle(chat.title);
+                        setContextMenuChatId(null);
+                      }}
+                      className="p-1 text-gray-400 hover:text-white"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteChat(chat.id);
+                        setContextMenuChatId(null);
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-500"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                </div>
+              </div>
+            )
+        })}
+      </div>
     </div>
-  </div>
-); 
+  );
+};
   --- END Sidebar.tsx ---
 
   📄 WelcomeScreen.tsx
   --- BEGIN WelcomeScreen.tsx ---
-import { Send } from 'lucide-react';
+// 📄 src/components/WelcomeScreen.tsx
 
-interface WelcomeScreenProps {
-  input: string;
-  setInput: (value: string) => void;
-  handleSubmit: (e: React.FormEvent) => Promise<void>;
-  isLoading: boolean;
-}
-
-export const WelcomeScreen = ({ 
-  input, 
-  setInput, 
-  handleSubmit, 
-  isLoading 
-}: WelcomeScreenProps) => (
-  <div className="flex items-center justify-center flex-1 px-4">
-    <div className="w-full max-w-3xl mx-auto text-center">
-      <h1 className="mb-4 text-6xl font-bold text-transparent uppercase bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text">
-        <span className="text-white">AI</span> Chat
-      </h1>
-      <p className="w-2/3 mx-auto mb-6 text-lg text-gray-400">
-        Вы можете спросить меня о чем угодно, у меня может быть хороший ответ,
-         а может и не быть, но вы все равно можете спросить.
-      </p>
-      <form onSubmit={handleSubmit}>
-        <div className="relative max-w-xl mx-auto">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleSubmit(e)
-              }
-            }}
-            placeholder="Напишите что-нибудь умное (или не пишите, мы не будем судить)..."
-            className="w-full py-3 pl-4 pr-12 overflow-hidden text-sm text-white placeholder-gray-400 border rounded-lg resize-none border-orange-500/20 bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent"
-            rows={1}
-            style={{ minHeight: '88px' }}
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="absolute p-2 text-orange-500 transition-colors -translate-y-1/2 right-2 top-1/2 hover:text-orange-400 disabled:text-gray-500 focus:outline-none"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-      </form>
-    </div>
+export const WelcomeScreen = () => (
+  <div className="w-full max-w-3xl mx-auto text-center px-4">
+    <h1 className="mb-4 text-5xl md:text-6xl font-bold text-transparent uppercase bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text">
+      <span className="text-white">AI</span> Chat
+    </h1>
+    <p className="w-full md:w-2/3 mx-auto mb-6 text-lg text-gray-400">
+      Вы можете спросить меня о чем угодно, у меня может быть хороший ответ,
+       а может и не быть, но вы все равно можете спросить.
+    </p>
   </div>
-); 
+);
   --- END WelcomeScreen.tsx ---
 
 📄 convex.tsx
@@ -790,6 +818,8 @@ export const useAuth = () => {
 
 📄 router.tsx
 --- BEGIN router.tsx ---
+// 📄 src/router.tsx
+
 import { createRouter as createTanstackRouter } from '@tanstack/react-router'
 
 // Import the generated route tree
@@ -797,11 +827,25 @@ import { routeTree } from './routeTree.gen'
 
 import './styles.css'
 
+// ++ НОВОЕ: Простой компонент для страницы 404
+const NotFoundComponent = () => (
+  <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white">
+    <h1 className="text-6xl font-bold text-orange-500">404</h1>
+    <p className="mt-4 text-2xl">Page Not Found</p>
+    <a href="/" className="mt-8 px-4 py-2 text-white bg-orange-600 rounded hover:bg-orange-700">
+      Go Home
+    </a>
+  </div>
+);
+
+
 // Create a new router instance
 export const createRouter = () => {
   const router = createTanstackRouter({
     routeTree,
     scrollRestoration: true,
+    // ++ НОВОЕ: Добавляем компонент 404 по умолчанию
+    defaultNotFoundComponent: NotFoundComponent,
   })
   return router
 }
@@ -814,7 +858,6 @@ declare module '@tanstack/react-router' {
     router: typeof router
   }
 }
-
 --- END router.tsx ---
 
 📁 routes/
@@ -824,7 +867,7 @@ declare module '@tanstack/react-router' {
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { Settings } from 'lucide-react'
+import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
   ChatMessage,
@@ -838,6 +881,9 @@ import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
 
+import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels'
+
+
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -849,11 +895,26 @@ export const Route = createFileRoute('/')({
 function Home() {
   const navigate = useNavigate()
   const { user } = useAuth()
-
+  
   const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation } = useConversations()
   const { isLoading, setLoading } = useAppState()
   const { settings, loadSettings } = useSettings()
   const { activePrompt, loadPrompts } = usePrompts()
+  
+  const [input, setInput] = useState('')
+  const [editingChatId, setEditingChatId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  
+  const mobileMessagesContainerRef = useRef<HTMLElement>(null);
+  const desktopMessagesContainerRef = useRef<HTMLElement>(null);
+
+  const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
 
   useEffect(() => {
     if (user) {
@@ -865,17 +926,8 @@ function Home() {
 
   const messages = useMemo(() => currentConversation?.messages || [], [currentConversation])
   
-  const [input, setInput] = useState('')
-  const [editingChatId, setEditingChatId] = useState<string | null>(null)
-  const [editingTitle, setEditingTitle] = useState('')
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
-  // --- ИЗМЕНЕНИЕ: Используем Ref для накопления финального контента ---
   const finalContentRef = useRef<string>(''); 
 
   useEffect(() => {
@@ -887,7 +939,6 @@ function Home() {
 
         setPendingMessage(prev => {
           if (prev) {
-            // Накапливаем контент и в стейте, и в ref
             const newContent = prev.content + charsToPrint;
             finalContentRef.current = newContent;
             return { ...prev, content: newContent };
@@ -906,8 +957,16 @@ function Home() {
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    if (messagesContainerRef.current) messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
-  }, [])
+    const container = mobileMessagesContainerRef.current || desktopMessagesContainerRef.current;
+    if (container) {
+        setTimeout(() => {
+            container.scrollTo({
+                top: container.scrollHeight,
+                behavior: 'smooth'
+            });
+        }, 100);
+    }
+}, []);
   
   useEffect(() => { scrollToBottom() }, [messages, pendingMessage, scrollToBottom])
   
@@ -924,12 +983,9 @@ function Home() {
         return null;
       }
       
-      // Сбрасываем ref перед началом
       finalContentRef.current = ''; 
       const initialAssistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
-      // --- ИЗМЕНЕНИЕ: Не устанавливаем pendingMessage сразу ---
-      // setPendingMessage(initialAssistantMessage); 
-
+      
       try {
         const response = await genAIResponse({
           data: {
@@ -955,7 +1011,6 @@ function Home() {
               try {
                 const parsed = JSON.parse(chunkStr);
                 if (parsed.text) {
-                  // --- ИЗМЕНЕНИЕ: Устанавливаем pendingMessage только на первом чанке ---
                   if (isFirstChunk) {
                     setPendingMessage(initialAssistantMessage);
                     isFirstChunk = false;
@@ -976,7 +1031,6 @@ function Home() {
             }, 50);
         });
         
-        // Возвращаем финальное сообщение, используя надежный ref
         return { ...initialAssistantMessage, content: finalContentRef.current };
 
       } catch (error) {
@@ -996,11 +1050,11 @@ function Home() {
       textQueueRef.current = '';
       finalContentRef.current = '';
       setPendingMessage(null);
+      setError(null);
 
       const currentInput = input
       setInput('')
       setLoading(true)
-      setError(null)
 
       const conversationTitle = createTitleFromInput(currentInput)
       const userMessage: Message = { id: Date.now().toString(), role: 'user' as const, content: currentInput.trim() }
@@ -1024,8 +1078,9 @@ function Home() {
         }
 
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
         console.error('Error in handleSubmit:', error)
-        setError(error instanceof Error ? error.message : 'An unexpected error occurred.')
+        setError(errorMessage);
       } finally {
         setLoading(false)
         setPendingMessage(null);
@@ -1048,35 +1103,109 @@ function Home() {
   const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle])
   const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
 
-  return (
-    <div className="relative flex h-screen bg-gray-900">
-      <div className="absolute z-50 top-5 right-5 flex gap-2">
-        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
-        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white transition-opacity rounded-full bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"><Settings className="w-5 h-5" /></button>
-      </div>
-
-      <Sidebar conversations={conversations} currentConversationId={currentConversationId} handleNewChat={handleNewChat} setCurrentConversationId={setCurrentConversationId} handleDeleteChat={handleDeleteChat} editingChatId={editingChatId} setEditingChatId={setEditingChatId} editingTitle={editingTitle} setEditingTitle={setEditingTitle} handleUpdateChatTitle={handleUpdateChatTitle} />
-
-      <div className="flex flex-col flex-1">
-        {error && <p className="w-full max-w-3xl p-4 mx-auto font-bold text-orange-500">{error}</p>}
-        {currentConversationId ? (
-          <>
-            <div ref={messagesContainerRef} className="flex-1 pb-24 overflow-y-auto">
-              <div className="w-full max-w-3xl px-4 mx-auto">
-                {messages.map((message) => <ChatMessage key={message.id} message={message} />)}
-                {pendingMessage && <ChatMessage message={pendingMessage} />}
-                {/* --- ИЗМЕНЕНИЕ: Правильная логика для индикатора --- */}
-                {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
-              </div>
+  const MainContent = () => (
+    <div className="w-full h-full p-4">
+        {error && (
+            <div className="bg-red-500/10 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg" role="alert">
+                <div className="flex">
+                    <div className="py-1"><AlertTriangle className="h-5 w-5 text-red-400 mr-3" /></div>
+                    <div>
+                        <p className="font-bold">An error occurred</p>
+                        <p className="text-sm">{error}</p>
+                    </div>
+                </div>
             </div>
-            <ChatInput input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
-          </>
-        ) : (
-          <WelcomeScreen input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
         )}
-      </div>
+        <div className="space-y-6">
+          {currentConversationId ? (
+              <>
+                  {messages.map((message) => <ChatMessage key={message.id} message={message} />)}
+                  {pendingMessage && <ChatMessage message={pendingMessage} />}
+                  {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
+              </>
+          ) : (
+              <div className="flex h-full items-center justify-center pt-20 md:pt-0"><WelcomeScreen /></div>
+          )}
+        </div>
+    </div>
+  );
 
-      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
+  return (
+    <div className="h-screen bg-gray-900 text-white overflow-hidden">
+        {/* Мобильная версия */}
+        <div className="md:hidden h-full flex flex-col">
+            {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
+            <Sidebar 
+                {...{ 
+                    conversations, 
+                    currentConversationId, 
+                    handleDeleteChat, 
+                    editingChatId, 
+                    setEditingChatId, 
+                    editingTitle, 
+                    setEditingTitle, 
+                    handleUpdateChatTitle, 
+                    isOpen: isSidebarOpen, 
+                    setIsOpen: setIsSidebarOpen, 
+                    isCollapsed: false,
+                    handleNewChat: () => {
+                        handleNewChat();
+                        setIsSidebarOpen(false);
+                    },
+                    setCurrentConversationId: (id) => { 
+                        setCurrentConversationId(id); 
+                        setIsSidebarOpen(false); 
+                    } 
+                }} 
+            />
+            
+            <div className="flex-1 flex flex-col relative min-h-0">
+                <header className="absolute top-0 left-0 right-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4">
+                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white rounded-lg hover:bg-gray-700"><Menu className="w-6 h-6" /></button>
+                    <div className="flex items-center gap-2">
+                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
+                        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
+                    </div>
+                </header>
+                
+                <main ref={mobileMessagesContainerRef} className="flex-1 pt-16 pb-4 overflow-y-auto">
+                    <MainContent />
+                </main>
+                
+                <footer className="w-full">
+                    <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
+                </footer>
+            </div>
+        </div>
+
+        {/* Десктопная версия */}
+        <div className="hidden md:flex h-full">
+            <PanelGroup direction="horizontal">
+                <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
+                    <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
+                </Panel>
+                <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
+                {/* -> ИЗМЕНЕНИЕ: ref убран с <Panel> */}
+                <Panel className="flex-1 flex flex-col relative min-h-0">
+                     <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
+                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
+                        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
+                    </header>
+                    
+                    {/* -> ИЗМЕНЕНИЕ: ref теперь на <main> */}
+                    <main ref={desktopMessagesContainerRef} className="flex-1 overflow-y-auto">
+                        <div className="w-full max-w-5xl mx-auto">
+                           <MainContent />
+                        </div>
+                    </main>
+                    <footer className="w-full max-w-5xl mx-auto">
+                         <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
+                    </footer>
+                </Panel>
+            </PanelGroup>
+        </div>
+        <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   )
 }
@@ -1224,6 +1353,8 @@ function SignupComponent() {
 
   📄 __root.tsx
   --- BEGIN __root.tsx ---
+// 📄 src/routes/__root.tsx
+
 import {
   createRootRoute,
   Outlet,
@@ -1231,7 +1362,6 @@ import {
   Scripts,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
-// Убираем Convex, добавляем наш AuthProvider
 import { AuthProvider } from '../providers/AuthProvider' 
 
 import appCss from '../styles.css?url'
@@ -1241,15 +1371,15 @@ export const Route = createRootRoute({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'AI Chat (Supabase & Gemini)' }, // Можете поменять заголовок
+      { title: 'AI Chat (Supabase & Gemini)' },
     ],
     links: [{ rel: 'stylesheet', href: appCss }],
   }),
-  // Компонент верхнего уровня остается без изменений, он вызывает RootDocument
   component: () => (
     <RootDocument>
       <Outlet />
-      <TanStackRouterDevtools />
+      {/* -> ИЗМЕНЕНИЕ: Devtools теперь рендерится только в режиме разработки */}
+      {import.meta.env.DEV && <TanStackRouterDevtools />}
     </RootDocument>
   ),
 })
@@ -1261,7 +1391,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {/* Оборачиваем все дочерние компоненты в AuthProvider */}
         <AuthProvider>
           {children}
         </AuthProvider>
