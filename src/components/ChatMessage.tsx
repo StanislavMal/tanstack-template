@@ -1,30 +1,31 @@
+// 📄 src/components/ChatMessage.tsx
+
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeHighlight from 'rehype-highlight'
 import type { Message } from '../utils/ai'
 
-export const ChatMessage = ({ message }: { message: Message }) => (
-  <div
-    className={`py-6 ${
-      message.role === 'assistant'
-        ? 'bg-gradient-to-r from-orange-500/5 to-red-600/5'
-        : 'bg-transparent'
-    }`}
-  >
-    <div className="flex items-start w-full max-w-3xl gap-4 mx-auto">
-      {message.role === 'assistant' ? (
-        <div className="flex items-center justify-center flex-shrink-0 w-8 h-8 ml-4 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600">
-          AI
-        </div>
-      ) : (
-        <div className="flex items-center justify-center flex-shrink-0 w-8 h-8 text-sm font-medium text-white bg-gray-700 rounded-lg">
-          Y
-        </div>
-      )}
-      <div className="flex-1 min-w-0 mr-4">
+export const ChatMessage = ({ message }: { message: Message }) => {
+  const isAssistant = message.role === 'assistant';
+
+  return (
+    // -> ИЗМЕНЕНИЕ: Внешний div-обертка для выравнивания пузыря влево или вправо
+    <div className={`flex w-full ${isAssistant ? 'justify-start' : 'justify-end'}`}>
+      
+      {/* -> ИЗМЕНЕНИЕ: Сам "пузырь" сообщения */}
+      <div
+        className={`rounded-lg px-4 py-2 ${
+          // -> ИЗМЕНЕНИЕ: Правильные цвета и ширина
+          isAssistant
+            ? 'bg-gradient-to-r from-orange-500/5 to-red-600/5' // AI: Оригинальный градиент, вся доступная ширина
+            : 'bg-gray-700/50 max-w-2xl'                          // User: Серый, ограниченная ширина
+        }`}
+        // -> ИЗМЕНЕНИЕ: Добавляем overflow: 'hidden', чтобы скругленные углы обрезали внутренний контент, например, таблицы
+        style={{ overflow: 'hidden' }}
+      >
         <ReactMarkdown
-          className="prose dark:prose-invert max-w-none"
+          className="prose dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-pre:bg-gray-800/50 prose-pre:overflow-x-auto prose-pre:p-4 prose-pre:rounded-md"
           rehypePlugins={[
             rehypeRaw,
             rehypeSanitize,
@@ -34,6 +35,7 @@ export const ChatMessage = ({ message }: { message: Message }) => (
           {message.content}
         </ReactMarkdown>
       </div>
+
     </div>
-  </div>
-); 
+  );
+};
