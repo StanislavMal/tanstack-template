@@ -30,7 +30,7 @@ export const genAIResponse = createServerFn({
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
-      model: data.model || "gemini-1.5-flash", // ← `data`
+      model: data.model || "gemini-2.5-flash", // ← `data`
     });
     
     // Тип `msg` теперь будет выведен правильно из `data.messages`
