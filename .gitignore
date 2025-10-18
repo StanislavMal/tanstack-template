@@ -6,3 +6,5 @@ dist-ssr
 .vinxi
 .netlify
 .env
+SUPABASE_SCHEMA.md
+export-supabase-schema.mjs
