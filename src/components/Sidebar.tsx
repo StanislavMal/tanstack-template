@@ -2,6 +2,7 @@
 
 import { PlusCircle, MessageCircle, Trash2, Edit2, X } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string }>;
@@ -34,9 +35,8 @@ export const Sidebar = ({
   setIsOpen,
   isCollapsed,
 }: SidebarProps) => {
-
+  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
   const [contextMenuChatId, setContextMenuChatId] = useState<string | null>(null);
-  // -> ИЗМЕНЕНИЕ: Добавляем тип и начальное значение null
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
 
@@ -73,7 +73,7 @@ export const Sidebar = ({
           className="flex items-center justify-center w-full gap-2 px-3 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90"
         >
           <PlusCircle className="w-4 h-4" />
-          New Chat
+          {t('newChat')} {/* -> ИЗМЕНЕНИЕ */}
         </button>
         <button 
           onClick={() => setIsOpen(false)}
