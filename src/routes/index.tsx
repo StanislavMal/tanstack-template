@@ -53,6 +53,8 @@ function Home() {
   
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
+  // --- ИЗМЕНЕНИЕ: Используем Ref для накопления финального контента ---
+  const finalContentRef = useRef<string>(''); 
 
   useEffect(() => {
     const animatePrinting = () => {
@@ -61,7 +63,15 @@ function Home() {
         const charsToPrint = textQueueRef.current.substring(0, speed);
         textQueueRef.current = textQueueRef.current.substring(speed);
 
-        setPendingMessage(prev => prev ? { ...prev, content: prev.content + charsToPrint } : null);
+        setPendingMessage(prev => {
+          if (prev) {
+            // Накапливаем контент и в стейте, и в ref
+            const newContent = prev.content + charsToPrint;
+            finalContentRef.current = newContent;
+            return { ...prev, content: newContent };
+          }
+          return null;
+        });
       }
       animationFrameRef.current = requestAnimationFrame(animatePrinting);
     };
@@ -85,7 +95,6 @@ function Home() {
     return firstThreeWords + (words.length > 3 ? '...' : '')
   }, [])
 
-  // --- ИСПРАВЛЕНИЕ: Убираем неиспользуемый аргумент `conversationId` ---
   const processAIResponse = useCallback(
     async (userMessage: Message) => {
       if (!settings) {
@@ -93,8 +102,11 @@ function Home() {
         return null;
       }
       
+      // Сбрасываем ref перед началом
+      finalContentRef.current = ''; 
       const initialAssistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
-      setPendingMessage(initialAssistantMessage);
+      // --- ИЗМЕНЕНИЕ: Не устанавливаем pendingMessage сразу ---
+      // setPendingMessage(initialAssistantMessage); 
 
       try {
         const response = await genAIResponse({
@@ -110,6 +122,7 @@ function Home() {
         
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        let isFirstChunk = true;
 
         while (true) {
           const { value, done } = await reader.read();
@@ -119,7 +132,14 @@ function Home() {
             if (chunkStr) {
               try {
                 const parsed = JSON.parse(chunkStr);
-                if (parsed.text) textQueueRef.current += parsed.text;
+                if (parsed.text) {
+                  // --- ИЗМЕНЕНИЕ: Устанавливаем pendingMessage только на первом чанке ---
+                  if (isFirstChunk) {
+                    setPendingMessage(initialAssistantMessage);
+                    isFirstChunk = false;
+                  }
+                  textQueueRef.current += parsed.text;
+                }
               } catch (e) { /* ignore */ }
             }
           })
@@ -134,15 +154,8 @@ function Home() {
             }, 50);
         });
         
-        // ВАЖНО: Возвращаем финальное сообщение, используя СТЕЙТ `pendingMessage`
-        // Это гарантирует, что мы вернем самый актуальный контент
-        let finalContent = '';
-        setPendingMessage(p => {
-          finalContent = p?.content ?? '';
-          return p;
-        });
-        
-        return { ...initialAssistantMessage, content: finalContent };
+        // Возвращаем финальное сообщение, используя надежный ref
+        return { ...initialAssistantMessage, content: finalContentRef.current };
 
       } catch (error) {
         console.error('Error in AI response:', error);
@@ -150,7 +163,7 @@ function Home() {
         return null;
       }
     },
-    [messages, settings, activePrompt], // `pendingMessage` убран из зависимостей
+    [messages, settings, activePrompt],
   );
 
   const handleSubmit = useCallback(
@@ -159,6 +172,7 @@ function Home() {
       if (!input.trim() || isLoading) return
 
       textQueueRef.current = '';
+      finalContentRef.current = '';
       setPendingMessage(null);
 
       const currentInput = input
@@ -181,7 +195,6 @@ function Home() {
 
         await addMessage(conversationId, userMessage);
         
-        // --- ИСПРАВЛЕНИЕ: Передаем только один аргумент ---
         const finalAiMessage = await processAIResponse(userMessage);
         
         if (finalAiMessage && finalAiMessage.content.trim()) {
@@ -230,7 +243,8 @@ function Home() {
               <div className="w-full max-w-3xl px-4 mx-auto">
                 {messages.map((message) => <ChatMessage key={message.id} message={message} />)}
                 {pendingMessage && <ChatMessage message={pendingMessage} />}
-                {isLoading && !pendingMessage && <LoadingIndicator />}
+                {/* --- ИЗМЕНЕНИЕ: Правильная логика для индикатора --- */}
+                {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
               </div>
             </div>
             <ChatInput input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
