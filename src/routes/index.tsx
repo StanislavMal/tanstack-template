@@ -1,4 +1,5 @@
 // 📄 src/routes/index.tsx
+
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { Settings } from 'lucide-react'
@@ -49,6 +50,39 @@ function Home() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
+  
+  const textQueueRef = useRef<string>('');
+  const animationFrameRef = useRef<number | undefined>(undefined);
+  const isStreamingFinishedRef = useRef<boolean>(false);
+  const finalMessageContentRef = useRef<string>('');
+  const pendingMessageIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const animatePrinting = () => {
+      if (textQueueRef.current.length > 0) {
+        const speed = 2;
+        const charsToPrint = textQueueRef.current.substring(0, speed);
+        textQueueRef.current = textQueueRef.current.substring(speed);
+
+        setPendingMessage(prev => {
+          if (!prev) return null;
+          const newContent = prev.content + charsToPrint;
+          finalMessageContentRef.current = newContent;
+          return { ...prev, content: newContent };
+        });
+      }
+      
+      animationFrameRef.current = requestAnimationFrame(animatePrinting);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animatePrinting);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
@@ -56,7 +90,7 @@ function Home() {
     }
   }, [])
   
-  useEffect(() => { scrollToBottom() }, [messages, isLoading, scrollToBottom])
+  useEffect(() => { scrollToBottom() }, [messages, isLoading, scrollToBottom, pendingMessage])
   
   const createTitleFromInput = useCallback((text: string) => {
     const words = text.trim().split(/\s+/)
@@ -64,15 +98,18 @@ function Home() {
     return firstThreeWords + (words.length > 3 ? '...' : '')
   }, [])
 
+  // --- ИСПРАВЛЕНИЕ: Убираем неиспользуемый аргумент `conversationId` ---
   const processAIResponse = useCallback(
-    async (conversationId: string, userMessage: Message) => {
+    async (userMessage: Message) => {
       if (!settings) {
         setError("User settings not loaded. Please try again.");
         return;
       }
+      
+      isStreamingFinishedRef.current = false;
+      finalMessageContentRef.current = '';
 
       try {
-        // ← ИСПОЛЬЗУЕМ `data`, А НЕ `body`
         const response = await genAIResponse({
           data: {
             messages: [...messages, userMessage],
@@ -83,45 +120,55 @@ function Home() {
         })
 
         if (!response.body) throw new Error('No response body')
-
+        
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
-        let done = false
-        let newMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant' as const, content: '' }
-        while (!done) {
-          const { value, done: readerDone } = await reader.read()
-          done = readerDone
-          if (value) {
-            const rawText = decoder.decode(value, { stream: true })
-            rawText.replace(/}\{/g, '}\n{').split('\n').forEach((chunkStr) => {
-              if (chunkStr) {
-                try {
-                  const parsed = JSON.parse(chunkStr)
-                  if (parsed.text) {
-                    newMessage = { ...newMessage, content: newMessage.content + parsed.text, }
-                    setPendingMessage({ ...newMessage })
-                  }
-                } catch (e) { /* ignore */ }
-              }
-            })
-          }
-        }
-        setPendingMessage(null)
-        if (newMessage.content.trim()) { await addMessage(conversationId, newMessage) }
         
+        pendingMessageIdRef.current = (Date.now() + 1).toString();
+        const initialAssistantMessage: Message = { 
+            id: pendingMessageIdRef.current,
+            role: 'assistant' as const, 
+            content: '' 
+        };
+        setPendingMessage(initialAssistantMessage);
+
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) {
+            isStreamingFinishedRef.current = true;
+            break;
+          }
+          const rawText = decoder.decode(value, { stream: true })
+          rawText.replace(/}\{/g, '}\n{').split('\n').forEach((chunkStr) => {
+            if (chunkStr) {
+              try {
+                const parsed = JSON.parse(chunkStr)
+                if (parsed.text) {
+                  textQueueRef.current += parsed.text;
+                }
+              } catch (e) { /* ignore */ }
+            }
+          })
+        }
       } catch (error) {
         console.error('Error in AI response:', error)
-        const errorMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant' as const, content: 'Sorry, I encountered an error generating a response.' }
-        await addMessage(conversationId, errorMessage)
+        isStreamingFinishedRef.current = true;
+        const errorMessage: Message = { id: (Date.now() + 2).toString(), role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' };
+        setPendingMessage(errorMessage);
+        setTimeout(() => setPendingMessage(null), 3000);
       }
     },
-    [messages, addMessage, settings, activePrompt],
+    [messages, settings, activePrompt], // Убираем `addMessage` из зависимостей, так как он не используется здесь
   )
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
       if (!input.trim() || isLoading) return
+
+      textQueueRef.current = '';
+      setPendingMessage(null);
+      isStreamingFinishedRef.current = false;
 
       const currentInput = input
       setInput('')
@@ -135,9 +182,9 @@ function Home() {
         content: currentInput.trim(),
       }
 
+      let conversationId = currentConversationId;
+      
       try {
-        let conversationId = currentConversationId
-
         if (!conversationId) {
           const newConvId = await createNewConversation(conversationTitle)
           if (newConvId) {
@@ -150,13 +197,37 @@ function Home() {
         }
 
         await addMessage(conversationId, userMessage)
-        await processAIResponse(conversationId, userMessage)
+        // --- ИСПРАВЛЕНИЕ: Передаем только один аргумент ---
+        await processAIResponse(userMessage)
+        
+        const waitForPrinting = () => new Promise(resolve => {
+            const interval = setInterval(() => {
+                if (isStreamingFinishedRef.current && textQueueRef.current.length === 0) {
+                    clearInterval(interval);
+                    resolve(null);
+                }
+            }, 50);
+        });
+
+        await waitForPrinting();
+        
+        if (finalMessageContentRef.current.trim()) {
+            const finalMessage: Message = {
+                id: pendingMessageIdRef.current || (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: finalMessageContentRef.current,
+            };
+            await addMessage(conversationId, finalMessage);
+        }
 
       } catch (error) {
         console.error('Error in handleSubmit:', error)
         setError(error instanceof Error ? error.message : 'An unexpected error occurred.')
       } finally {
         setLoading(false)
+        setPendingMessage(null);
+        finalMessageContentRef.current = '';
+        pendingMessageIdRef.current = null;
       }
     },
     [
@@ -191,8 +262,9 @@ function Home() {
           <>
             <div ref={messagesContainerRef} className="flex-1 pb-24 overflow-y-auto">
               <div className="w-full max-w-3xl px-4 mx-auto">
-                {[...messages, pendingMessage].filter((message): message is Message => message !== null).map((message) => <ChatMessage key={message.id} message={message} />)}
-                {isLoading && <LoadingIndicator />}
+                {messages.map((message) => <ChatMessage key={message.id} message={message} />)}
+                {pendingMessage && <ChatMessage message={pendingMessage} />}
+                {isLoading && !pendingMessage && <LoadingIndicator />}
               </div>
             </div>
             <ChatInput input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
