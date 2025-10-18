@@ -28,7 +28,7 @@ function Home() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation, updateMessageContent } = useConversations()
+  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation } = useConversations()
   const { isLoading, setLoading } = useAppState()
   const { settings, loadSettings } = useSettings()
   const { activePrompt, loadPrompts } = usePrompts()
@@ -48,26 +48,20 @@ function Home() {
   const [editingTitle, setEditingTitle] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
   
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
-  const streamingMessageIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const animatePrinting = () => {
-      if (textQueueRef.current.length > 0 && streamingMessageIdRef.current && currentConversationId) {
+      if (textQueueRef.current.length > 0) {
         const speed = 2;
         const charsToPrint = textQueueRef.current.substring(0, speed);
         textQueueRef.current = textQueueRef.current.substring(speed);
 
-        const conv = currentConversation;
-        const msg = conv?.messages.find(m => m.id === streamingMessageIdRef.current);
-
-        if (conv && msg) {
-          // Вызываем `updateMessageContent` для плавного обновления UI
-          updateMessageContent(conv.id, msg.id, msg.content + charsToPrint);
-        }
+        setPendingMessage(prev => prev ? { ...prev, content: prev.content + charsToPrint } : null);
       }
       animationFrameRef.current = requestAnimationFrame(animatePrinting);
     };
@@ -75,19 +69,15 @@ function Home() {
     animationFrameRef.current = requestAnimationFrame(animatePrinting);
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [currentConversationId, currentConversation, updateMessageContent]);
+  }, []);
 
   const scrollToBottom = useCallback(() => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
-    }
+    if (messagesContainerRef.current) messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
   }, [])
   
-  useEffect(() => { scrollToBottom() }, [messages, isLoading, scrollToBottom])
+  useEffect(() => { scrollToBottom() }, [messages, pendingMessage, scrollToBottom])
   
   const createTitleFromInput = useCallback((text: string) => {
     const words = text.trim().split(/\s+/)
@@ -95,59 +85,46 @@ function Home() {
     return firstThreeWords + (words.length > 3 ? '...' : '')
   }, [])
 
+  // --- ИСПРАВЛЕНИЕ: Убираем неиспользуемый аргумент `conversationId` ---
   const processAIResponse = useCallback(
-    async (conversationId: string, userMessage: Message) => {
+    async (userMessage: Message) => {
       if (!settings) {
-        setError("User settings not loaded. Please try again.");
-        return;
+        setError("User settings not loaded.");
+        return null;
       }
       
-      textQueueRef.current = '';
-      const assistantMessageId = (Date.now() + 1).toString();
-      streamingMessageIdRef.current = assistantMessageId;
-      
-      // Создаем и сразу добавляем "пустое" сообщение в историю
-      const initialAssistantMessage: Message = { 
-          id: assistantMessageId,
-          role: 'assistant' as const, 
-          content: '' 
-      };
-      await addMessage(conversationId, initialAssistantMessage);
+      const initialAssistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
+      setPendingMessage(initialAssistantMessage);
 
       try {
         const response = await genAIResponse({
           data: {
-            messages: [...messages, userMessage], // Передаем актуальные сообщения
+            messages: [...messages, userMessage],
             model: settings.model,
             mainSystemInstruction: settings.system_instruction,
             activePromptContent: activePrompt?.content,
           },
         })
 
-        if (!response.body) throw new Error('No response body')
+        if (!response.body) throw new Error('No response body');
         
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
 
         while (true) {
-          const { value, done } = await reader.read()
-          if (done) {
-            break;
-          }
-          const rawText = decoder.decode(value, { stream: true })
+          const { value, done } = await reader.read();
+          if (done) break;
+          const rawText = decoder.decode(value, { stream: true });
           rawText.replace(/}\{/g, '}\n{').split('\n').forEach((chunkStr) => {
             if (chunkStr) {
               try {
-                const parsed = JSON.parse(chunkStr)
-                if (parsed.text) {
-                  textQueueRef.current += parsed.text;
-                }
+                const parsed = JSON.parse(chunkStr);
+                if (parsed.text) textQueueRef.current += parsed.text;
               } catch (e) { /* ignore */ }
             }
           })
         }
         
-        // Ждем, пока вся очередь допечатается
         await new Promise(resolve => {
             const interval = setInterval(() => {
                 if (textQueueRef.current.length === 0) {
@@ -157,21 +134,24 @@ function Home() {
             }, 50);
         });
         
-        // Финальное обновление полного сообщения в БД
-        const finalContent = currentConversation?.messages.find(m => m.id === assistantMessageId)?.content || '';
-        if (finalContent.trim()) {
-            await addMessage(conversationId, { ...initialAssistantMessage, content: finalContent });
-        }
+        // ВАЖНО: Возвращаем финальное сообщение, используя СТЕЙТ `pendingMessage`
+        // Это гарантирует, что мы вернем самый актуальный контент
+        let finalContent = '';
+        setPendingMessage(p => {
+          finalContent = p?.content ?? '';
+          return p;
+        });
+        
+        return { ...initialAssistantMessage, content: finalContent };
 
       } catch (error) {
         console.error('Error in AI response:', error);
-        // Можно добавить логику для отображения ошибки в чате
-      } finally {
-        streamingMessageIdRef.current = null;
+        setError('An error occurred while getting the AI response.');
+        return null;
       }
     },
-    [messages, settings, activePrompt, addMessage, updateMessageContent, currentConversation],
-  )
+    [messages, settings, activePrompt], // `pendingMessage` убран из зависимостей
+  );
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -179,7 +159,7 @@ function Home() {
       if (!input.trim() || isLoading) return
 
       textQueueRef.current = '';
-      streamingMessageIdRef.current = null;
+      setPendingMessage(null);
 
       const currentInput = input
       setInput('')
@@ -187,34 +167,33 @@ function Home() {
       setError(null)
 
       const conversationTitle = createTitleFromInput(currentInput)
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: 'user' as const,
-        content: currentInput.trim(),
-      }
+      const userMessage: Message = { id: Date.now().toString(), role: 'user' as const, content: currentInput.trim() }
 
       let conversationId = currentConversationId;
       
       try {
         if (!conversationId) {
           const newConvId = await createNewConversation(conversationTitle)
-          if (newConvId) {
-            conversationId = newConvId
-          }
+          if (newConvId) conversationId = newConvId
         }
         
-        if (!conversationId) {
-          throw new Error('Failed to create or find conversation ID.')
-        }
+        if (!conversationId) throw new Error('Failed to create or find conversation ID.');
 
-        await addMessage(conversationId, userMessage)
-        await processAIResponse(conversationId, userMessage)
+        await addMessage(conversationId, userMessage);
+        
+        // --- ИСПРАВЛЕНИЕ: Передаем только один аргумент ---
+        const finalAiMessage = await processAIResponse(userMessage);
+        
+        if (finalAiMessage && finalAiMessage.content.trim()) {
+            await addMessage(conversationId, finalAiMessage);
+        }
 
       } catch (error) {
         console.error('Error in handleSubmit:', error)
         setError(error instanceof Error ? error.message : 'An unexpected error occurred.')
       } finally {
         setLoading(false)
+        setPendingMessage(null);
       }
     },
     [
@@ -250,8 +229,8 @@ function Home() {
             <div ref={messagesContainerRef} className="flex-1 pb-24 overflow-y-auto">
               <div className="w-full max-w-3xl px-4 mx-auto">
                 {messages.map((message) => <ChatMessage key={message.id} message={message} />)}
-                {/* pendingMessage больше не нужен, isLoading используется для индикатора загрузки */}
-                {isLoading && <LoadingIndicator />}
+                {pendingMessage && <ChatMessage message={pendingMessage} />}
+                {isLoading && !pendingMessage && <LoadingIndicator />}
               </div>
             </div>
             <ChatInput input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />

@@ -118,50 +118,20 @@ export function useConversations() {
       if (error) console.error('Failed to delete conversation from Supabase:', error);
   }, []);
   
-  // --- НОВАЯ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ UI ---
-  const updateMessageContent = useCallback((conversationId: string, messageId: string, newContent: string) => {
-    store.setState(state => {
-      const conv = state.conversations.find(c => c.id === conversationId);
-      if (!conv) return state;
-
-      return {
-        ...state,
-        conversations: state.conversations.map(c =>
-          c.id === conversationId
-            ? {
-                ...c,
-                messages: c.messages.map(m =>
-                  m.id === messageId ? { ...m, content: newContent } : m
-                ),
-              }
-            : c
-        ),
-      };
-    });
-  }, []);
-  
-  // --- ОБНОВЛЕННАЯ ФУНКЦИЯ, КОТОРАЯ МОЖЕТ ДОБАВЛЯТЬ И ОБНОВЛЯТЬ ---
+  // --- ВОЗВРАЩАЕМ `addMessage` К ПРОСТОМУ ВИДУ ---
   const addMessage = useCallback(async (conversationId: string, message: Message) => {
       const conversation = selectors.getConversations(store.state).find(c => c.id === conversationId);
       if (!conversation) return;
-
-      const messageExists = conversation.messages.some(m => m.id === message.id);
-
-      let updatedMessages;
-
-      if (messageExists) {
-        // ОБНОВЛЕНИЕ существующего сообщения
-        updatedMessages = conversation.messages.map(m => m.id === message.id ? message : m);
-        actions.updateMessageContent(conversationId, message.id, message.content); // Обновляем UI
-      } else {
-        // ДОБАВЛЕНИЕ нового сообщения
-        updatedMessages = [...conversation.messages, message];
-        actions.addMessage(conversationId, message);
-      }
       
-      // Отправляем полный обновленный массив сообщений в Supabase
+      // Просто добавляем сообщение в массив
+      const updatedMessages = [...conversation.messages, message];
+      
+      // Оптимистично обновляем UI
+      actions.addMessage(conversationId, message);
+
+      // Отправляем обновленный массив в Supabase
       const { error } = await supabase.from('conversations').update({ messages: updatedMessages }).eq('id', conversationId);
-      if (error) console.error('Failed to sync message to Supabase:', error);
+      if (error) console.error('Failed to add message to Supabase:', error);
   }, []);
 
 
@@ -175,6 +145,5 @@ export function useConversations() {
     updateConversationTitle,
     deleteConversation,
     addMessage,
-    updateMessageContent, // Экспортируем новую функцию
   };
 }
