@@ -15,7 +15,8 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      // -> ИЗМЕНЕНИЕ: Добавлены `maximum-scale=1` и `user-scalable=no` для предотвращения зума на мобильных устройствах
+      { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' },
       { title: 'AI Chat (Supabase & Gemini)' },
     ],
     links: [{ rel: 'stylesheet', href: appCss }],
@@ -23,7 +24,6 @@ export const Route = createRootRoute({
   component: () => (
     <RootDocument>
       <Outlet />
-      {/* -> ИЗМЕНЕНИЕ: Devtools теперь рендерится только в режиме разработки */}
       {import.meta.env.DEV && <TanStackRouterDevtools />}
     </RootDocument>
   ),
