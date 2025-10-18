@@ -2,16 +2,15 @@
 import { Store } from '@tanstack/store'
 import type { Message } from '../utils/ai'
 
-// --- ИЗМЕНЕНИЯ: Обновленные типы ---
 export interface Prompt {
-  id: string // UUID из БД
+  id: string
   name: string
   content: string
   is_active: boolean
 }
 
 export interface UserSettings {
-  model: 'gemini-2.5-flash' | 'gemini-2.5-pro'
+  model: 'gemini-1.5-flash' | 'gemini-1.5-pro'
   system_instruction: string
 }
 
@@ -23,7 +22,7 @@ export interface Conversation {
 
 export interface State {
   prompts: Prompt[]
-  settings: UserSettings | null // Настройки будут загружаться
+  settings: UserSettings | null
   conversations: Conversation[]
   currentConversationId: string | null
   isLoading: boolean
@@ -31,7 +30,7 @@ export interface State {
 
 const initialState: State = {
   prompts: [],
-  settings: null, // Изначально настроек нет
+  settings: null,
   conversations: [],
   currentConversationId: null,
   isLoading: false
@@ -40,7 +39,24 @@ const initialState: State = {
 export const store = new Store<State>(initialState)
 
 export const actions = {
-  // --- НОВЫЕ ACTIONS ---
+  // --- НОВЫЙ ACTION ---
+  updateMessageContent: (conversationId: string, messageId: string, content: string) => {
+    store.setState(state => ({
+      ...state,
+      conversations: state.conversations.map(conv =>
+        conv.id === conversationId
+          ? {
+              ...conv,
+              messages: conv.messages.map(msg =>
+                msg.id === messageId ? { ...msg, content: content } : msg
+              ),
+            }
+          : conv
+      ),
+    }));
+  },
+  
+  // Остальные actions
   setSettings: (settings: UserSettings) => {
     store.setState(state => ({ ...state, settings }));
   },
@@ -49,7 +65,6 @@ export const actions = {
     store.setState(state => ({ ...state, prompts }));
   },
 
-  // --- ACTIONS ДЛЯ ЧАТОВ (без изменений) ---
   setConversations: (conversations: Conversation[]) => {
     store.setState(state => ({ ...state, conversations }))
   },
@@ -101,14 +116,12 @@ export const actions = {
 
 // Selectors
 export const selectors = {
-  // --- НОВЫЕ И ОБНОВЛЕННЫЕ SELECTORS ---
   getSettings: (state: State) => state.settings,
   getActivePrompt: (state: State) => state.prompts.find(p => p.is_active),
   getPrompts: (state: State) => state.prompts,
-  // --- Старые селекторы без изменений ---
   getCurrentConversation: (state: State) => 
     state.conversations.find(c => c.id === state.currentConversationId),
   getConversations: (state: State) => state.conversations,
   getCurrentConversationId: (state: State) => state.currentConversationId,
   getIsLoading: (state: State) => state.isLoading
-} 
+}

@@ -1,5 +1,6 @@
 // 📄 store/hooks.ts
-import { useCallback } from 'react'; // <--- Импортируем useCallback
+
+import { useCallback } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { actions, selectors, store, type Conversation, type Prompt, type UserSettings } from './store';
 import type { Message } from '../utils/ai';
@@ -10,38 +11,23 @@ export function useSettings() {
     const { user } = useAuth();
     const settings = useStore(store, s => selectors.getSettings(s));
 
-    // --- ИЗМЕНЕНИЕ: Оборачиваем в useCallback ---
     const loadSettings = useCallback(async () => {
         if (!user) return;
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('settings')
-            .eq('id', user.id)
-            .single();
-
+        const { data, error } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
         if (error) console.error("Error loading settings:", error);
-        if (data && data.settings) {
-            actions.setSettings(data.settings as UserSettings);
-        }
-    }, [user]); // Зависимость: `user`
+        if (data && data.settings) actions.setSettings(data.settings as UserSettings);
+    }, [user]);
 
-    // --- ИЗМЕНЕНИЕ: Оборачиваем в useCallback ---
     const updateSettings = useCallback(async (newSettings: Partial<UserSettings>) => {
         if (!user || !settings) return;
-
         const updated = { ...settings, ...newSettings };
         actions.setSettings(updated);
-
-        const { error } = await supabase
-            .from('profiles')
-            .update({ settings: updated })
-            .eq('id', user.id);
-
+        const { error } = await supabase.from('profiles').update({ settings: updated }).eq('id', user.id);
         if (error) {
             console.error("Error updating settings:", error);
             actions.setSettings(settings); 
         }
-    }, [user, settings]); // Зависимости: `user` и `settings`
+    }, [user, settings]);
 
     return { settings, loadSettings, updateSettings };
 }
@@ -51,7 +37,6 @@ export function usePrompts() {
     const prompts = useStore(store, s => selectors.getPrompts(s));
     const activePrompt = useStore(store, s => selectors.getActivePrompt(s));
 
-    // --- ИЗМЕНЕНИЕ: Оборачиваем в useCallback ---
     const loadPrompts = useCallback(async () => {
         if (!user) return;
         const { data, error } = await supabase.from('prompts').select('*').eq('user_id', user.id).order('created_at');
@@ -59,15 +44,13 @@ export function usePrompts() {
         if (data) actions.setPrompts(data as Prompt[]);
     }, [user]);
 
-    // --- ИЗМЕНЕНИЕ: Оборачиваем в useCallback ---
     const createPrompt = useCallback(async (name: string, content: string) => {
         if (!user) return;
         const { error } = await supabase.from('prompts').insert({ name, content, user_id: user.id });
         if (error) console.error("Error creating prompt:", error);
-        else await loadPrompts(); // Вызываем стабильную функцию
+        else await loadPrompts();
     }, [user, loadPrompts]);
 
-    // --- ИЗМЕНЕНИЕ: Оборачиваем в useCallback ---
     const deletePrompt = useCallback(async (id: string) => {
         if (!user) return;
         const { error } = await supabase.from('prompts').delete().eq('id', id);
@@ -75,17 +58,12 @@ export function usePrompts() {
         else await loadPrompts();
     }, [user, loadPrompts]);
 
-    // --- ИЗМЕНЕНИЕ: Оборачиваем в useCallback ---
     const setPromptActive = useCallback(async (id: string, isActive: boolean) => {
         if (!user) return;
-        const { error: deactivateError } = await supabase.from('prompts').update({ is_active: false }).eq('user_id', user.id);
-        if (deactivateError) { console.error("Error deactivating prompts:", deactivateError); return; }
-
+        await supabase.from('prompts').update({ is_active: false }).eq('user_id', user.id);
         if (isActive) {
-            const { error: activateError } = await supabase.from('prompts').update({ is_active: true }).eq('id', id);
-            if (activateError) console.error("Error activating prompt:", activateError);
+            await supabase.from('prompts').update({ is_active: true }).eq('id', id);
         }
-        
         await loadPrompts();
     }, [user, loadPrompts]);
     
@@ -106,7 +84,6 @@ export function useConversations() {
   const currentConversationId = useStore(store, s => selectors.getCurrentConversationId(s));
   const currentConversation = useStore(store, s => selectors.getCurrentConversation(s));
 
-  // --- ИЗМЕНЕНИЕ: Оборачиваем все возвращаемые функции в useCallback ---
   const setCurrentConversationId = useCallback((id: string | null) => {
       actions.setCurrentConversationId(id);
   }, []);
@@ -140,14 +117,51 @@ export function useConversations() {
       const { error } = await supabase.from('conversations').delete().eq('id', id);
       if (error) console.error('Failed to delete conversation from Supabase:', error);
   }, []);
+  
+  // --- НОВАЯ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ UI ---
+  const updateMessageContent = useCallback((conversationId: string, messageId: string, newContent: string) => {
+    store.setState(state => {
+      const conv = state.conversations.find(c => c.id === conversationId);
+      if (!conv) return state;
 
+      return {
+        ...state,
+        conversations: state.conversations.map(c =>
+          c.id === conversationId
+            ? {
+                ...c,
+                messages: c.messages.map(m =>
+                  m.id === messageId ? { ...m, content: newContent } : m
+                ),
+              }
+            : c
+        ),
+      };
+    });
+  }, []);
+  
+  // --- ОБНОВЛЕННАЯ ФУНКЦИЯ, КОТОРАЯ МОЖЕТ ДОБАВЛЯТЬ И ОБНОВЛЯТЬ ---
   const addMessage = useCallback(async (conversationId: string, message: Message) => {
-      const conversation = selectors.getCurrentConversation(store.state);
+      const conversation = selectors.getConversations(store.state).find(c => c.id === conversationId);
       if (!conversation) return;
-      const updatedMessages = [...conversation.messages, message];
-      actions.addMessage(conversationId, message);
+
+      const messageExists = conversation.messages.some(m => m.id === message.id);
+
+      let updatedMessages;
+
+      if (messageExists) {
+        // ОБНОВЛЕНИЕ существующего сообщения
+        updatedMessages = conversation.messages.map(m => m.id === message.id ? message : m);
+        actions.updateMessageContent(conversationId, message.id, message.content); // Обновляем UI
+      } else {
+        // ДОБАВЛЕНИЕ нового сообщения
+        updatedMessages = [...conversation.messages, message];
+        actions.addMessage(conversationId, message);
+      }
+      
+      // Отправляем полный обновленный массив сообщений в Supabase
       const { error } = await supabase.from('conversations').update({ messages: updatedMessages }).eq('id', conversationId);
-      if (error) console.error('Failed to add message to Supabase:', error);
+      if (error) console.error('Failed to sync message to Supabase:', error);
   }, []);
 
 
@@ -161,5 +175,6 @@ export function useConversations() {
     updateConversationTitle,
     deleteConversation,
     addMessage,
+    updateMessageContent, // Экспортируем новую функцию
   };
 }
