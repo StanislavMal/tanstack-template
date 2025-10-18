@@ -8,6 +8,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* -> ИЗМЕНЕНИЕ: Добавлено для плавной прокрутки на iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 code {

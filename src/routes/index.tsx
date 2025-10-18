@@ -42,8 +42,8 @@ function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
-  const mobileMessagesContainerRef = useRef<HTMLElement>(null);
-  const desktopMessagesContainerRef = useRef<HTMLElement>(null);
+  // -> ИЗМЕНЕНИЕ: Объединяем рефы, так как логика скролла одинакова
+  const messagesContainerRef = useRef<HTMLElement>(null);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -92,7 +92,8 @@ function Home() {
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    const container = mobileMessagesContainerRef.current || desktopMessagesContainerRef.current;
+    // -> ИЗМЕНЕНИЕ: Используем один реф
+    const container = messagesContainerRef.current;
     if (container) {
         setTimeout(() => {
             container.scrollTo({
@@ -239,6 +240,7 @@ function Home() {
   const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
 
   const MainContent = () => (
+    // -> ИЗМЕНЕНИЕ: Контейнер для сообщений теперь имеет паддинг здесь
     <div className="w-full h-full p-4">
         {error && (
             <div className="bg-red-500/10 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg" role="alert">
@@ -259,7 +261,8 @@ function Home() {
                   {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
               </>
           ) : (
-              <div className="flex h-full items-center justify-center pt-20 md:pt-0"><WelcomeScreen /></div>
+              // -> ИЗМЕНЕНИЕ: Убран лишний flex-контейнер, выравнивание теперь обрабатывается выше
+              <WelcomeScreen />
           )}
         </div>
     </div>
@@ -267,8 +270,10 @@ function Home() {
 
 
   return (
-    <div className="h-screen bg-gray-900 text-white overflow-hidden">
+    // -> ИЗМЕНЕНИЕ: h-screen заменен на h-[100dvh], что корректно работает с мобильными браузерами.
+    <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
         {/* Мобильная версия */}
+        {/* -> ИЗМЕНЕНИЕ: Полностью новая структура для мобильной версии */}
         <div className="md:hidden h-full flex flex-col">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
             <Sidebar 
@@ -295,42 +300,44 @@ function Home() {
                 }} 
             />
             
-            <div className="flex-1 flex flex-col relative min-h-0">
-                <header className="absolute top-0 left-0 right-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4">
-                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white rounded-lg hover:bg-gray-700"><Menu className="w-6 h-6" /></button>
-                    <div className="flex items-center gap-2">
-                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
-                        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
-                    </div>
-                </header>
-                
-                <main ref={mobileMessagesContainerRef} className="flex-1 pt-16 pb-4 overflow-y-auto">
-                    <MainContent />
-                </main>
-                
-                <footer className="w-full">
-                    <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
-                </footer>
-            </div>
+            {/* -> ИЗМЕНЕНИЕ: Header теперь в потоке, не абсолютно позиционирован */}
+            <header className="flex-shrink-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 border-b border-gray-700">
+                <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white rounded-lg hover:bg-gray-700"><Menu className="w-6 h-6" /></button>
+                <div className="flex items-center gap-2">
+                    <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
+                    <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
+                </div>
+            </header>
+            
+            {/* -> ИЗМЕНЕНИЕ: main занимает все оставшееся место, имеет `overflow-y-auto` и `min-h-0` для правильного сжатия */}
+            <main 
+                ref={messagesContainerRef} 
+                className={`flex-1 overflow-y-auto min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
+            >
+                <MainContent />
+            </main>
+            
+            {/* -> ИЗМЕНЕНИЕ: footer просто занимает свое место внизу */}
+            <footer className="flex-shrink-0 w-full">
+                <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
+            </footer>
         </div>
 
-        {/* Десктопная версия */}
+        {/* Десктопная версия (без изменений) */}
         <div className="hidden md:flex h-full">
             <PanelGroup direction="horizontal">
                 <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
                     <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
                 </Panel>
                 <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
-                {/* -> ИЗМЕНЕНИЕ: ref убран с <Panel> */}
                 <Panel className="flex-1 flex flex-col relative min-h-0">
                      <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
                         <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
                         <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
                     </header>
                     
-                    {/* -> ИЗМЕНЕНИЕ: ref теперь на <main> */}
-                    <main ref={desktopMessagesContainerRef} className="flex-1 overflow-y-auto">
-                        <div className="w-full max-w-5xl mx-auto">
+                    <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
+                        <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
                            <MainContent />
                         </div>
                     </main>
