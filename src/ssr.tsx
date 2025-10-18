@@ -1,3 +1,5 @@
+// 📄 src/ssr.tsx (Исправленная версия)
+
 import {
   createStartHandler,
   defaultStreamHandler,
@@ -7,6 +9,9 @@ import * as Sentry from '@sentry/react'
 
 import { createRouter } from './router'
 import { initSentry } from './sentry'
+
+// -> ИЗМЕНЕНИЕ: Импортируем нашу универсальную конфигурацию i18n
+import './i18n'; 
 
 // Initialize Sentry in SSR context (will be skipped if DSN is not defined)
 initSentry()

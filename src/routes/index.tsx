@@ -15,6 +15,7 @@ import { useConversations, usePrompts, useSettings, useAppState } from '../store
 import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
+import { useTranslation } from 'react-i18next' // -> ИЗМЕНЕНИЕ
 
 import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels'
 
@@ -28,6 +29,7 @@ export const Route = createFileRoute('/')({
 })
 
 function Home() {
+  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
   const navigate = useNavigate()
   const { user } = useAuth()
   
@@ -42,7 +44,6 @@ function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
-  // -> ИЗМЕНЕНИЕ: Объединяем рефы, так как логика скролла одинакова
   const messagesContainerRef = useRef<HTMLElement>(null);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
@@ -92,7 +93,6 @@ function Home() {
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    // -> ИЗМЕНЕНИЕ: Используем один реф
     const container = messagesContainerRef.current;
     if (container) {
         setTimeout(() => {
@@ -199,7 +199,8 @@ function Home() {
       
       try {
         if (!conversationId) {
-          const newConvId = await createNewConversation(conversationTitle)
+          // -> ИЗМЕНЕНИЕ: Используем t() для заголовка нового чата, если он создается без ввода
+          const newConvId = await createNewConversation(conversationTitle || t('newChat'))
           if (newConvId) conversationId = newConvId
         }
         
@@ -231,6 +232,7 @@ function Home() {
       processAIResponse,
       setLoading,
       createTitleFromInput,
+      t, // -> ИЗМЕНЕНИЕ: Добавили t в зависимости
     ],
   )
 
@@ -240,14 +242,13 @@ function Home() {
   const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
 
   const MainContent = () => (
-    // -> ИЗМЕНЕНИЕ: Контейнер для сообщений теперь имеет паддинг здесь
     <div className="w-full h-full p-4">
         {error && (
             <div className="bg-red-500/10 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg" role="alert">
                 <div className="flex">
                     <div className="py-1"><AlertTriangle className="h-5 w-5 text-red-400 mr-3" /></div>
                     <div>
-                        <p className="font-bold">An error occurred</p>
+                        <p className="font-bold">{t('errorOccurred')}</p> {/* -> ИЗМЕНЕНИЕ */}
                         <p className="text-sm">{error}</p>
                     </div>
                 </div>
@@ -261,7 +262,6 @@ function Home() {
                   {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
               </>
           ) : (
-              // -> ИЗМЕНЕНИЕ: Убран лишний flex-контейнер, выравнивание теперь обрабатывается выше
               <WelcomeScreen />
           )}
         </div>
@@ -270,10 +270,8 @@ function Home() {
 
 
   return (
-    // -> ИЗМЕНЕНИЕ: h-screen заменен на h-[100dvh], что корректно работает с мобильными браузерами.
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
         {/* Мобильная версия */}
-        {/* -> ИЗМЕНЕНИЕ: Полностью новая структура для мобильной версии */}
         <div className="md:hidden h-full flex flex-col">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
             <Sidebar 
@@ -300,16 +298,14 @@ function Home() {
                 }} 
             />
             
-            {/* -> ИЗМЕНЕНИЕ: Header теперь в потоке, не абсолютно позиционирован */}
             <header className="flex-shrink-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 border-b border-gray-700">
                 <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white rounded-lg hover:bg-gray-700"><Menu className="w-6 h-6" /></button>
                 <div className="flex items-center gap-2">
-                    <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
+                    <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button> {/* -> ИЗМЕНЕНИЕ */}
                     <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
                 </div>
             </header>
             
-            {/* -> ИЗМЕНЕНИЕ: main занимает все оставшееся место, имеет `overflow-y-auto` и `min-h-0` для правильного сжатия */}
             <main 
                 ref={messagesContainerRef} 
                 className={`flex-1 overflow-y-auto min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
@@ -317,13 +313,12 @@ function Home() {
                 <MainContent />
             </main>
             
-            {/* -> ИЗМЕНЕНИЕ: footer просто занимает свое место внизу */}
             <footer className="flex-shrink-0 w-full">
                 <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
             </footer>
         </div>
 
-        {/* Десктопная версия (без изменений) */}
+        {/* Десктопная версия */}
         <div className="hidden md:flex h-full">
             <PanelGroup direction="horizontal">
                 <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
@@ -332,7 +327,7 @@ function Home() {
                 <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
                 <Panel className="flex-1 flex flex-col relative min-h-0">
                      <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
-                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
+                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button> {/* -> ИЗМЕНЕНИЕ */}
                         <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
                     </header>
                     
