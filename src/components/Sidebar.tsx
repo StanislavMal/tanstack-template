@@ -1,7 +1,7 @@
 // 📄 src/components/Sidebar.tsx
 
-// -> ИЗМЕНЕНИЕ: Убираем неиспользуемые ChevronsLeft и ChevronsRight
 import { PlusCircle, MessageCircle, Trash2, Edit2, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string }>;
@@ -35,8 +35,27 @@ export const Sidebar = ({
   isCollapsed,
 }: SidebarProps) => {
 
-  // Если панель свернута на десктопе, не рендерим ничего
-  // Это предотвращает рендер контента, когда панель имеет нулевую ширину
+  const [contextMenuChatId, setContextMenuChatId] = useState<string | null>(null);
+  // -> ИЗМЕНЕНИЕ: Добавляем тип и начальное значение null
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
+
+  const handleTouchStart = (chatId: string) => {
+    if (contextMenuChatId !== chatId) {
+      setContextMenuChatId(null);
+    }
+    
+    longPressTimer.current = setTimeout(() => {
+      setContextMenuChatId(chatId);
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+    }
+  };
+
   if (isCollapsed) {
     return null;
   }
@@ -64,68 +83,88 @@ export const Sidebar = ({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {conversations.map((chat) => (
-          <div
-            key={chat.id}
-            className={`group flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-700/50 ${
-              chat.id === currentConversationId ? 'bg-gray-700/50' : ''
-            }`}
-            onClick={() => setCurrentConversationId(chat.id)}
-          >
-            <MessageCircle className="w-4 h-4 text-gray-400" />
-            {editingChatId === chat.id ? (
-              <input
-                type="text"
-                value={editingTitle}
-                onChange={(e) => setEditingTitle(e.target.value)}
-                onFocus={(e) => e.target.select()}
-                onBlur={() => {
-                  if (editingTitle.trim()) {
-                    handleUpdateChatTitle(chat.id, editingTitle)
+      <div className="flex-1 overflow-y-auto" onTouchMove={handleTouchEnd}>
+        {conversations.map((chat) => {
+            const showMobileMenu = contextMenuChatId === chat.id;
+
+            return (
+              <div
+                key={chat.id}
+                className={`group flex items-center justify-between gap-3 px-3 py-2 cursor-pointer hover:bg-gray-700/50 ${
+                  chat.id === currentConversationId ? 'bg-gray-700/50' : ''
+                }`}
+                onClick={() => {
+                  if (contextMenuChatId) {
+                    setContextMenuChatId(null);
+                    return; 
                   }
-                  setEditingChatId(null)
-                  setEditingTitle('')
+                  setCurrentConversationId(chat.id);
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && editingTitle.trim()) {
-                    handleUpdateChatTitle(chat.id, editingTitle)
-                  } else if (e.key === 'Escape') {
-                    setEditingChatId(null)
-                    setEditingTitle('')
-                  }
-                }}
-                className="flex-1 text-sm text-white bg-transparent focus:outline-none"
-                autoFocus
-              />
-            ) : (
-              <span className="flex-1 text-sm text-gray-300 truncate">
-                {chat.title}
-              </span>
-            )}
-            <div className="items-center hidden gap-1 group-hover:flex">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setEditingChatId(chat.id)
-                  setEditingTitle(chat.title)
-                }}
-                className="p-1 text-gray-400 hover:text-white"
+                onTouchStart={() => handleTouchStart(chat.id)}
+                onTouchEnd={handleTouchEnd}
               >
-                <Edit2 className="w-3 h-3" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDeleteChat(chat.id)
-                }}
-                className="p-1 text-gray-400 hover:text-red-500"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        ))}
+                <div className="flex items-center flex-1 min-w-0 gap-3">
+                  <MessageCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  {editingChatId === chat.id ? (
+                    <input
+                      type="text"
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                      onBlur={() => {
+                        if (editingTitle.trim()) {
+                          handleUpdateChatTitle(chat.id, editingTitle)
+                        }
+                        setEditingChatId(null)
+                        setEditingTitle('')
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && editingTitle.trim()) {
+                          handleUpdateChatTitle(chat.id, editingTitle)
+                        } else if (e.key === 'Escape') {
+                          setEditingChatId(null)
+                          setEditingTitle('')
+                        }
+                      }}
+                      className="flex-1 text-sm text-white bg-transparent focus:outline-none"
+                      autoFocus
+                    />
+                  ) : (
+                    <span className="flex-1 text-sm text-gray-300 truncate">
+                      {chat.title}
+                    </span>
+                  )}
+                </div>
+
+                <div className={`
+                    items-center gap-1
+                    md:group-hover:flex ${showMobileMenu ? 'flex' : 'hidden'}
+                `}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingChatId(chat.id);
+                        setEditingTitle(chat.title);
+                        setContextMenuChatId(null);
+                      }}
+                      className="p-1 text-gray-400 hover:text-white"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteChat(chat.id);
+                        setContextMenuChatId(null);
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-500"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                </div>
+              </div>
+            )
+        })}
       </div>
     </div>
   );

@@ -42,7 +42,6 @@ function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
-  // -> ИЗМЕНЕНИЕ: Создаем ДВА разных ref'а для мобильного и десктопного контейнеров
   const mobileMessagesContainerRef = useRef<HTMLElement>(null);
   const desktopMessagesContainerRef = useRef<HTMLElement>(null);
 
@@ -92,7 +91,6 @@ function Home() {
     };
   }, []);
 
-  // -> ИЗМЕНЕНИЕ: Функция теперь проверяет оба ref'а
   const scrollToBottom = useCallback(() => {
     const container = mobileMessagesContainerRef.current || desktopMessagesContainerRef.current;
     if (container) {
@@ -273,7 +271,29 @@ function Home() {
         {/* Мобильная версия */}
         <div className="md:hidden h-full flex flex-col">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
-            <Sidebar {...{ conversations, currentConversationId, handleNewChat, handleDeleteChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: isSidebarOpen, setIsOpen: setIsSidebarOpen, isCollapsed: false, setCurrentConversationId: (id) => { setCurrentConversationId(id); setIsSidebarOpen(false); } }} />
+            <Sidebar 
+                {...{ 
+                    conversations, 
+                    currentConversationId, 
+                    handleDeleteChat, 
+                    editingChatId, 
+                    setEditingChatId, 
+                    editingTitle, 
+                    setEditingTitle, 
+                    handleUpdateChatTitle, 
+                    isOpen: isSidebarOpen, 
+                    setIsOpen: setIsSidebarOpen, 
+                    isCollapsed: false,
+                    handleNewChat: () => {
+                        handleNewChat();
+                        setIsSidebarOpen(false);
+                    },
+                    setCurrentConversationId: (id) => { 
+                        setCurrentConversationId(id); 
+                        setIsSidebarOpen(false); 
+                    } 
+                }} 
+            />
             
             <div className="flex-1 flex flex-col relative min-h-0">
                 <header className="absolute top-0 left-0 right-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4">
@@ -284,7 +304,6 @@ function Home() {
                     </div>
                 </header>
                 
-                {/* -> ИЗМЕНЕНИЕ: Применяем ref к мобильному <main> */}
                 <main ref={mobileMessagesContainerRef} className="flex-1 pt-16 pb-4 overflow-y-auto">
                     <MainContent />
                 </main>
@@ -302,19 +321,20 @@ function Home() {
                     <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
                 </Panel>
                 <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
+                {/* -> ИЗМЕНЕНИЕ: ref убран с <Panel> */}
                 <Panel className="flex-1 flex flex-col relative min-h-0">
                      <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
                         <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
                         <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
                     </header>
                     
-                    {/* -> ИЗМЕНЕНИЕ: Скролл теперь на <main>, а не на <Panel>. ref применяется сюда. */}
+                    {/* -> ИЗМЕНЕНИЕ: ref теперь на <main> */}
                     <main ref={desktopMessagesContainerRef} className="flex-1 overflow-y-auto">
-                        <div className="w-full lg:w-3/4 xl:w-2/3 mx-auto">
+                        <div className="w-full max-w-5xl mx-auto">
                            <MainContent />
                         </div>
                     </main>
-                    <footer className="w-full lg:w-3/4 xl:w-2/3 mx-auto">
+                    <footer className="w-full max-w-5xl mx-auto">
                          <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
                     </footer>
                 </Panel>
