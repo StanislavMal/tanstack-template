@@ -13,13 +13,15 @@ const IGNORE_PATTERNS = [
   'package-lock.json',
   'yarn.lock',
   'README.md',
-  'generate-context.mjs',
+  'generate-context-optimized.mjs',
   'PROJECT_CONTEXT.md',
   'PROJECT_SCOUT_REPORT.md',
   'universal-context-scout.mjs',
   'LICENSE',
   '.gitignore',
-  'tanstack-starter-preview.jpg'
+  'tanstack-starter-preview.jpg',
+  'export-supabase-schema.mjs',
+  'SUPABASE_SCHEMA.md'
 ];
 
 const BINARY_EXTENSIONS = [
