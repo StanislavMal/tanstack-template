@@ -1,3 +1,5 @@
+// 📄 src/routes/__root.tsx
+
 import {
   createRootRoute,
   Outlet,
@@ -5,7 +7,6 @@ import {
   Scripts,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
-// Убираем Convex, добавляем наш AuthProvider
 import { AuthProvider } from '../providers/AuthProvider' 
 
 import appCss from '../styles.css?url'
@@ -15,15 +16,15 @@ export const Route = createRootRoute({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'AI Chat (Supabase & Gemini)' }, // Можете поменять заголовок
+      { title: 'AI Chat (Supabase & Gemini)' },
     ],
     links: [{ rel: 'stylesheet', href: appCss }],
   }),
-  // Компонент верхнего уровня остается без изменений, он вызывает RootDocument
   component: () => (
     <RootDocument>
       <Outlet />
-      <TanStackRouterDevtools />
+      {/* -> ИЗМЕНЕНИЕ: Devtools теперь рендерится только в режиме разработки */}
+      {import.meta.env.DEV && <TanStackRouterDevtools />}
     </RootDocument>
   ),
 })
@@ -35,7 +36,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {/* Оборачиваем все дочерние компоненты в AuthProvider */}
         <AuthProvider>
           {children}
         </AuthProvider>

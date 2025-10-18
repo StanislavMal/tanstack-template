@@ -2,7 +2,7 @@
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { Settings } from 'lucide-react'
+import { Settings, Menu } from 'lucide-react' // -> ИЗМЕНЕНИЕ: Добавлена иконка Menu
 import {
   SettingsDialog,
   ChatMessage,
@@ -47,13 +47,13 @@ function Home() {
   const [editingChatId, setEditingChatId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false) // ++ НОВОЕ: Состояние для мобильного сайдбара
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
   
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
-  // --- ИЗМЕНЕНИЕ: Используем Ref для накопления финального контента ---
   const finalContentRef = useRef<string>(''); 
 
   useEffect(() => {
@@ -65,7 +65,6 @@ function Home() {
 
         setPendingMessage(prev => {
           if (prev) {
-            // Накапливаем контент и в стейте, и в ref
             const newContent = prev.content + charsToPrint;
             finalContentRef.current = newContent;
             return { ...prev, content: newContent };
@@ -102,12 +101,9 @@ function Home() {
         return null;
       }
       
-      // Сбрасываем ref перед началом
       finalContentRef.current = ''; 
       const initialAssistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
-      // --- ИЗМЕНЕНИЕ: Не устанавливаем pendingMessage сразу ---
-      // setPendingMessage(initialAssistantMessage); 
-
+      
       try {
         const response = await genAIResponse({
           data: {
@@ -133,7 +129,6 @@ function Home() {
               try {
                 const parsed = JSON.parse(chunkStr);
                 if (parsed.text) {
-                  // --- ИЗМЕНЕНИЕ: Устанавливаем pendingMessage только на первом чанке ---
                   if (isFirstChunk) {
                     setPendingMessage(initialAssistantMessage);
                     isFirstChunk = false;
@@ -154,7 +149,6 @@ function Home() {
             }, 50);
         });
         
-        // Возвращаем финальное сообщение, используя надежный ref
         return { ...initialAssistantMessage, content: finalContentRef.current };
 
       } catch (error) {
@@ -227,15 +221,50 @@ function Home() {
   const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
 
   return (
-    <div className="relative flex h-screen bg-gray-900">
-      <div className="absolute z-50 top-5 right-5 flex gap-2">
-        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
-        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white transition-opacity rounded-full bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"><Settings className="w-5 h-5" /></button>
-      </div>
+    // -> ИЗМЕНЕНИЕ: Добавлен `overflow-hidden` для исправления бага с прокруткой
+    <div className="relative flex h-screen bg-gray-900 overflow-hidden">
+      
+      {/* ++ НОВОЕ: Оверлей для затемнения фона на мобильных при открытом сайдбаре */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/50 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
 
-      <Sidebar conversations={conversations} currentConversationId={currentConversationId} handleNewChat={handleNewChat} setCurrentConversationId={setCurrentConversationId} handleDeleteChat={handleDeleteChat} editingChatId={editingChatId} setEditingChatId={setEditingChatId} editingTitle={editingTitle} setEditingTitle={setEditingTitle} handleUpdateChatTitle={handleUpdateChatTitle} />
+      {/* -> ИЗМЕНЕНИЕ: Передаем новые props в Sidebar */}
+      <Sidebar
+        conversations={conversations}
+        currentConversationId={currentConversationId}
+        handleNewChat={handleNewChat}
+        setCurrentConversationId={(id) => {
+          setCurrentConversationId(id);
+          setIsSidebarOpen(false); // Закрываем сайдбар при выборе чата на мобильном
+        }}
+        handleDeleteChat={handleDeleteChat}
+        editingChatId={editingChatId}
+        setEditingChatId={setEditingChatId}
+        editingTitle={editingTitle}
+        setEditingTitle={setEditingTitle}
+        handleUpdateChatTitle={handleUpdateChatTitle}
+        isOpen={isSidebarOpen}
+        setIsOpen={setIsSidebarOpen}
+      />
 
       <div className="flex flex-col flex-1">
+        {/* -> ИЗМЕНЕНИЕ: Добавлена кнопка-бургер */}
+        <div className="absolute top-5 right-5 z-10 flex gap-2 items-center">
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2 text-white rounded-lg md:hidden hover:bg-gray-700"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+          
+          <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
+          <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white transition-opacity rounded-full bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"><Settings className="w-5 h-5" /></button>
+        </div>
+
         {error && <p className="w-full max-w-3xl p-4 mx-auto font-bold text-orange-500">{error}</p>}
         {currentConversationId ? (
           <>
@@ -243,7 +272,6 @@ function Home() {
               <div className="w-full max-w-3xl px-4 mx-auto">
                 {messages.map((message) => <ChatMessage key={message.id} message={message} />)}
                 {pendingMessage && <ChatMessage message={pendingMessage} />}
-                {/* --- ИЗМЕНЕНИЕ: Правильная логика для индикатора --- */}
                 {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
               </div>
             </div>
