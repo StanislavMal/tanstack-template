@@ -1,5 +1,26 @@
+/* 📄 src/styles.css */
+
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
+
+/* 
+  Это фундаментальные стили, которые создают корректный контекст высоты для всего приложения.
+  Они заставляют корневые элементы занимать всю высоту окна, что позволяет
+  внутренним flex-контейнерам правильно вычислять свои размеры.
+*/
+html,
+body,
+#root {
+  @apply h-full;
+}
+
+/* 
+  Этот стиль предотвращает появление "двойной" полосы прокрутки на самом окне браузера,
+  так как вся прокрутка теперь управляется внутри нашего компонента.
+*/
+html {
+  @apply overflow-hidden;
+}
 
 body {
   @apply m-0;
@@ -8,7 +29,6 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* -> ИЗМЕНЕНИЕ: Добавлено для плавной прокрутки на iOS */
   -webkit-overflow-scrolling: touch;
 }
 
@@ -35,21 +55,11 @@ code {
   background-color: rgba(156, 163, 175, 0.7);
 }
 
-/* Smooth transitions for dark mode */
-html {
-  transition: background-color 0.3s ease;
-}
-
 /* Markdown content styles */
 .prose {
   max-width: none;
   color: #e5e7eb; /* text-gray-200 */
 }
-
-/* .prose p {
-  margin-top: 1.25em;
-  margin-bottom: 1.25em;
-} */
 
 .prose code {
   color: #e5e7eb;
@@ -76,8 +86,6 @@ html {
 
 .prose h1, .prose h2, .prose h3, .prose h4 {
   color: #f9fafb; /* text-gray-50 */
-  /* margin-top: 2em; */
-  /* margin-bottom: 1em; */
 }
 
 .prose ul, .prose ol {
@@ -131,31 +139,8 @@ html {
   font-weight: 600;
 }
 
-/* Message transition animations */
-.message-enter {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
-.message-enter-active {
-  opacity: 1;
-  transform: translateY(0);
-  transition: opacity 300ms, transform 300ms;
-}
-
-.message-exit {
-  opacity: 1;
-}
-
-.message-exit-active {
-  opacity: 0;
-  transition: opacity 300ms;
-}
-
-/* Add/update these styles to match AI formatting capabilities */
 .prose h1 {
   font-size: 2em;
-  /* margin-top: 1em; */
   margin-bottom: 0.5em;
 }
 
@@ -181,22 +166,6 @@ html {
   padding-left: 1.5em;
 }
 
-.prose table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1em 0;
-}
-
-.prose th,
-.prose td {
-  border: 1px solid rgba(249, 115, 22, 0.2);
-  padding: 0.5em;
-}
-
-.prose th {
-  background-color: rgba(249, 115, 22, 0.1);
-}
-
 .prose strong {
   color: #f9fafb; /* text-gray-50 */
   font-weight: 600;
@@ -204,41 +173,4 @@ html {
 
 .prose em {
   font-style: italic;
-}
-
-.prose blockquote {
-  border-left: 4px solid #f97316; /* orange-500 */
-  padding-left: 1em;
-  margin: 1em 0;
-  color: #d1d5db; /* text-gray-300 */
-}
-
-/* Ensure code blocks match the AI's formatting */
-.prose code {
-  color: #e5e7eb;
-  background-color: rgba(31, 41, 55, 0.5);
-  padding: 0.2em 0.4em;
-  border-radius: 0.375rem;
-  font-size: 0.875em;
-}
-
-.prose pre {
-  background-color: rgba(31, 41, 55, 0.5);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin: 1em 0;
-}
-
-.prose pre code {
-  background-color: transparent;
-  padding: 0;
-  border-radius: 0;
-}
-
-.prose pre {
-  background-color: rgba(31, 41, 55, 0.5); /* prose-pre:bg-gray-800/50 */
-  border-radius: 0.5rem; /* prose-pre:rounded-md */
-  padding: 1rem; /* prose-pre:p-4 */
-  margin: 1em 0;
-  overflow-x: auto;
 }

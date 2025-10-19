@@ -10,7 +10,7 @@ import {
   ChatInput,
   Sidebar,
   WelcomeScreen,
-  ScrollDownButton, // <-- ДОБАВЛЕНО
+  ScrollDownButton,
 } from '../components'
 import { useConversations, usePrompts, useSettings, useAppState } from '../store' 
 import { genAIResponse, type Message } from '../utils'
@@ -19,6 +19,24 @@ import { useAuth } from '../providers/AuthProvider'
 import { useTranslation } from 'react-i18next'
 import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels'
 
+// Хук для определения типа устройства на клиенте
+const useMediaQuery = (query: string) => {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const media = window.matchMedia(query);
+    if (media.matches !== matches) {
+      setMatches(media.matches);
+    }
+    const listener = () => setMatches(media.matches);
+    window.addEventListener('resize', listener);
+    return () => window.removeEventListener('resize', listener);
+  }, [matches, query]);
+
+  return matches;
+};
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
@@ -55,6 +73,7 @@ function Home() {
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
+  const isDesktop = useMediaQuery('(min-width: 768px)');
 
   useEffect(() => {
     if (user) {
@@ -102,18 +121,27 @@ function Home() {
     };
   }, []);
 
-  const forceScrollToBottom = useCallback(() => {
+  const forceScrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const container = messagesContainerRef.current;
     if (container) {
-      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      container.scrollTo({ top: container.scrollHeight, behavior });
     }
   }, []);
 
   useEffect(() => {
+    if (currentConversationId) {
+      setUserHasScrolled(false);
+      setShowScrollDownButton(false);
+      setTimeout(() => forceScrollToBottom('auto'), 50); // Мгновенный скролл при смене чата
+    }
+  }, [currentConversationId, forceScrollToBottom]);
+
+  useEffect(() => {
     if (!userHasScrolled) {
-      forceScrollToBottom();
+      forceScrollToBottom('smooth'); // Плавный скролл при новых сообщениях
     }
   }, [displayMessages, userHasScrolled, forceScrollToBottom]);
+
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -121,170 +149,153 @@ function Home() {
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 150; 
       
       setUserHasScrolled(!isAtBottom);
-      setShowScrollDownButton(!isAtBottom);
+      setShowScrollDownButton(!isAtBottom && scrollHeight > clientHeight + 150);
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
   }, []);
-
-
-  const createTitleFromInput = useCallback((text: string) => {
-    const words = text.trim().split(/\s+/)
-    const firstThreeWords = words.slice(0, 3).join(' ')
-    return firstThreeWords + (words.length > 3 ? '...' : '')
-  }, [])
-
+  
   const processAIResponse = useCallback(
     async (userMessage: Message) => {
-      if (!settings) {
-        setError("User settings not loaded.");
-        setLoading(false);
-        return null;
-      }
-      
-      finalContentRef.current = ''; 
-      const initialAssistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '' };
-      
-      try {
-        const history = messages.at(-1)?.id === userMessage.id 
-            ? messages.slice(0, -1) 
-            : messages;
-
-        const response = await genAIResponse({
-          data: {
-            messages: [...history, userMessage],
-            model: settings.model,
-            mainSystemInstruction: settings.system_instruction,
-            activePromptContent: activePrompt?.content,
-          },
-        })
-        
-        if (!response.body) throw new Error('No response body');
-        
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let isFirstChunk = true;
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          const rawText = decoder.decode(value, { stream: true });
-          rawText.replace(/}\{/g, '}\n{').split('\n').forEach((chunkStr) => {
-            if (chunkStr) {
-              try {
-                const parsed = JSON.parse(chunkStr);
-                if (parsed.text) {
-                  if (isFirstChunk) {
-                    setPendingMessage(initialAssistantMessage);
-                    setLoading(false);
-                    isFirstChunk = false;
-                  }
-                  textQueueRef.current += parsed.text;
-                }
-              } catch (e) { /* ignore */ }
-            }
-          })
-        }
-        
-        if (isFirstChunk) {
+        if (!settings) {
+            setError("User settings not loaded.");
             setLoading(false);
+            return null;
         }
 
-        await new Promise(resolve => {
-            const interval = setInterval(() => {
-                if (textQueueRef.current.length === 0) {
-                    clearInterval(interval);
-                    resolve(null);
-                }
-            }, 50);
-        });
-        
-        return { ...initialAssistantMessage, content: finalContentRef.current };
+        finalContentRef.current = '';
+        const initialAssistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '' };
 
-      } catch (error) {
-        console.error('Error in AI response:', error);
-        setError('An error occurred while getting the AI response.');
-        setLoading(false);
-        return null;
-      }
+        try {
+            const history = messages.at(-1)?.id === userMessage.id
+                ? messages.slice(0, -1)
+                : messages;
+
+            const response = await genAIResponse({
+                data: {
+                    messages: [...history, userMessage],
+                    model: settings.model,
+                    mainSystemInstruction: settings.system_instruction,
+                    activePromptContent: activePrompt?.content,
+                },
+            });
+
+            if (!response.body) throw new Error('No response body');
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let isFirstChunk = true;
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                const rawText = decoder.decode(value, { stream: true });
+                rawText.replace(/}\{/g, '}\n{').split('\n').forEach((chunkStr) => {
+                    if (chunkStr) {
+                        try {
+                            const parsed = JSON.parse(chunkStr);
+                            if (parsed.text) {
+                                if (isFirstChunk) {
+                                    setPendingMessage(initialAssistantMessage);
+                                    setLoading(false);
+                                    isFirstChunk = false;
+                                }
+                                textQueueRef.current += parsed.text;
+                            }
+                        } catch (e) { /* ignore */ }
+                    }
+                });
+            }
+
+            if (isFirstChunk) {
+                setLoading(false);
+            }
+
+            await new Promise(resolve => {
+                const interval = setInterval(() => {
+                    if (textQueueRef.current.length === 0) {
+                        clearInterval(interval);
+                        resolve(null);
+                    }
+                }, 50);
+            });
+
+            return { ...initialAssistantMessage, content: finalContentRef.current };
+
+        } catch (error) {
+            console.error('Error in AI response:', error);
+            setError('An error occurred while getting the AI response.');
+            setLoading(false);
+            return null;
+        }
     },
-    [settings, activePrompt, messages, setLoading],
-);
+    [settings, activePrompt, messages, setLoading]
+  );
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
-      e.preventDefault()
-      if (!input.trim() || isLoading) return
+        e.preventDefault();
+        if (!input.trim() || isLoading) return;
 
-      textQueueRef.current = '';
-      finalContentRef.current = '';
-      setPendingMessage(null);
-      setError(null);
-      
-      setUserHasScrolled(false);
-      setShowScrollDownButton(false);
-      forceScrollToBottom();
+        setUserHasScrolled(false);
+        setShowScrollDownButton(false);
 
-      const currentInput = input
-      setInput('')
-      
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
-
-      setLoading(true)
-
-      const conversationTitle = createTitleFromInput(currentInput)
-      const userMessage: Message = { id: crypto.randomUUID(), role: 'user' as const, content: currentInput.trim() }
-
-      let convId = currentConversationId;
-      
-      try {
-        if (!convId) {
-          const newConvId = await createNewConversation(conversationTitle || t('newChat'))
-          if (newConvId) convId = newConvId
-        }
-        
-        if (!convId) throw new Error('Failed to create or find conversation ID.');
-
-        await addMessage(convId, userMessage);
-        
-        const finalAiMessage = await processAIResponse(userMessage);
-        
-        if (finalAiMessage && finalAiMessage.content.trim()) {
-            await addMessage(convId, finalAiMessage);
-        }
-
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
-        console.error('Error in handleSubmit:', error)
-        setError(errorMessage);
-        setLoading(false);
-      } finally {
+        textQueueRef.current = '';
+        finalContentRef.current = '';
         setPendingMessage(null);
-      }
+        setError(null);
+        
+        const currentInput = input;
+        setInput('');
+        
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+        }
+
+        setLoading(true);
+
+        const conversationTitle = input.trim().split(/\s+/).slice(0, 3).join(' ') + (input.trim().split(/\s+/).length > 3 ? '...' : '');
+        const userMessage: Message = { id: crypto.randomUUID(), role: 'user' as const, content: currentInput.trim() };
+
+        let convId = currentConversationId;
+        
+        try {
+            if (!convId) {
+                const newConvId = await createNewConversation(conversationTitle || t('newChat'));
+                if (newConvId) convId = newConvId;
+            }
+            
+            if (!convId) throw new Error('Failed to create or find conversation ID.');
+
+            await addMessage(convId, userMessage);
+            
+            const finalAiMessage = await processAIResponse(userMessage);
+            
+            if (finalAiMessage && finalAiMessage.content.trim()) {
+                await addMessage(convId, finalAiMessage);
+            }
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+            console.error('Error in handleSubmit:', error);
+            setError(errorMessage);
+            setLoading(false);
+        } finally {
+            setPendingMessage(null);
+        }
     },
-    [
-      input,
-      isLoading,
-      currentConversationId,
-      createNewConversation,
-      addMessage,
-      processAIResponse,
-      setLoading,
-      createTitleFromInput,
-      t,
-      forceScrollToBottom,
-    ],
-  )
+    [input, isLoading, currentConversationId, createNewConversation, addMessage, processAIResponse, setLoading, t]
+  );
   
   const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
     if (!currentConversationId) return;
 
+    setUserHasScrolled(false);
+    setShowScrollDownButton(false);
     setEditingMessageId(null);
     setLoading(true);
     setError(null);
@@ -292,8 +303,6 @@ function Home() {
     finalContentRef.current = '';
     setPendingMessage(null);
     
-    setUserHasScrolled(false);
-    setShowScrollDownButton(false);
 
     try {
       const updatedUserMessage = await editMessageAndUpdate(messageId, newContent);
@@ -319,9 +328,8 @@ function Home() {
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
 
-  // -> ИЗМЕНЕНИЕ: Новый обработчик для кнопки скролла
   const handleScrollDownClick = useCallback(() => {
-    forceScrollToBottom();
+    forceScrollToBottom('smooth');
     setUserHasScrolled(false);
     setShowScrollDownButton(false);
   }, [forceScrollToBottom]);
@@ -331,11 +339,16 @@ function Home() {
   const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle])
   const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
   const handleDuplicateChat = useCallback(async (id: string) => { await duplicateConversation(id) }, [duplicateConversation])
-
-  const MainContent = () => (
-    <div className="w-full h-full p-4">
-        {error && (
-            <div className="bg-red-500/10 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg" role="alert">
+  
+  const ChatArea = () => (
+    <>
+      <main 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto min-h-0"
+      >
+        <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : 'p-4'}`}>
+          {error && (
+              <div className="bg-red-500/10 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg" role="alert">
                 <div className="flex">
                     <div className="py-1"><AlertTriangle className="h-5 w-5 text-red-400 mr-3" /></div>
                     <div>
@@ -343,107 +356,85 @@ function Home() {
                         <p className="text-sm">{error}</p>
                     </div>
                 </div>
-            </div>
-        )}
-        <div className="space-y-4">
-          {currentConversationId ? (
-              <>
-                  {displayMessages.map((message) => (
-                    <ChatMessage 
-                      key={message.id} 
-                      message={message} 
-                      isEditing={editingMessageId === message.id}
-                      onStartEdit={() => setEditingMessageId(message.id)}
-                      onCancelEdit={() => setEditingMessageId(null)}
-                      onSaveEdit={(newContent) => handleSaveEdit(message.id, newContent)}
-                      onCopyMessage={() => navigator.clipboard.writeText(message.content)}
-                    />
-                  ))}
-                  {isLoading && <LoadingIndicator />}
-              </>
-          ) : (
-              <WelcomeScreen />
+              </div>
           )}
+          <div className="space-y-4">
+              {currentConversationId ? (
+                  <>
+                      {displayMessages.map((message) => (
+                          <ChatMessage 
+                              key={message.id} 
+                              message={message} 
+                              isEditing={editingMessageId === message.id}
+                              onStartEdit={() => setEditingMessageId(message.id)}
+                              onCancelEdit={() => setEditingMessageId(null)}
+                              onSaveEdit={(newContent) => handleSaveEdit(message.id, newContent)}
+                              onCopyMessage={() => navigator.clipboard.writeText(message.content)}
+                          />
+                      ))}
+                      {isLoading && <LoadingIndicator />}
+                  </>
+              ) : (
+                  <WelcomeScreen />
+              )}
+          </div>
         </div>
-    </div>
+      </main>
+      
+      {showScrollDownButton && (
+          <ScrollDownButton
+              onClick={handleScrollDownClick}
+              className={isDesktop ? "bottom-28 right-10" : "bottom-24 right-4"}
+          />
+      )}
+
+      <footer className="w-full max-w-5xl mx-auto flex-shrink-0">
+          <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
+      </footer>
+    </>
   );
 
-
   return (
-    <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
-        {/* Мобильная версия */}
-        <div className="md:hidden h-full flex flex-col relative">
-            {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
-            <Sidebar 
-                {...{ 
-                    conversations, currentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: isSidebarOpen, setIsOpen: setIsSidebarOpen, isCollapsed: false,
-                    handleNewChat: () => { handleNewChat(); setIsSidebarOpen(false); },
-                    setCurrentConversationId: (id) => { setCurrentConversationId(id); setIsSidebarOpen(false); } 
-                }} 
-            />
-            
-            <header className="flex-shrink-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 border-b border-gray-700">
-                <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white rounded-lg hover:bg-gray-700"><Menu className="w-6 h-6" /></button>
-                <div className="flex items-center gap-2">
-                    <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
-                    <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
-                </div>
-            </header>
-            
-            <main 
-                ref={messagesContainerRef} 
-                className={`flex-1 overflow-y-auto min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
-            >
-                <MainContent />
-            </main>
-            
-            {/* -> ИЗМЕНЕНИЕ: Используем новый компонент */}
-            {showScrollDownButton && (
-                <ScrollDownButton
-                    onClick={handleScrollDownClick}
-                    className="bottom-24 right-4"
-                />
-            )}
-            
-            <footer className="flex-shrink-0 w-full">
-                <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
-            </footer>
+    <div className="h-full bg-gray-900 text-white">
+      {isDesktop ? (
+        // ДЕСКТОПНАЯ ВЕРСИЯ
+        <PanelGroup direction="horizontal">
+          <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
+            <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
+          </Panel>
+          <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
+          <Panel className="flex-1 flex flex-col relative min-h-0">
+               <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
+                  <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
+                  <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
+              </header>
+              <ChatArea />
+          </Panel>
+        </PanelGroup>
+      ) : (
+        // МОБИЛЬНАЯ ВЕРСИЯ
+        <div className="h-full flex flex-col">
+          {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
+          <Sidebar 
+              {...{ 
+                  conversations, currentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: isSidebarOpen, setIsOpen: setIsSidebarOpen, isCollapsed: false,
+                  handleNewChat: () => { handleNewChat(); setIsSidebarOpen(false); },
+                  setCurrentConversationId: (id) => { setCurrentConversationId(id); setIsSidebarOpen(false); } 
+              }} 
+          />
+          
+          <header className="flex-shrink-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 border-b border-gray-700">
+              <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white rounded-lg hover:bg-gray-700"><Menu className="w-6 h-6" /></button>
+              <div className="flex items-center gap-2">
+                  <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
+                  <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
+              </div>
+          </header>
+          <ChatArea />
         </div>
+      )}
 
-        {/* Десктопная версия */}
-        <div className="hidden md:flex h-full">
-            <PanelGroup direction="horizontal">
-                <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
-                    <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
-                </Panel>
-                <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
-                <Panel className="flex-1 flex flex-col relative min-h-0">
-                     <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
-                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
-                        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
-                    </header>
-                    
-                    <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
-                        <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                           <MainContent />
-                        </div>
-                    </main>
-                    
-                    {/* -> ИЗМЕНЕНИЕ: Используем новый компонент */}
-                    {showScrollDownButton && (
-                        <ScrollDownButton
-                            onClick={handleScrollDownClick}
-                            className="bottom-28 right-10"
-                        />
-                    )}
-
-                    <footer className="w-full max-w-5xl mx-auto">
-                         <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
-                    </footer>
-                </Panel>
-            </PanelGroup>
-        </div>
-        <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   )
 }
