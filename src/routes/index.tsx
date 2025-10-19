@@ -45,7 +45,7 @@ function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  // -> ИЗМЕНЕНИЕ: Добавляем ref для textarea
+  // ->ИЗМЕНЕНИЕ: Добавляем ref для textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLElement>(null);
 
