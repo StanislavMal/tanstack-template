@@ -2,7 +2,8 @@
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react' 
-import { Settings, Menu, AlertTriangle } from 'lucide-react'
+// -> ИЗМЕНЕНИЕ: Добавляем иконку для кнопки скролла
+import { Settings, Menu, AlertTriangle, ArrowDown } from 'lucide-react'
 import {
   SettingsDialog,
   ChatMessage,
@@ -42,15 +43,19 @@ function Home() {
   const [editingTitle, setEditingTitle] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
+  // -> ИЗМЕНЕНИЕ: Добавляем ref для textarea
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLElement>(null);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
-
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  
+  // -> ИЗМЕНЕНИЕ: Новое состояние для управления прокруткой
+  const [userHasScrolled, setUserHasScrolled] = useState(false);
+  const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
 
   useEffect(() => {
@@ -99,20 +104,37 @@ function Home() {
     };
   }, []);
 
-  const scrollToBottom = useCallback(() => {
+  // -> ИЗМЕНЕНИЕ: Логика прокрутки
+  const forceScrollToBottom = useCallback(() => {
     const container = messagesContainerRef.current;
     if (container) {
-        setTimeout(() => {
-            container.scrollTo({
-                top: container.scrollHeight,
-                behavior: 'smooth'
-            });
-        }, 100);
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     }
   }, []);
-  
-  useEffect(() => { scrollToBottom() }, [displayMessages, scrollToBottom])
-  
+
+  useEffect(() => {
+    if (!userHasScrolled) {
+      forceScrollToBottom();
+    }
+  }, [displayMessages, userHasScrolled, forceScrollToBottom]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 150; // Порог в 150px
+      
+      setUserHasScrolled(!isAtBottom);
+      setShowScrollDownButton(!isAtBottom);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+
   const createTitleFromInput = useCallback((text: string) => {
     const words = text.trim().split(/\s+/)
     const firstThreeWords = words.slice(0, 3).join(' ')
@@ -123,7 +145,7 @@ function Home() {
     async (userMessage: Message) => {
       if (!settings) {
         setError("User settings not loaded.");
-        setLoading(false); // -> ИЗМЕНЕНИЕ: Устанавливаем false, если нет настроек
+        setLoading(false);
         return null;
       }
       
@@ -161,7 +183,7 @@ function Home() {
                 if (parsed.text) {
                   if (isFirstChunk) {
                     setPendingMessage(initialAssistantMessage);
-                    setLoading(false); // -> ИЗМЕНЕНИЕ: Устанавливаем false при первом чанке
+                    setLoading(false);
                     isFirstChunk = false;
                   }
                   textQueueRef.current += parsed.text;
@@ -171,8 +193,6 @@ function Home() {
           })
         }
         
-        // -> ИЗМЕНЕНИЕ: Если стрим закончился, а мы так и не получили ни одного чанка,
-        // все равно выключаем индикатор загрузки.
         if (isFirstChunk) {
             setLoading(false);
         }
@@ -191,11 +211,11 @@ function Home() {
       } catch (error) {
         console.error('Error in AI response:', error);
         setError('An error occurred while getting the AI response.');
-        setLoading(false); // -> ИЗМЕНЕНИЕ: Устанавливаем false в случае ошибки
+        setLoading(false);
         return null;
       }
     },
-    [settings, activePrompt, messages, setLoading], // -> ИЗМЕНЕНИЕ: Добавляем setLoading в зависимости
+    [settings, activePrompt, messages, setLoading],
 );
 
   const handleSubmit = useCallback(
@@ -207,10 +227,21 @@ function Home() {
       finalContentRef.current = '';
       setPendingMessage(null);
       setError(null);
+      
+      // -> ИЗМЕНЕНИЕ: Немедленно сбрасываем флаг скролла и прокручиваем
+      setUserHasScrolled(false);
+      setShowScrollDownButton(false);
+      forceScrollToBottom();
 
       const currentInput = input
       setInput('')
-      setLoading(true) // <- Индикатор включается здесь...
+      
+      // -> ИЗМЕНЕНИЕ: Сбрасываем высоту textarea
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+
+      setLoading(true)
 
       const conversationTitle = createTitleFromInput(currentInput)
       const userMessage: Message = { id: crypto.randomUUID(), role: 'user' as const, content: currentInput.trim() }
@@ -227,7 +258,7 @@ function Home() {
 
         await addMessage(convId, userMessage);
         
-        const finalAiMessage = await processAIResponse(userMessage); // <- ...и выключится внутри этой функции
+        const finalAiMessage = await processAIResponse(userMessage);
         
         if (finalAiMessage && finalAiMessage.content.trim()) {
             await addMessage(convId, finalAiMessage);
@@ -237,9 +268,8 @@ function Home() {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
         console.error('Error in handleSubmit:', error)
         setError(errorMessage);
-        setLoading(false); // -> ИЗМЕНЕНИЕ: Дополнительная защита
+        setLoading(false);
       } finally {
-        // -> ИЗМЕНЕНИЕ: Убираем setLoading(false) отсюда, т.к. он теперь обрабатывается раньше
         setPendingMessage(null);
       }
     },
@@ -253,6 +283,7 @@ function Home() {
       setLoading,
       createTitleFromInput,
       t,
+      forceScrollToBottom, // -> ИЗМЕНЕНИЕ: Добавляем зависимость
     ],
   )
   
@@ -260,11 +291,15 @@ function Home() {
     if (!currentConversationId) return;
 
     setEditingMessageId(null);
-    setLoading(true); // <- Включаем
+    setLoading(true);
     setError(null);
     textQueueRef.current = '';
     finalContentRef.current = '';
     setPendingMessage(null);
+    
+    // -> ИЗМЕНЕНИЕ: Сбрасываем скролл
+    setUserHasScrolled(false);
+    setShowScrollDownButton(false);
 
     try {
       const updatedUserMessage = await editMessageAndUpdate(messageId, newContent);
@@ -273,7 +308,7 @@ function Home() {
         throw new Error("Failed to get updated user message after edit.");
       }
       
-      const finalAiMessage = await processAIResponse(updatedUserMessage); // <- Выключится здесь
+      const finalAiMessage = await processAIResponse(updatedUserMessage);
         
       if (finalAiMessage && finalAiMessage.content.trim()) {
           await addMessage(currentConversationId, finalAiMessage);
@@ -283,9 +318,8 @@ function Home() {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during edit.';
         console.error('Error in handleSaveEdit:', error)
         setError(errorMessage);
-        setLoading(false); // -> ИЗМЕНЕНИЕ: Дополнительная защита
+        setLoading(false);
     } finally {
-        // -> ИЗМЕНЕНИЕ: Убираем setLoading(false)
         setPendingMessage(null);
     }
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
@@ -310,7 +344,8 @@ function Home() {
                 </div>
             </div>
         )}
-        <div className="space-y-6">
+        {/* -> ИЗМЕНЕНИЕ: Уменьшаем отступ */}
+        <div className="space-y-4">
           {currentConversationId ? (
               <>
                   {displayMessages.map((message) => (
@@ -324,7 +359,6 @@ function Home() {
                       onCopyMessage={() => navigator.clipboard.writeText(message.content)}
                     />
                   ))}
-                  {/* -> ИЗМЕНЕНИЕ: Условие для показа индикатора стало проще */}
                   {isLoading && <LoadingIndicator />}
               </>
           ) : (
@@ -337,32 +371,14 @@ function Home() {
 
   return (
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
-        {/* ...остальной код без изменений... */}
         {/* Мобильная версия */}
-        <div className="md:hidden h-full flex flex-col">
+        <div className="md:hidden h-full flex flex-col relative"> {/* -> ИЗМЕНЕНИЕ: Добавляем 'relative' */}
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
             <Sidebar 
                 {...{ 
-                    conversations, 
-                    currentConversationId, 
-                    handleDeleteChat, 
-                    handleDuplicateChat, 
-                    editingChatId, 
-                    setEditingChatId, 
-                    editingTitle, 
-                    setEditingTitle, 
-                    handleUpdateChatTitle, 
-                    isOpen: isSidebarOpen, 
-                    setIsOpen: setIsSidebarOpen, 
-                    isCollapsed: false,
-                    handleNewChat: () => {
-                        handleNewChat();
-                        setIsSidebarOpen(false);
-                    },
-                    setCurrentConversationId: (id) => { 
-                        setCurrentConversationId(id); 
-                        setIsSidebarOpen(false); 
-                    } 
+                    conversations, currentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: isSidebarOpen, setIsOpen: setIsSidebarOpen, isCollapsed: false,
+                    handleNewChat: () => { handleNewChat(); setIsSidebarOpen(false); },
+                    setCurrentConversationId: (id) => { setCurrentConversationId(id); setIsSidebarOpen(false); } 
                 }} 
             />
             
@@ -381,8 +397,22 @@ function Home() {
                 <MainContent />
             </main>
             
+            {/* -> ИЗМЕНЕНИЕ: Кнопка скролла вниз */}
+            {showScrollDownButton && (
+                <button
+                    onClick={() => {
+                        forceScrollToBottom();
+                        setUserHasScrolled(false);
+                        setShowScrollDownButton(false);
+                    }}
+                    className="absolute bottom-24 right-4 z-10 w-10 h-10 rounded-full bg-gray-700/80 backdrop-blur-sm text-white flex items-center justify-center shadow-lg hover:bg-gray-600"
+                >
+                    <ArrowDown className="w-5 h-5" />
+                </button>
+            )}
+            
             <footer className="flex-shrink-0 w-full">
-                <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
+                <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
             </footer>
         </div>
 
@@ -404,8 +434,23 @@ function Home() {
                            <MainContent />
                         </div>
                     </main>
+                    
+                    {/* -> ИЗМЕНЕНИЕ: Кнопка скролла вниз для десктопа */}
+                    {showScrollDownButton && (
+                        <button
+                            onClick={() => {
+                                forceScrollToBottom();
+                                setUserHasScrolled(false);
+                                setShowScrollDownButton(false);
+                            }}
+                            className="absolute bottom-28 right-10 z-10 w-10 h-10 rounded-full bg-gray-700/80 backdrop-blur-sm text-white flex items-center justify-center shadow-lg hover:bg-gray-600"
+                        >
+                            <ArrowDown className="w-5 h-5" />
+                        </button>
+                    )}
+
                     <footer className="w-full max-w-5xl mx-auto">
-                         <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
+                         <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
                     </footer>
                 </Panel>
             </PanelGroup>
