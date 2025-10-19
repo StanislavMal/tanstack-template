@@ -1,4 +1,4 @@
-// 📄 store/hooks.ts
+// 📄 src/store/hooks.ts
 
 import { useCallback, useEffect } from 'react';
 import { useStore } from '@tanstack/react-store';
@@ -179,31 +179,24 @@ export function useConversations() {
     }
   }, [user]);
 
-  // -> ИЗМЕНЕНИЕ: Убираем неиспользуемый параметр 'conversationId' и улучшаем логику
   const editMessageAndUpdate = useCallback(async (messageId: string, newContent: string) => {
-    // Получаем оригинальные сообщения ДО изменения состояния
     const originalMessages = selectors.getCurrentMessages(store.state);
     const originalMessageIndex = originalMessages.findIndex(m => m.id === messageId);
     if (originalMessageIndex === -1) return null;
 
-    // Определяем ID сообщений, которые будут удалены из истории
     const idsToDelete = originalMessages
       .slice(originalMessageIndex + 1)
       .map(m => m.id);
 
-    // 1. Оптимистично обновляем UI
     actions.editMessage(messageId, newContent);
     
     try {
-      // 2. Параллельно выполняем операции с БД
       const promises = [];
 
-      // Удаляем "устаревшие" сообщения
       if (idsToDelete.length > 0) {
         promises.push(supabase.from('messages').delete().in('id', idsToDelete));
       }
 
-      // Обновляем контент отредактированного сообщения
       promises.push(
         supabase
           .from('messages')
@@ -218,12 +211,10 @@ export function useConversations() {
 
     } catch (error) {
       console.error('Failed to update messages in Supabase after edit:', error);
-      // Откатываем UI в случае ошибки
       actions.setMessages(originalMessages);
       return null;
     }
 
-    // 3. Возвращаем новое (отредактированное) сообщение пользователя для повторной отправки в AI
     const updatedMessages = selectors.getCurrentMessages(store.state);
     return updatedMessages.at(-1) || null;
   }, []);
@@ -234,6 +225,7 @@ export function useConversations() {
     const originalConversation = conversations.find(c => c.id === id);
     if (!originalConversation) return;
 
+    // 1. Загружаем сообщения для копирования
     const { data: messagesToCopy, error: messagesError } = await supabase
       .from('messages')
       .select('role, content, user_id')
@@ -245,6 +237,7 @@ export function useConversations() {
       return;
     }
 
+    // 2. Создаем новую беседу в БД
     const newTitle = `copy_${originalConversation.title}`;
     const { data: newConvData, error: newConvError } = await supabase
       .from('conversations')
@@ -259,23 +252,30 @@ export function useConversations() {
 
     const newConversation = newConvData as Conversation;
 
+    // 3. Копируем сообщения в новую беседу
     if (messagesToCopy && messagesToCopy.length > 0) {
         const newMessages = messagesToCopy.map(msg => ({
             ...msg,
             conversation_id: newConversation.id,
-            id: undefined
+            // id будет сгенерирован базой данных
         }));
         
         const { error: insertError } = await supabase.from('messages').insert(newMessages);
         if (insertError) {
             console.error('Failed to insert duplicated messages:', insertError);
+            // Здесь можно добавить логику отката - удалить созданную беседу
+            await supabase.from('conversations').delete().eq('id', newConversation.id);
             return;
         }
     }
     
-    actions.addConversation(newConversation);
+    // 4. Обновляем список бесед с сервера
+    await loadConversations();
 
-  }, [user, conversations]);
+    // 5. Переключаемся на новую беседу
+    setCurrentConversationId(newConversation.id);
+
+  }, [user, conversations, loadConversations, setCurrentConversationId]);
 
 
   return {
