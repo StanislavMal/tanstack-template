@@ -14,17 +14,20 @@ export interface UserSettings {
   system_instruction: string
 }
 
+// -> ИЗМЕНЕНИЕ: Убираем массив 'messages' отсюда
 export interface Conversation {
   id: string
   title: string
-  messages: Message[]
-  created_at: string // -> НОВОЕ
+  user_id: string
+  created_at: string
 }
 
 export interface State {
   prompts: Prompt[]
   settings: UserSettings | null
   conversations: Conversation[]
+  // -> НОВОЕ: Отдельное состояние для сообщений текущего диалога
+  currentMessages: Message[] 
   currentConversationId: string | null
   isLoading: boolean
 }
@@ -33,6 +36,7 @@ const initialState: State = {
   prompts: [],
   settings: null,
   conversations: [],
+  currentMessages: [], // -> НОВОЕ
   currentConversationId: null,
   isLoading: false
 }
@@ -40,31 +44,33 @@ const initialState: State = {
 export const store = new Store<State>(initialState)
 
 export const actions = {
-  // -> ИЗМЕНЕНИЕ: Заменяем updateMessageContent на более универсальный
-  editMessage: (conversationId: string, messageId: string, newContent: string) => {
+  // -> ИЗМЕНЕНИЕ: Полностью переписываем логику работы с сообщениями
+  setMessages: (messages: Message[]) => {
+    store.setState(state => ({ ...state, currentMessages: messages }));
+  },
+
+  addMessage: (message: Message) => {
+    store.setState(state => ({
+      ...state,
+      currentMessages: [...state.currentMessages, message]
+    }));
+  },
+
+  editMessage: (messageId: string, newContent: string) => {
     store.setState(state => {
-      const convIndex = state.conversations.findIndex(c => c.id === conversationId);
-      if (convIndex === -1) return state;
-
-      const newConversations = [...state.conversations];
-      const conversation = { ...newConversations[convIndex] };
-      
-      const msgIndex = conversation.messages.findIndex(m => m.id === messageId);
+      const msgIndex = state.currentMessages.findIndex(m => m.id === messageId);
       if (msgIndex === -1) return state;
-
-      const newMessages = [...conversation.messages];
+      
+      const newMessages = [...state.currentMessages];
       // Обновляем сообщение
       newMessages[msgIndex] = { ...newMessages[msgIndex], content: newContent };
-      // Удаляем все сообщения *после* отредактированного
-      newMessages.splice(msgIndex + 1);
+      // Обрезаем историю после отредактированного сообщения
+      const finalMessages = newMessages.slice(0, msgIndex + 1);
 
-      conversation.messages = newMessages;
-      newConversations[convIndex] = conversation;
-
-      return { ...state, conversations: newConversations };
+      return { ...state, currentMessages: finalMessages };
     });
   },
-  
+
   // Остальные actions
   setSettings: (settings: UserSettings) => {
     store.setState(state => ({ ...state, settings }));
@@ -79,15 +85,22 @@ export const actions = {
   },
 
   setCurrentConversationId: (id: string | null) => {
-    store.setState(state => ({ ...state, currentConversationId: id }))
+    store.setState(state => {
+      // При смене диалога очищаем старые сообщения
+      if (state.currentConversationId !== id) {
+        return { ...state, currentConversationId: id, currentMessages: [] };
+      }
+      return { ...state, currentConversationId: id };
+    });
   },
 
   addConversation: (conversation: Conversation) => {
     store.setState(state => ({
       ...state,
-      conversations: [conversation, ...state.conversations], // -> ИЗМЕНЕНИЕ: Добавляем в начало списка
-      currentConversationId: conversation.id
-    }))
+      conversations: [conversation, ...state.conversations],
+      currentConversationId: conversation.id,
+      currentMessages: [] // Новый диалог всегда пустой
+    }));
   },
 
   updateConversationTitle: (id: string, title: string) => {
@@ -103,21 +116,12 @@ export const actions = {
     store.setState(state => ({
       ...state,
       conversations: state.conversations.filter(conv => conv.id !== id),
-      currentConversationId: state.currentConversationId === id ? null : state.currentConversationId
-    }))
+      currentConversationId: state.currentConversationId === id ? null : state.currentConversationId,
+      // Если удалили текущий, чистим сообщения
+      currentMessages: state.currentConversationId === id ? [] : state.currentMessages,
+    }));
   },
-
-  addMessage: (conversationId: string, message: Message) => {
-    store.setState(state => ({
-      ...state,
-      conversations: state.conversations.map(conv =>
-        conv.id === conversationId
-          ? { ...conv, messages: [...conv.messages, message] }
-          : conv
-      )
-    }))
-  },
-
+  
   setLoading: (isLoading: boolean) => {
     store.setState(state => ({ ...state, isLoading }))
   }
@@ -132,5 +136,7 @@ export const selectors = {
     state.conversations.find(c => c.id === state.currentConversationId),
   getConversations: (state: State) => state.conversations,
   getCurrentConversationId: (state: State) => state.currentConversationId,
-  getIsLoading: (state: State) => state.isLoading
+  getIsLoading: (state: State) => state.isLoading,
+  // -> НОВОЕ: Селектор для получения сообщений
+  getCurrentMessages: (state: State) => state.currentMessages,
 }

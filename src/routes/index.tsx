@@ -1,7 +1,7 @@
 // 📄 src/routes/index.tsx
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react' 
 import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
@@ -11,7 +11,7 @@ import {
   Sidebar,
   WelcomeScreen,
 } from '../components'
-import { useConversations, usePrompts, useSettings, useAppState, store, type Conversation } from '../store'
+import { useConversations, usePrompts, useSettings, useAppState } from '../store' 
 import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
@@ -32,8 +32,7 @@ function Home() {
   const navigate = useNavigate()
   const { user } = useAuth()
   
-  // -> ИЗМЕНЕНИЕ: Достаем новую функцию из хука
-  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation, editMessageAndUpdate, duplicateConversation } = useConversations()
+  const { conversations, messages, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, editMessageAndUpdate, duplicateConversation } = useConversations()
   const { isLoading, setLoading } = useAppState()
   const { settings, loadSettings } = useSettings()
   const { activePrompt, loadPrompts } = usePrompts()
@@ -61,9 +60,15 @@ function Home() {
       loadSettings()
     }
   }, [user, loadConversations, loadPrompts, loadSettings])
-
-  const messages = useMemo(() => currentConversation?.messages || [], [currentConversation])
   
+  const displayMessages = useMemo(() => {
+    const combined = [...messages];
+    if (pendingMessage && !messages.some(m => m.id === pendingMessage.id)) {
+        combined.push(pendingMessage);
+    }
+    return combined;
+  }, [messages, pendingMessage]);
+
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
   const finalContentRef = useRef<string>(''); 
@@ -104,9 +109,9 @@ function Home() {
             });
         }, 100);
     }
-}, []);
+  }, []);
   
-  useEffect(() => { scrollToBottom() }, [messages, pendingMessage, scrollToBottom])
+  useEffect(() => { scrollToBottom() }, [displayMessages, scrollToBottom])
   
   const createTitleFromInput = useCallback((text: string) => {
     const words = text.trim().split(/\s+/)
@@ -118,18 +123,17 @@ function Home() {
     async (userMessage: Message) => {
       if (!settings) {
         setError("User settings not loaded.");
+        setLoading(false); // -> ИЗМЕНЕНИЕ: Устанавливаем false, если нет настроек
         return null;
       }
       
       finalContentRef.current = ''; 
-      const initialAssistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
+      const initialAssistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '' };
       
       try {
-        const previousMessages = store.state.conversations.find((c: Conversation) => c.id === currentConversationId)?.messages || [];
-        
-        const history = previousMessages.at(-1)?.id === userMessage.id 
-            ? previousMessages.slice(0, -1) 
-            : previousMessages;
+        const history = messages.at(-1)?.id === userMessage.id 
+            ? messages.slice(0, -1) 
+            : messages;
 
         const response = await genAIResponse({
           data: {
@@ -157,6 +161,7 @@ function Home() {
                 if (parsed.text) {
                   if (isFirstChunk) {
                     setPendingMessage(initialAssistantMessage);
+                    setLoading(false); // -> ИЗМЕНЕНИЕ: Устанавливаем false при первом чанке
                     isFirstChunk = false;
                   }
                   textQueueRef.current += parsed.text;
@@ -166,6 +171,12 @@ function Home() {
           })
         }
         
+        // -> ИЗМЕНЕНИЕ: Если стрим закончился, а мы так и не получили ни одного чанка,
+        // все равно выключаем индикатор загрузки.
+        if (isFirstChunk) {
+            setLoading(false);
+        }
+
         await new Promise(resolve => {
             const interval = setInterval(() => {
                 if (textQueueRef.current.length === 0) {
@@ -180,10 +191,11 @@ function Home() {
       } catch (error) {
         console.error('Error in AI response:', error);
         setError('An error occurred while getting the AI response.');
+        setLoading(false); // -> ИЗМЕНЕНИЕ: Устанавливаем false в случае ошибки
         return null;
       }
     },
-    [settings, activePrompt, currentConversationId], 
+    [settings, activePrompt, messages, setLoading], // -> ИЗМЕНЕНИЕ: Добавляем setLoading в зависимости
 );
 
   const handleSubmit = useCallback(
@@ -198,35 +210,36 @@ function Home() {
 
       const currentInput = input
       setInput('')
-      setLoading(true)
+      setLoading(true) // <- Индикатор включается здесь...
 
       const conversationTitle = createTitleFromInput(currentInput)
-      const userMessage: Message = { id: Date.now().toString(), role: 'user' as const, content: currentInput.trim() }
+      const userMessage: Message = { id: crypto.randomUUID(), role: 'user' as const, content: currentInput.trim() }
 
-      let conversationId = currentConversationId;
+      let convId = currentConversationId;
       
       try {
-        if (!conversationId) {
+        if (!convId) {
           const newConvId = await createNewConversation(conversationTitle || t('newChat'))
-          if (newConvId) conversationId = newConvId
+          if (newConvId) convId = newConvId
         }
         
-        if (!conversationId) throw new Error('Failed to create or find conversation ID.');
+        if (!convId) throw new Error('Failed to create or find conversation ID.');
 
-        await addMessage(conversationId, userMessage);
+        await addMessage(convId, userMessage);
         
-        const finalAiMessage = await processAIResponse(userMessage);
+        const finalAiMessage = await processAIResponse(userMessage); // <- ...и выключится внутри этой функции
         
         if (finalAiMessage && finalAiMessage.content.trim()) {
-            await addMessage(conversationId, finalAiMessage);
+            await addMessage(convId, finalAiMessage);
         }
 
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
         console.error('Error in handleSubmit:', error)
         setError(errorMessage);
+        setLoading(false); // -> ИЗМЕНЕНИЕ: Дополнительная защита
       } finally {
-        setLoading(false)
+        // -> ИЗМЕНЕНИЕ: Убираем setLoading(false) отсюда, т.к. он теперь обрабатывается раньше
         setPendingMessage(null);
       }
     },
@@ -247,20 +260,20 @@ function Home() {
     if (!currentConversationId) return;
 
     setEditingMessageId(null);
-    setLoading(true);
+    setLoading(true); // <- Включаем
     setError(null);
     textQueueRef.current = '';
     finalContentRef.current = '';
     setPendingMessage(null);
 
     try {
-      const updatedUserMessage = await editMessageAndUpdate(currentConversationId, messageId, newContent);
+      const updatedUserMessage = await editMessageAndUpdate(messageId, newContent);
 
       if (!updatedUserMessage) {
         throw new Error("Failed to get updated user message after edit.");
       }
       
-      const finalAiMessage = await processAIResponse(updatedUserMessage);
+      const finalAiMessage = await processAIResponse(updatedUserMessage); // <- Выключится здесь
         
       if (finalAiMessage && finalAiMessage.content.trim()) {
           await addMessage(currentConversationId, finalAiMessage);
@@ -270,8 +283,9 @@ function Home() {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during edit.';
         console.error('Error in handleSaveEdit:', error)
         setError(errorMessage);
+        setLoading(false); // -> ИЗМЕНЕНИЕ: Дополнительная защита
     } finally {
-        setLoading(false);
+        // -> ИЗМЕНЕНИЕ: Убираем setLoading(false)
         setPendingMessage(null);
     }
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
@@ -281,7 +295,6 @@ function Home() {
   const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation])
   const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle])
   const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
-  // -> НОВЫЙ ОБРАБОТЧИК
   const handleDuplicateChat = useCallback(async (id: string) => { await duplicateConversation(id) }, [duplicateConversation])
 
   const MainContent = () => (
@@ -300,7 +313,7 @@ function Home() {
         <div className="space-y-6">
           {currentConversationId ? (
               <>
-                  {messages.map((message) => (
+                  {displayMessages.map((message) => (
                     <ChatMessage 
                       key={message.id} 
                       message={message} 
@@ -311,8 +324,8 @@ function Home() {
                       onCopyMessage={() => navigator.clipboard.writeText(message.content)}
                     />
                   ))}
-                  {pendingMessage && <ChatMessage message={pendingMessage} isEditing={false} onStartEdit={()=>{}} onCancelEdit={()=>{}} onSaveEdit={()=>{}} onCopyMessage={()=>{}} />}
-                  {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
+                  {/* -> ИЗМЕНЕНИЕ: Условие для показа индикатора стало проще */}
+                  {isLoading && <LoadingIndicator />}
               </>
           ) : (
               <WelcomeScreen />
@@ -324,6 +337,7 @@ function Home() {
 
   return (
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
+        {/* ...остальной код без изменений... */}
         {/* Мобильная версия */}
         <div className="md:hidden h-full flex flex-col">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
@@ -332,7 +346,7 @@ function Home() {
                     conversations, 
                     currentConversationId, 
                     handleDeleteChat, 
-                    handleDuplicateChat, // -> ИЗМЕНЕНИЕ
+                    handleDuplicateChat, 
                     editingChatId, 
                     setEditingChatId, 
                     editingTitle, 
