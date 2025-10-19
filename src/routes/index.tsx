@@ -1,7 +1,8 @@
 // 📄 src/routes/index.tsx
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef, useCallback } from 'react'
+// -> ИЗМЕНЕНИЕ: Добавляем useMemo
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react' 
 import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
@@ -11,7 +12,6 @@ import {
   Sidebar,
   WelcomeScreen,
 } from '../components'
-// -> ИЗМЕНЕНИЕ: Убираем неиспользуемый импорт 'Conversation'
 import { useConversations, usePrompts, useSettings, useAppState } from '../store' 
 import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
@@ -62,6 +62,16 @@ function Home() {
     }
   }, [user, loadConversations, loadPrompts, loadSettings])
   
+  // -> НОВОЕ: Создаем единый массив для отображения
+  const displayMessages = useMemo(() => {
+    const combined = [...messages];
+    // Добавляем 'pendingMessage' только если сообщение с таким ID еще не попало в основной массив 'messages'
+    if (pendingMessage && !messages.some(m => m.id === pendingMessage.id)) {
+        combined.push(pendingMessage);
+    }
+    return combined;
+  }, [messages, pendingMessage]);
+
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
   const finalContentRef = useRef<string>(''); 
@@ -73,6 +83,7 @@ function Home() {
         const charsToPrint = textQueueRef.current.substring(0, speed);
         textQueueRef.current = textQueueRef.current.substring(speed);
 
+        // -> ИЗМЕНЕНИЕ: Обновляем 'pendingMessage', а не 'displayMessages'
         setPendingMessage(prev => {
           if (prev) {
             const newContent = prev.content + charsToPrint;
@@ -102,9 +113,10 @@ function Home() {
             });
         }, 100);
     }
-}, []);
+  // -> ИЗМЕНЕНИЕ: Зависимость от 'displayMessages'
+  }, []);
   
-  useEffect(() => { scrollToBottom() }, [messages, pendingMessage, scrollToBottom])
+  useEffect(() => { scrollToBottom() }, [displayMessages, scrollToBottom])
   
   const createTitleFromInput = useCallback((text: string) => {
     const words = text.trim().split(/\s+/)
@@ -250,7 +262,6 @@ function Home() {
     setPendingMessage(null);
 
     try {
-      // -> ИЗМЕНЕНИЕ: Убираем 'currentConversationId' из вызова
       const updatedUserMessage = await editMessageAndUpdate(messageId, newContent);
 
       if (!updatedUserMessage) {
@@ -271,7 +282,6 @@ function Home() {
         setLoading(false);
         setPendingMessage(null);
     }
-    // -> ИЗМЕНЕНИЕ: Убираем зависимость
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
 
@@ -297,7 +307,8 @@ function Home() {
         <div className="space-y-6">
           {currentConversationId ? (
               <>
-                  {messages.map((message) => (
+                  {/* -> ИЗМЕНЕНИЕ: Рендерим новый унифицированный массив */}
+                  {displayMessages.map((message) => (
                     <ChatMessage 
                       key={message.id} 
                       message={message} 
@@ -308,8 +319,8 @@ function Home() {
                       onCopyMessage={() => navigator.clipboard.writeText(message.content)}
                     />
                   ))}
-                  {pendingMessage && <ChatMessage message={pendingMessage} isEditing={false} onStartEdit={()=>{}} onCancelEdit={()=>{}} onSaveEdit={()=>{}} onCopyMessage={()=>{}} />}
-                  {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
+                  {/* -> ИЗМЕНЕНИЕ: Убираем отдельный рендер 'pendingMessage' и 'LoadingIndicator' отсюда, так как они теперь часть логики выше */}
+                  {isLoading && displayMessages.length === messages.length && <LoadingIndicator />}
               </>
           ) : (
               <WelcomeScreen />
@@ -321,6 +332,7 @@ function Home() {
 
   return (
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
+        {/* ... остальная часть компонента без изменений ... */}
         {/* Мобильная версия */}
         <div className="md:hidden h-full flex flex-col">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
