@@ -39,21 +39,29 @@ const initialState: State = {
 export const store = new Store<State>(initialState)
 
 export const actions = {
-  // --- НОВЫЙ ACTION ---
-  updateMessageContent: (conversationId: string, messageId: string, content: string) => {
-    store.setState(state => ({
-      ...state,
-      conversations: state.conversations.map(conv =>
-        conv.id === conversationId
-          ? {
-              ...conv,
-              messages: conv.messages.map(msg =>
-                msg.id === messageId ? { ...msg, content: content } : msg
-              ),
-            }
-          : conv
-      ),
-    }));
+  // -> ИЗМЕНЕНИЕ: Заменяем updateMessageContent на более универсальный
+  editMessage: (conversationId: string, messageId: string, newContent: string) => {
+    store.setState(state => {
+      const convIndex = state.conversations.findIndex(c => c.id === conversationId);
+      if (convIndex === -1) return state;
+
+      const newConversations = [...state.conversations];
+      const conversation = { ...newConversations[convIndex] };
+      
+      const msgIndex = conversation.messages.findIndex(m => m.id === messageId);
+      if (msgIndex === -1) return state;
+
+      const newMessages = [...conversation.messages];
+      // Обновляем сообщение
+      newMessages[msgIndex] = { ...newMessages[msgIndex], content: newContent };
+      // Удаляем все сообщения *после* отредактированного
+      newMessages.splice(msgIndex + 1);
+
+      conversation.messages = newMessages;
+      newConversations[convIndex] = conversation;
+
+      return { ...state, conversations: newConversations };
+    });
   },
   
   // Остальные actions

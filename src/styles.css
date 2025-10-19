@@ -234,3 +234,11 @@ html {
   padding: 0;
   border-radius: 0;
 }
+
+.prose pre {
+  background-color: rgba(31, 41, 55, 0.5); /* prose-pre:bg-gray-800/50 */
+  border-radius: 0.5rem; /* prose-pre:rounded-md */
+  padding: 1rem; /* prose-pre:p-4 */
+  margin: 1em 0;
+  overflow-x: auto;
+}
