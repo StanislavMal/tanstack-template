@@ -1,7 +1,6 @@
 // 📄 src/routes/index.tsx
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-// -> ИЗМЕНЕНИЕ: Добавляем useMemo
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react' 
 import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
@@ -62,10 +61,8 @@ function Home() {
     }
   }, [user, loadConversations, loadPrompts, loadSettings])
   
-  // -> НОВОЕ: Создаем единый массив для отображения
   const displayMessages = useMemo(() => {
     const combined = [...messages];
-    // Добавляем 'pendingMessage' только если сообщение с таким ID еще не попало в основной массив 'messages'
     if (pendingMessage && !messages.some(m => m.id === pendingMessage.id)) {
         combined.push(pendingMessage);
     }
@@ -83,7 +80,6 @@ function Home() {
         const charsToPrint = textQueueRef.current.substring(0, speed);
         textQueueRef.current = textQueueRef.current.substring(speed);
 
-        // -> ИЗМЕНЕНИЕ: Обновляем 'pendingMessage', а не 'displayMessages'
         setPendingMessage(prev => {
           if (prev) {
             const newContent = prev.content + charsToPrint;
@@ -113,7 +109,6 @@ function Home() {
             });
         }, 100);
     }
-  // -> ИЗМЕНЕНИЕ: Зависимость от 'displayMessages'
   }, []);
   
   useEffect(() => { scrollToBottom() }, [displayMessages, scrollToBottom])
@@ -128,6 +123,7 @@ function Home() {
     async (userMessage: Message) => {
       if (!settings) {
         setError("User settings not loaded.");
+        setLoading(false); // -> ИЗМЕНЕНИЕ: Устанавливаем false, если нет настроек
         return null;
       }
       
@@ -165,6 +161,7 @@ function Home() {
                 if (parsed.text) {
                   if (isFirstChunk) {
                     setPendingMessage(initialAssistantMessage);
+                    setLoading(false); // -> ИЗМЕНЕНИЕ: Устанавливаем false при первом чанке
                     isFirstChunk = false;
                   }
                   textQueueRef.current += parsed.text;
@@ -174,6 +171,12 @@ function Home() {
           })
         }
         
+        // -> ИЗМЕНЕНИЕ: Если стрим закончился, а мы так и не получили ни одного чанка,
+        // все равно выключаем индикатор загрузки.
+        if (isFirstChunk) {
+            setLoading(false);
+        }
+
         await new Promise(resolve => {
             const interval = setInterval(() => {
                 if (textQueueRef.current.length === 0) {
@@ -188,10 +191,11 @@ function Home() {
       } catch (error) {
         console.error('Error in AI response:', error);
         setError('An error occurred while getting the AI response.');
+        setLoading(false); // -> ИЗМЕНЕНИЕ: Устанавливаем false в случае ошибки
         return null;
       }
     },
-    [settings, activePrompt, messages],
+    [settings, activePrompt, messages, setLoading], // -> ИЗМЕНЕНИЕ: Добавляем setLoading в зависимости
 );
 
   const handleSubmit = useCallback(
@@ -206,7 +210,7 @@ function Home() {
 
       const currentInput = input
       setInput('')
-      setLoading(true)
+      setLoading(true) // <- Индикатор включается здесь...
 
       const conversationTitle = createTitleFromInput(currentInput)
       const userMessage: Message = { id: crypto.randomUUID(), role: 'user' as const, content: currentInput.trim() }
@@ -223,7 +227,7 @@ function Home() {
 
         await addMessage(convId, userMessage);
         
-        const finalAiMessage = await processAIResponse(userMessage);
+        const finalAiMessage = await processAIResponse(userMessage); // <- ...и выключится внутри этой функции
         
         if (finalAiMessage && finalAiMessage.content.trim()) {
             await addMessage(convId, finalAiMessage);
@@ -233,8 +237,9 @@ function Home() {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
         console.error('Error in handleSubmit:', error)
         setError(errorMessage);
+        setLoading(false); // -> ИЗМЕНЕНИЕ: Дополнительная защита
       } finally {
-        setLoading(false)
+        // -> ИЗМЕНЕНИЕ: Убираем setLoading(false) отсюда, т.к. он теперь обрабатывается раньше
         setPendingMessage(null);
       }
     },
@@ -255,7 +260,7 @@ function Home() {
     if (!currentConversationId) return;
 
     setEditingMessageId(null);
-    setLoading(true);
+    setLoading(true); // <- Включаем
     setError(null);
     textQueueRef.current = '';
     finalContentRef.current = '';
@@ -268,7 +273,7 @@ function Home() {
         throw new Error("Failed to get updated user message after edit.");
       }
       
-      const finalAiMessage = await processAIResponse(updatedUserMessage);
+      const finalAiMessage = await processAIResponse(updatedUserMessage); // <- Выключится здесь
         
       if (finalAiMessage && finalAiMessage.content.trim()) {
           await addMessage(currentConversationId, finalAiMessage);
@@ -278,8 +283,9 @@ function Home() {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during edit.';
         console.error('Error in handleSaveEdit:', error)
         setError(errorMessage);
+        setLoading(false); // -> ИЗМЕНЕНИЕ: Дополнительная защита
     } finally {
-        setLoading(false);
+        // -> ИЗМЕНЕНИЕ: Убираем setLoading(false)
         setPendingMessage(null);
     }
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
@@ -307,7 +313,6 @@ function Home() {
         <div className="space-y-6">
           {currentConversationId ? (
               <>
-                  {/* -> ИЗМЕНЕНИЕ: Рендерим новый унифицированный массив */}
                   {displayMessages.map((message) => (
                     <ChatMessage 
                       key={message.id} 
@@ -319,8 +324,8 @@ function Home() {
                       onCopyMessage={() => navigator.clipboard.writeText(message.content)}
                     />
                   ))}
-                  {/* -> ИЗМЕНЕНИЕ: Убираем отдельный рендер 'pendingMessage' и 'LoadingIndicator' отсюда, так как они теперь часть логики выше */}
-                  {isLoading && displayMessages.length === messages.length && <LoadingIndicator />}
+                  {/* -> ИЗМЕНЕНИЕ: Условие для показа индикатора стало проще */}
+                  {isLoading && <LoadingIndicator />}
               </>
           ) : (
               <WelcomeScreen />
@@ -332,7 +337,7 @@ function Home() {
 
   return (
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
-        {/* ... остальная часть компонента без изменений ... */}
+        {/* ...остальной код без изменений... */}
         {/* Мобильная версия */}
         <div className="md:hidden h-full flex flex-col">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
