@@ -1,8 +1,8 @@
 // 📄 src/components/Sidebar.tsx
 
-import { PlusCircle, MessageCircle, Trash2, Edit2, X } from 'lucide-react';
+import { PlusCircle, MessageCircle, Trash2, Edit2, X, Copy } from 'lucide-react'; // -> ИЗМЕНЕНИЕ
 import { useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
+import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string }>;
@@ -10,14 +10,15 @@ interface SidebarProps {
   handleNewChat: () => void;
   setCurrentConversationId: (id: string) => void;
   handleDeleteChat: (id: string) => void;
+  handleDuplicateChat: (id: string) => void; // -> НОВОЕ
   editingChatId: string | null;
   setEditingChatId: (id: string | null) => void;
   editingTitle: string;
   setEditingTitle: (title: string) => void;
   handleUpdateChatTitle: (id: string, title: string) => void;
-  isOpen: boolean; // Для мобильных
-  setIsOpen: (isOpen: boolean) => void; // Для мобильных
-  isCollapsed: boolean; // Для десктопа
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void;
+  isCollapsed: boolean;
 }
 
 export const Sidebar = ({ 
@@ -25,7 +26,8 @@ export const Sidebar = ({
   currentConversationId, 
   handleNewChat, 
   setCurrentConversationId, 
-  handleDeleteChat, 
+  handleDeleteChat,
+  handleDuplicateChat, // -> НОВОЕ
   editingChatId, 
   setEditingChatId, 
   editingTitle, 
@@ -35,7 +37,7 @@ export const Sidebar = ({
   setIsOpen,
   isCollapsed,
 }: SidebarProps) => {
-  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
+  const { t } = useTranslation();
   const [contextMenuChatId, setContextMenuChatId] = useState<string | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -73,7 +75,7 @@ export const Sidebar = ({
           className="flex items-center justify-center w-full gap-2 px-3 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90"
         >
           <PlusCircle className="w-4 h-4" />
-          {t('newChat')} {/* -> ИЗМЕНЕНИЕ */}
+          {t('newChat')}
         </button>
         <button 
           onClick={() => setIsOpen(false)}
@@ -148,8 +150,21 @@ export const Sidebar = ({
                         setContextMenuChatId(null);
                       }}
                       className="p-1 text-gray-400 hover:text-white"
+                      title="Rename"
                     >
                       <Edit2 className="w-3 h-3" />
+                    </button>
+                    {/* -> НОВАЯ КНОПКА */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDuplicateChat(chat.id);
+                        setContextMenuChatId(null);
+                      }}
+                      className="p-1 text-gray-400 hover:text-white"
+                      title="Duplicate"
+                    >
+                      <Copy className="w-3 h-3" />
                     </button>
                     <button
                       onClick={(e) => {
@@ -158,6 +173,7 @@ export const Sidebar = ({
                         setContextMenuChatId(null);
                       }}
                       className="p-1 text-gray-400 hover:text-red-500"
+                      title="Delete"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>

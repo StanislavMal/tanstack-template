@@ -11,7 +11,7 @@ import {
   Sidebar,
   WelcomeScreen,
 } from '../components'
-import { useConversations, usePrompts, useSettings, useAppState, store, type Conversation } from '../store' //
+import { useConversations, usePrompts, useSettings, useAppState, store, type Conversation } from '../store'
 import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
@@ -33,7 +33,7 @@ function Home() {
   const { user } = useAuth()
   
   // -> ИЗМЕНЕНИЕ: Достаем новую функцию из хука
-  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation, editMessageAndUpdate } = useConversations()
+  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation, editMessageAndUpdate, duplicateConversation } = useConversations()
   const { isLoading, setLoading } = useAppState()
   const { settings, loadSettings } = useSettings()
   const { activePrompt, loadPrompts } = usePrompts()
@@ -44,7 +44,6 @@ function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
-  // -> ИЗМЕНЕНИЕ: Новое состояние для отслеживания ID редактируемого сообщения
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   const messagesContainerRef = useRef<HTMLElement>(null);
@@ -126,7 +125,6 @@ function Home() {
       const initialAssistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
       
       try {
-        // -> ИЗМЕНЕНИЕ: Используем store.state вместо store.getState()
         const previousMessages = store.state.conversations.find((c: Conversation) => c.id === currentConversationId)?.messages || [];
         
         const history = previousMessages.at(-1)?.id === userMessage.id 
@@ -245,11 +243,10 @@ function Home() {
     ],
   )
   
-  // -> ИЗМЕНЕНИЕ: Новая функция для сохранения отредактированного сообщения
   const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
     if (!currentConversationId) return;
 
-    setEditingMessageId(null); // Выключаем режим редактирования
+    setEditingMessageId(null);
     setLoading(true);
     setError(null);
     textQueueRef.current = '';
@@ -263,7 +260,6 @@ function Home() {
         throw new Error("Failed to get updated user message after edit.");
       }
       
-      // Повторно запускаем генерацию ответа AI
       const finalAiMessage = await processAIResponse(updatedUserMessage);
         
       if (finalAiMessage && finalAiMessage.content.trim()) {
@@ -285,6 +281,8 @@ function Home() {
   const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation])
   const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle])
   const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
+  // -> НОВЫЙ ОБРАБОТЧИК
+  const handleDuplicateChat = useCallback(async (id: string) => { await duplicateConversation(id) }, [duplicateConversation])
 
   const MainContent = () => (
     <div className="w-full h-full p-4">
@@ -302,7 +300,6 @@ function Home() {
         <div className="space-y-6">
           {currentConversationId ? (
               <>
-                  {/* -> ИЗМЕНЕНИЕ: Передаем новые пропсы в ChatMessage */}
                   {messages.map((message) => (
                     <ChatMessage 
                       key={message.id} 
@@ -335,6 +332,7 @@ function Home() {
                     conversations, 
                     currentConversationId, 
                     handleDeleteChat, 
+                    handleDuplicateChat, // -> ИЗМЕНЕНИЕ
                     editingChatId, 
                     setEditingChatId, 
                     editingTitle, 
@@ -378,7 +376,7 @@ function Home() {
         <div className="hidden md:flex h-full">
             <PanelGroup direction="horizontal">
                 <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
-                    <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
+                    <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
                 </Panel>
                 <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
                 <Panel className="flex-1 flex flex-col relative min-h-0">

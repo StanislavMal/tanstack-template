@@ -18,6 +18,7 @@ export interface Conversation {
   id: string
   title: string
   messages: Message[]
+  created_at: string // -> НОВОЕ
 }
 
 export interface State {
@@ -84,7 +85,7 @@ export const actions = {
   addConversation: (conversation: Conversation) => {
     store.setState(state => ({
       ...state,
-      conversations: [...state.conversations, conversation],
+      conversations: [conversation, ...state.conversations], // -> ИЗМЕНЕНИЕ: Добавляем в начало списка
       currentConversationId: conversation.id
     }))
   },
