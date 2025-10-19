@@ -130,9 +130,11 @@ function shouldSkipContent(filePath, content) {
   }
   
   // Пропускаем большие JSON файлы кроме package.json
-  if (filename.endsWith('.json') && filename !== 'package.json') {
-    return `// Файл ${filename} (содержимое пропущено для экономии места)`;
-  }
+const IMPORTANT_JSON_FILES = ['package.json', 'translation.json'];
+
+if (filename.endsWith('.json') && !IMPORTANT_JSON_FILES.includes(filename)) {
+  return `// Файл ${filename} (содержимое пропущено для экономии места)`;
+}
   
   return null;
 }
@@ -173,7 +175,7 @@ function scanDir(dir, depth = 0, isRootScan = false) {
         [
           'package.json', '.env.example', 'netlify.toml',
           'postcss.config.ts', 'app.config.ts', 'vite.config.js',
-          'tsconfig.json'
+          'tsconfig.json', 'translation.json'
         ].includes(file);
         
         if (shouldRead) {

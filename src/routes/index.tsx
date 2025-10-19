@@ -2,8 +2,7 @@
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react' 
-// -> ИЗМЕНЕНИЕ: Добавляем иконку для кнопки скролла
-import { Settings, Menu, AlertTriangle, ArrowDown } from 'lucide-react'
+import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
   ChatMessage,
@@ -11,6 +10,7 @@ import {
   ChatInput,
   Sidebar,
   WelcomeScreen,
+  ScrollDownButton, // <-- ДОБАВЛЕНО
 } from '../components'
 import { useConversations, usePrompts, useSettings, useAppState } from '../store' 
 import { genAIResponse, type Message } from '../utils'
@@ -45,7 +45,6 @@ function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  // ->ИЗМЕНЕНИЕ: Добавляем ref для textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLElement>(null);
 
@@ -53,7 +52,6 @@ function Home() {
   const [error, setError] = useState<string | null>(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  // -> ИЗМЕНЕНИЕ: Новое состояние для управления прокруткой
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
@@ -104,7 +102,6 @@ function Home() {
     };
   }, []);
 
-  // -> ИЗМЕНЕНИЕ: Логика прокрутки
   const forceScrollToBottom = useCallback(() => {
     const container = messagesContainerRef.current;
     if (container) {
@@ -124,7 +121,7 @@ function Home() {
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 150; // Порог в 150px
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
       
       setUserHasScrolled(!isAtBottom);
       setShowScrollDownButton(!isAtBottom);
@@ -228,7 +225,6 @@ function Home() {
       setPendingMessage(null);
       setError(null);
       
-      // -> ИЗМЕНЕНИЕ: Немедленно сбрасываем флаг скролла и прокручиваем
       setUserHasScrolled(false);
       setShowScrollDownButton(false);
       forceScrollToBottom();
@@ -236,7 +232,6 @@ function Home() {
       const currentInput = input
       setInput('')
       
-      // -> ИЗМЕНЕНИЕ: Сбрасываем высоту textarea
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -283,7 +278,7 @@ function Home() {
       setLoading,
       createTitleFromInput,
       t,
-      forceScrollToBottom, // -> ИЗМЕНЕНИЕ: Добавляем зависимость
+      forceScrollToBottom,
     ],
   )
   
@@ -297,7 +292,6 @@ function Home() {
     finalContentRef.current = '';
     setPendingMessage(null);
     
-    // -> ИЗМЕНЕНИЕ: Сбрасываем скролл
     setUserHasScrolled(false);
     setShowScrollDownButton(false);
 
@@ -325,6 +319,13 @@ function Home() {
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
 
+  // -> ИЗМЕНЕНИЕ: Новый обработчик для кнопки скролла
+  const handleScrollDownClick = useCallback(() => {
+    forceScrollToBottom();
+    setUserHasScrolled(false);
+    setShowScrollDownButton(false);
+  }, [forceScrollToBottom]);
+
   const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId])
   const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation])
   const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle])
@@ -344,7 +345,6 @@ function Home() {
                 </div>
             </div>
         )}
-        {/* -> ИЗМЕНЕНИЕ: Уменьшаем отступ */}
         <div className="space-y-4">
           {currentConversationId ? (
               <>
@@ -372,7 +372,7 @@ function Home() {
   return (
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
         {/* Мобильная версия */}
-        <div className="md:hidden h-full flex flex-col relative"> {/* -> ИЗМЕНЕНИЕ: Добавляем 'relative' */}
+        <div className="md:hidden h-full flex flex-col relative">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
             <Sidebar 
                 {...{ 
@@ -397,18 +397,12 @@ function Home() {
                 <MainContent />
             </main>
             
-            {/* -> ИЗМЕНЕНИЕ: Кнопка скролла вниз */}
+            {/* -> ИЗМЕНЕНИЕ: Используем новый компонент */}
             {showScrollDownButton && (
-                <button
-                    onClick={() => {
-                        forceScrollToBottom();
-                        setUserHasScrolled(false);
-                        setShowScrollDownButton(false);
-                    }}
-                    className="absolute bottom-24 right-4 z-10 w-10 h-10 rounded-full bg-gray-700/80 backdrop-blur-sm text-white flex items-center justify-center shadow-lg hover:bg-gray-600"
-                >
-                    <ArrowDown className="w-5 h-5" />
-                </button>
+                <ScrollDownButton
+                    onClick={handleScrollDownClick}
+                    className="bottom-24 right-4"
+                />
             )}
             
             <footer className="flex-shrink-0 w-full">
@@ -435,18 +429,12 @@ function Home() {
                         </div>
                     </main>
                     
-                    {/* -> ИЗМЕНЕНИЕ: Кнопка скролла вниз для десктопа */}
+                    {/* -> ИЗМЕНЕНИЕ: Используем новый компонент */}
                     {showScrollDownButton && (
-                        <button
-                            onClick={() => {
-                                forceScrollToBottom();
-                                setUserHasScrolled(false);
-                                setShowScrollDownButton(false);
-                            }}
-                            className="absolute bottom-28 right-10 z-10 w-10 h-10 rounded-full bg-gray-700/80 backdrop-blur-sm text-white flex items-center justify-center shadow-lg hover:bg-gray-600"
-                        >
-                            <ArrowDown className="w-5 h-5" />
-                        </button>
+                        <ScrollDownButton
+                            onClick={handleScrollDownClick}
+                            className="bottom-28 right-10"
+                        />
                     )}
 
                     <footer className="w-full max-w-5xl mx-auto">

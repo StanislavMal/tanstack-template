@@ -239,8 +239,10 @@ hydrateRoot(document, <AppComponent router={router} />)
   --- BEGIN ChatInput.tsx ---
 // 📄 src/components/ChatInput.tsx
 
+// -> ИЗМЕНЕНИЕ: Импортируем forwardRef и Ref
+import { forwardRef, type Ref } from 'react';
 import { Send } from 'lucide-react';
-import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
+import { useTranslation } from 'react-i18next';
 
 interface ChatInputProps {
   input: string;
@@ -249,19 +251,19 @@ interface ChatInputProps {
   isLoading: boolean;
 }
 
-export const ChatInput = ({ 
-  input, 
-  setInput, 
-  handleSubmit, 
-  isLoading 
-}: ChatInputProps) => {
-  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
+// -> ИЗМЕНЕНИЕ: Оборачиваем компонент в forwardRef
+export const ChatInput = forwardRef((
+  { input, setInput, handleSubmit, isLoading }: ChatInputProps,
+  ref: Ref<HTMLTextAreaElement> // -> ИЗМЕНЕНИЕ: Типизируем ref
+) => {
+  const { t } = useTranslation();
 
   return (
     <div className="bg-gray-900/80 backdrop-blur-sm border-t border-orange-500/10 p-4">
       <form onSubmit={handleSubmit}>
         <div className="relative flex items-center">
           <textarea
+            ref={ref} // -> ИЗМЕНЕНИЕ: Применяем ref к textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -270,7 +272,7 @@ export const ChatInput = ({
                 handleSubmit(e)
               }
             }}
-            placeholder={t('chatInputPlaceholder')} // -> ИЗМЕНЕНИЕ
+            placeholder={t('chatInputPlaceholder')}
             className="w-full pl-4 pr-12 py-2.5 overflow-y-auto text-sm text-white placeholder-gray-400 border rounded-lg shadow-lg resize-none border-orange-500/20 bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent"
             rows={1}
             style={{ maxHeight: '200px' }}
@@ -291,7 +293,10 @@ export const ChatInput = ({
       </form>
     </div>
   );
-}
+});
+
+// -> ИЗМЕНЕНИЕ: Добавляем displayName для DevTools
+ChatInput.displayName = 'ChatInput';
   --- END ChatInput.tsx ---
 
   📄 ChatMessage.tsx
@@ -476,45 +481,51 @@ export { CodeBlock } from './CodeBlock';
   --- BEGIN LoadingIndicator.tsx ---
 // 📄 src/components/LoadingIndicator.tsx
 
-import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
+import { useTranslation } from 'react-i18next';
 
 export const LoadingIndicator = () => {
-  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
+  const { t } = useTranslation();
   
   return (
-    <div className="px-6 py-6 bg-gradient-to-r from-orange-500/5 to-red-600/5">
-      <div className="flex items-start w-full max-w-3xl gap-4 mx-auto">
-        <div className="relative flex-shrink-0 w-8 h-8">
-          <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-orange-500 via-red-500 to-orange-500 animate-[spin_2s_linear_infinite]"></div>
-          <div className="absolute inset-[2px] rounded-lg bg-gray-900 flex items-center justify-center">
-            <div className="relative flex items-center justify-center w-full h-full rounded-lg bg-gradient-to-r from-orange-500 to-red-600">
-              <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-orange-500 to-red-600 animate-pulse"></div>
-              <span className="relative z-10 text-sm font-medium text-white">
-                AI
-              </span>
+    // -> ИЗМЕНЕНИЕ: Оборачиваем в div, имитирующий ChatMessage
+    <div className="group relative flex flex-col w-full items-start">
+      <div className="isolate rounded-lg px-4 py-2 transition-colors duration-200 w-full bg-gradient-to-r from-orange-500/5 to-red-600/5">
+        <div className="flex items-center gap-3">
+          {/* -> ИЗМЕНЕНИЕ: Убрали лишнюю обертку и отступы */}
+          <div className="relative flex-shrink-0 w-8 h-8">
+            <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-orange-500 via-red-500 to-orange-500 animate-[spin_2s_linear_infinite]"></div>
+            <div className="absolute inset-[2px] rounded-lg bg-gray-900 flex items-center justify-center">
+              <div className="relative flex items-center justify-center w-full h-full rounded-lg bg-gradient-to-r from-orange-500 to-red-600">
+                <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-orange-500 to-red-600 animate-pulse"></div>
+                <span className="relative z-10 text-sm font-medium text-white">
+                  AI
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-lg font-medium text-gray-400">
+              {t('thinking')}
+            </div>
+            <div className="flex gap-2">
+              <div
+                className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
+                style={{ animationDelay: '0ms' }}
+              ></div>
+              <div
+                className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
+                style={{ animationDelay: '200ms' }}
+              ></div>
+              <div
+                className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
+                style={{ animationDelay: '400ms' }}
+              ></div>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-lg font-medium text-gray-400">
-            {t('thinking')} {/* -> ИЗМЕНЕНИЕ */}
-          </div>
-          <div className="flex gap-2">
-            <div
-              className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
-              style={{ animationDelay: '0ms' }}
-            ></div>
-            <div
-              className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
-              style={{ animationDelay: '200ms' }}
-            ></div>
-            <div
-              className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
-              style={{ animationDelay: '400ms' }}
-            ></div>
-          </div>
-        </div>
       </div>
+      {/* -> ИЗМЕНЕНИЕ: Добавляем пустой div для отступа, как в ChatMessage */}
+      <div className="h-6 mt-1.5 px-2"></div>
     </div>
   );
 }
@@ -702,9 +713,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   --- BEGIN Sidebar.tsx ---
 // 📄 src/components/Sidebar.tsx
 
-import { PlusCircle, MessageCircle, Trash2, Edit2, X } from 'lucide-react';
+import { PlusCircle, MessageCircle, Trash2, Edit2, X, Copy } from 'lucide-react'; // -> ИЗМЕНЕНИЕ
 import { useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
+import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string }>;
@@ -712,14 +723,15 @@ interface SidebarProps {
   handleNewChat: () => void;
   setCurrentConversationId: (id: string) => void;
   handleDeleteChat: (id: string) => void;
+  handleDuplicateChat: (id: string) => void; // -> НОВОЕ
   editingChatId: string | null;
   setEditingChatId: (id: string | null) => void;
   editingTitle: string;
   setEditingTitle: (title: string) => void;
   handleUpdateChatTitle: (id: string, title: string) => void;
-  isOpen: boolean; // Для мобильных
-  setIsOpen: (isOpen: boolean) => void; // Для мобильных
-  isCollapsed: boolean; // Для десктопа
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void;
+  isCollapsed: boolean;
 }
 
 export const Sidebar = ({ 
@@ -727,7 +739,8 @@ export const Sidebar = ({
   currentConversationId, 
   handleNewChat, 
   setCurrentConversationId, 
-  handleDeleteChat, 
+  handleDeleteChat,
+  handleDuplicateChat, // -> НОВОЕ
   editingChatId, 
   setEditingChatId, 
   editingTitle, 
@@ -737,7 +750,7 @@ export const Sidebar = ({
   setIsOpen,
   isCollapsed,
 }: SidebarProps) => {
-  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
+  const { t } = useTranslation();
   const [contextMenuChatId, setContextMenuChatId] = useState<string | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -775,7 +788,7 @@ export const Sidebar = ({
           className="flex items-center justify-center w-full gap-2 px-3 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90"
         >
           <PlusCircle className="w-4 h-4" />
-          {t('newChat')} {/* -> ИЗМЕНЕНИЕ */}
+          {t('newChat')}
         </button>
         <button 
           onClick={() => setIsOpen(false)}
@@ -850,8 +863,21 @@ export const Sidebar = ({
                         setContextMenuChatId(null);
                       }}
                       className="p-1 text-gray-400 hover:text-white"
+                      title="Rename"
                     >
                       <Edit2 className="w-3 h-3" />
+                    </button>
+                    {/* -> НОВАЯ КНОПКА */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDuplicateChat(chat.id);
+                        setContextMenuChatId(null);
+                      }}
+                      className="p-1 text-gray-400 hover:text-white"
+                      title="Duplicate"
+                    >
+                      <Copy className="w-3 h-3" />
                     </button>
                     <button
                       onClick={(e) => {
@@ -860,6 +886,7 @@ export const Sidebar = ({
                         setContextMenuChatId(null);
                       }}
                       className="p-1 text-gray-400 hover:text-red-500"
+                      title="Delete"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -976,11 +1003,89 @@ export default i18n;
 📁 locales/
   📁 en/
     📄 translation.json
-    // Файл translation.json (содержимое пропущено для экономии места)
+    --- BEGIN translation.json ---
+{
+  "appTitle": "AI Chat (Supabase & Gemini)",
+  "chatInputPlaceholder": "Write something smart...",
+  "welcomeTitle": "AI Chat",
+  "welcomeMessage": "You can ask me anything, I might have a good answer, or I might not, but you can still ask.",
+  "newChat": "New Chat",
+  "logout": "Logout",
+  "login": "Login",
+  "loggingIn": "Logging in...",
+  "signup": "Sign Up",
+  "signingUp": "Signing up...",
+  "emailPlaceholder": "Email",
+  "passwordPlaceholder": "Password",
+  "loginPrompt": "Don't have an account?",
+  "signupPrompt": "Already have an account?",
+  "signupSuccess": "Registration successful! Please login.",
+  "thinking": "Thinking",
+  "settings": "Settings",
+  "generalSettings": "General Settings",
+  "aiModel": "AI Model",
+  "modelFlash": "Gemini 2.5 Flash (Fast & Cost-Effective)",
+  "modelPro": "Gemini 2.5 Pro (Advanced & Powerful)",
+  "systemInstruction": "System Instruction",
+  "systemInstructionPlaceholder": "e.g., You are a helpful assistant that speaks like a pirate.",
+  "systemInstructionNote": "This is the base instruction for the AI. An active prompt (if any) will be added to this.",
+  "customPrompts": "Custom Prompts",
+  "addPrompt": "Add Prompt",
+  "promptNamePlaceholder": "Prompt name...",
+  "promptContentPlaceholder": "Enter prompt content...",
+  "savePrompt": "Save Prompt",
+  "cancel": "Cancel",
+  "saveAndClose": "Save & Close",
+  "promptsNote": "Manage custom prompts. Activating one will automatically deactivate others.",
+  "errorOccurred": "An error occurred",
+  "pageNotFound": "Page Not Found",
+  "goHome": "Go Home",
+  "language": "Language"
+}
+    --- END translation.json ---
 
   📁 ru/
     📄 translation.json
-    // Файл translation.json (содержимое пропущено для экономии места)
+    --- BEGIN translation.json ---
+{
+  "appTitle": "AI Чат (Supabase & Gemini)",
+  "chatInputPlaceholder": "Напишите что-нибудь умное...",
+  "welcomeTitle": "AI Чат",
+  "welcomeMessage": "Вы можете спросить меня о чем угодно, у меня может быть хороший ответ, а может и не быть, но вы все равно можете спросить.",
+  "newChat": "Новый чат",
+  "logout": "Выйти",
+  "login": "Войти",
+  "loggingIn": "Вход...",
+  "signup": "Регистрация",
+  "signingUp": "Регистрация...",
+  "emailPlaceholder": "Электронная почта",
+  "passwordPlaceholder": "Пароль",
+  "loginPrompt": "Нет аккаунта?",
+  "signupPrompt": "Уже есть аккаунт?",
+  "signupSuccess": "Регистрация прошла успешно! Пожалуйста, войдите.",
+  "thinking": "Думаю",
+  "settings": "Настройки",
+  "generalSettings": "Общие настройки",
+  "aiModel": "Модель ИИ",
+  "modelFlash": "Gemini 2.5 Flash (Быстрая и экономичная)",
+  "modelPro": "Gemini 2.5 Pro (Продвинутая и мощная)",
+  "systemInstruction": "Системная инструкция",
+  "systemInstructionPlaceholder": "например, Ты — полезный ассистент, который говорит как пират.",
+  "systemInstructionNote": "Это базовая инструкция для ИИ. Активный промпт (если есть) будет добавлен к ней.",
+  "customPrompts": "Пользовательские промпты",
+  "addPrompt": "Добавить промпт",
+  "promptNamePlaceholder": "Название промпта...",
+  "promptContentPlaceholder": "Введите содержание промпта...",
+  "savePrompt": "Сохранить промпт",
+  "cancel": "Отмена",
+  "saveAndClose": "Сохранить и закрыть",
+  "promptsNote": "Управляйте пользовательскими промптами. Активация одного автоматически деактивирует другие.",
+  "errorOccurred": "Произошла ошибка",
+  "pageNotFound": "Страница не найдена",
+  "goHome": "На главную",
+  "language": "Язык"
+}
+    --- END translation.json ---
 
 📁 providers/
   📄 AuthProvider.tsx
@@ -1098,8 +1203,9 @@ declare module '@tanstack/react-router' {
 // 📄 src/routes/index.tsx
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { Settings, Menu, AlertTriangle } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react' 
+// -> ИЗМЕНЕНИЕ: Добавляем иконку для кнопки скролла
+import { Settings, Menu, AlertTriangle, ArrowDown } from 'lucide-react'
 import {
   SettingsDialog,
   ChatMessage,
@@ -1108,7 +1214,7 @@ import {
   Sidebar,
   WelcomeScreen,
 } from '../components'
-import { useConversations, usePrompts, useSettings, useAppState, store, type Conversation } from '../store' //
+import { useConversations, usePrompts, useSettings, useAppState } from '../store' 
 import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
@@ -1129,8 +1235,7 @@ function Home() {
   const navigate = useNavigate()
   const { user } = useAuth()
   
-  // -> ИЗМЕНЕНИЕ: Достаем новую функцию из хука
-  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation, editMessageAndUpdate } = useConversations()
+  const { conversations, messages, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, editMessageAndUpdate, duplicateConversation } = useConversations()
   const { isLoading, setLoading } = useAppState()
   const { settings, loadSettings } = useSettings()
   const { activePrompt, loadPrompts } = usePrompts()
@@ -1140,16 +1245,19 @@ function Home() {
   const [editingTitle, setEditingTitle] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  
-  // -> ИЗМЕНЕНИЕ: Новое состояние для отслеживания ID редактируемого сообщения
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
+  // ->ИЗМЕНЕНИЕ: Добавляем ref для textarea
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLElement>(null);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
-
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  
+  // -> ИЗМЕНЕНИЕ: Новое состояние для управления прокруткой
+  const [userHasScrolled, setUserHasScrolled] = useState(false);
+  const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
 
   useEffect(() => {
@@ -1159,9 +1267,15 @@ function Home() {
       loadSettings()
     }
   }, [user, loadConversations, loadPrompts, loadSettings])
-
-  const messages = useMemo(() => currentConversation?.messages || [], [currentConversation])
   
+  const displayMessages = useMemo(() => {
+    const combined = [...messages];
+    if (pendingMessage && !messages.some(m => m.id === pendingMessage.id)) {
+        combined.push(pendingMessage);
+    }
+    return combined;
+  }, [messages, pendingMessage]);
+
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
   const finalContentRef = useRef<string>(''); 
@@ -1192,20 +1306,37 @@ function Home() {
     };
   }, []);
 
-  const scrollToBottom = useCallback(() => {
+  // -> ИЗМЕНЕНИЕ: Логика прокрутки
+  const forceScrollToBottom = useCallback(() => {
     const container = messagesContainerRef.current;
     if (container) {
-        setTimeout(() => {
-            container.scrollTo({
-                top: container.scrollHeight,
-                behavior: 'smooth'
-            });
-        }, 100);
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     }
-}, []);
-  
-  useEffect(() => { scrollToBottom() }, [messages, pendingMessage, scrollToBottom])
-  
+  }, []);
+
+  useEffect(() => {
+    if (!userHasScrolled) {
+      forceScrollToBottom();
+    }
+  }, [displayMessages, userHasScrolled, forceScrollToBottom]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 150; // Порог в 150px
+      
+      setUserHasScrolled(!isAtBottom);
+      setShowScrollDownButton(!isAtBottom);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+
   const createTitleFromInput = useCallback((text: string) => {
     const words = text.trim().split(/\s+/)
     const firstThreeWords = words.slice(0, 3).join(' ')
@@ -1216,19 +1347,17 @@ function Home() {
     async (userMessage: Message) => {
       if (!settings) {
         setError("User settings not loaded.");
+        setLoading(false);
         return null;
       }
       
       finalContentRef.current = ''; 
-      const initialAssistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
+      const initialAssistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '' };
       
       try {
-        // -> ИЗМЕНЕНИЕ: Используем store.state вместо store.getState()
-        const previousMessages = store.state.conversations.find((c: Conversation) => c.id === currentConversationId)?.messages || [];
-        
-        const history = previousMessages.at(-1)?.id === userMessage.id 
-            ? previousMessages.slice(0, -1) 
-            : previousMessages;
+        const history = messages.at(-1)?.id === userMessage.id 
+            ? messages.slice(0, -1) 
+            : messages;
 
         const response = await genAIResponse({
           data: {
@@ -1256,6 +1385,7 @@ function Home() {
                 if (parsed.text) {
                   if (isFirstChunk) {
                     setPendingMessage(initialAssistantMessage);
+                    setLoading(false);
                     isFirstChunk = false;
                   }
                   textQueueRef.current += parsed.text;
@@ -1265,6 +1395,10 @@ function Home() {
           })
         }
         
+        if (isFirstChunk) {
+            setLoading(false);
+        }
+
         await new Promise(resolve => {
             const interval = setInterval(() => {
                 if (textQueueRef.current.length === 0) {
@@ -1279,10 +1413,11 @@ function Home() {
       } catch (error) {
         console.error('Error in AI response:', error);
         setError('An error occurred while getting the AI response.');
+        setLoading(false);
         return null;
       }
     },
-    [settings, activePrompt, currentConversationId], 
+    [settings, activePrompt, messages, setLoading],
 );
 
   const handleSubmit = useCallback(
@@ -1294,38 +1429,49 @@ function Home() {
       finalContentRef.current = '';
       setPendingMessage(null);
       setError(null);
+      
+      // -> ИЗМЕНЕНИЕ: Немедленно сбрасываем флаг скролла и прокручиваем
+      setUserHasScrolled(false);
+      setShowScrollDownButton(false);
+      forceScrollToBottom();
 
       const currentInput = input
       setInput('')
+      
+      // -> ИЗМЕНЕНИЕ: Сбрасываем высоту textarea
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+
       setLoading(true)
 
       const conversationTitle = createTitleFromInput(currentInput)
-      const userMessage: Message = { id: Date.now().toString(), role: 'user' as const, content: currentInput.trim() }
+      const userMessage: Message = { id: crypto.randomUUID(), role: 'user' as const, content: currentInput.trim() }
 
-      let conversationId = currentConversationId;
+      let convId = currentConversationId;
       
       try {
-        if (!conversationId) {
+        if (!convId) {
           const newConvId = await createNewConversation(conversationTitle || t('newChat'))
-          if (newConvId) conversationId = newConvId
+          if (newConvId) convId = newConvId
         }
         
-        if (!conversationId) throw new Error('Failed to create or find conversation ID.');
+        if (!convId) throw new Error('Failed to create or find conversation ID.');
 
-        await addMessage(conversationId, userMessage);
+        await addMessage(convId, userMessage);
         
         const finalAiMessage = await processAIResponse(userMessage);
         
         if (finalAiMessage && finalAiMessage.content.trim()) {
-            await addMessage(conversationId, finalAiMessage);
+            await addMessage(convId, finalAiMessage);
         }
 
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
         console.error('Error in handleSubmit:', error)
         setError(errorMessage);
+        setLoading(false);
       } finally {
-        setLoading(false)
         setPendingMessage(null);
       }
     },
@@ -1339,28 +1485,31 @@ function Home() {
       setLoading,
       createTitleFromInput,
       t,
+      forceScrollToBottom, // -> ИЗМЕНЕНИЕ: Добавляем зависимость
     ],
   )
   
-  // -> ИЗМЕНЕНИЕ: Новая функция для сохранения отредактированного сообщения
   const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
     if (!currentConversationId) return;
 
-    setEditingMessageId(null); // Выключаем режим редактирования
+    setEditingMessageId(null);
     setLoading(true);
     setError(null);
     textQueueRef.current = '';
     finalContentRef.current = '';
     setPendingMessage(null);
+    
+    // -> ИЗМЕНЕНИЕ: Сбрасываем скролл
+    setUserHasScrolled(false);
+    setShowScrollDownButton(false);
 
     try {
-      const updatedUserMessage = await editMessageAndUpdate(currentConversationId, messageId, newContent);
+      const updatedUserMessage = await editMessageAndUpdate(messageId, newContent);
 
       if (!updatedUserMessage) {
         throw new Error("Failed to get updated user message after edit.");
       }
       
-      // Повторно запускаем генерацию ответа AI
       const finalAiMessage = await processAIResponse(updatedUserMessage);
         
       if (finalAiMessage && finalAiMessage.content.trim()) {
@@ -1371,8 +1520,8 @@ function Home() {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during edit.';
         console.error('Error in handleSaveEdit:', error)
         setError(errorMessage);
-    } finally {
         setLoading(false);
+    } finally {
         setPendingMessage(null);
     }
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
@@ -1382,6 +1531,7 @@ function Home() {
   const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation])
   const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle])
   const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
+  const handleDuplicateChat = useCallback(async (id: string) => { await duplicateConversation(id) }, [duplicateConversation])
 
   const MainContent = () => (
     <div className="w-full h-full p-4">
@@ -1396,11 +1546,11 @@ function Home() {
                 </div>
             </div>
         )}
-        <div className="space-y-6">
+        {/* -> ИЗМЕНЕНИЕ: Уменьшаем отступ */}
+        <div className="space-y-4">
           {currentConversationId ? (
               <>
-                  {/* -> ИЗМЕНЕНИЕ: Передаем новые пропсы в ChatMessage */}
-                  {messages.map((message) => (
+                  {displayMessages.map((message) => (
                     <ChatMessage 
                       key={message.id} 
                       message={message} 
@@ -1411,8 +1561,7 @@ function Home() {
                       onCopyMessage={() => navigator.clipboard.writeText(message.content)}
                     />
                   ))}
-                  {pendingMessage && <ChatMessage message={pendingMessage} isEditing={false} onStartEdit={()=>{}} onCancelEdit={()=>{}} onSaveEdit={()=>{}} onCopyMessage={()=>{}} />}
-                  {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
+                  {isLoading && <LoadingIndicator />}
               </>
           ) : (
               <WelcomeScreen />
@@ -1425,29 +1574,13 @@ function Home() {
   return (
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
         {/* Мобильная версия */}
-        <div className="md:hidden h-full flex flex-col">
+        <div className="md:hidden h-full flex flex-col relative"> {/* -> ИЗМЕНЕНИЕ: Добавляем 'relative' */}
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
             <Sidebar 
                 {...{ 
-                    conversations, 
-                    currentConversationId, 
-                    handleDeleteChat, 
-                    editingChatId, 
-                    setEditingChatId, 
-                    editingTitle, 
-                    setEditingTitle, 
-                    handleUpdateChatTitle, 
-                    isOpen: isSidebarOpen, 
-                    setIsOpen: setIsSidebarOpen, 
-                    isCollapsed: false,
-                    handleNewChat: () => {
-                        handleNewChat();
-                        setIsSidebarOpen(false);
-                    },
-                    setCurrentConversationId: (id) => { 
-                        setCurrentConversationId(id); 
-                        setIsSidebarOpen(false); 
-                    } 
+                    conversations, currentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: isSidebarOpen, setIsOpen: setIsSidebarOpen, isCollapsed: false,
+                    handleNewChat: () => { handleNewChat(); setIsSidebarOpen(false); },
+                    setCurrentConversationId: (id) => { setCurrentConversationId(id); setIsSidebarOpen(false); } 
                 }} 
             />
             
@@ -1466,8 +1599,22 @@ function Home() {
                 <MainContent />
             </main>
             
+            {/* -> ИЗМЕНЕНИЕ: Кнопка скролла вниз */}
+            {showScrollDownButton && (
+                <button
+                    onClick={() => {
+                        forceScrollToBottom();
+                        setUserHasScrolled(false);
+                        setShowScrollDownButton(false);
+                    }}
+                    className="absolute bottom-24 right-4 z-10 w-10 h-10 rounded-full bg-gray-700/80 backdrop-blur-sm text-white flex items-center justify-center shadow-lg hover:bg-gray-600"
+                >
+                    <ArrowDown className="w-5 h-5" />
+                </button>
+            )}
+            
             <footer className="flex-shrink-0 w-full">
-                <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
+                <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
             </footer>
         </div>
 
@@ -1475,7 +1622,7 @@ function Home() {
         <div className="hidden md:flex h-full">
             <PanelGroup direction="horizontal">
                 <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
-                    <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
+                    <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
                 </Panel>
                 <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
                 <Panel className="flex-1 flex flex-col relative min-h-0">
@@ -1489,8 +1636,23 @@ function Home() {
                            <MainContent />
                         </div>
                     </main>
+                    
+                    {/* -> ИЗМЕНЕНИЕ: Кнопка скролла вниз для десктопа */}
+                    {showScrollDownButton && (
+                        <button
+                            onClick={() => {
+                                forceScrollToBottom();
+                                setUserHasScrolled(false);
+                                setShowScrollDownButton(false);
+                            }}
+                            className="absolute bottom-28 right-10 z-10 w-10 h-10 rounded-full bg-gray-700/80 backdrop-blur-sm text-white flex items-center justify-center shadow-lg hover:bg-gray-600"
+                        >
+                            <ArrowDown className="w-5 h-5" />
+                        </button>
+                    )}
+
                     <footer className="w-full max-w-5xl mx-auto">
-                         <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
+                         <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
                     </footer>
                 </Panel>
             </PanelGroup>
@@ -1786,13 +1948,14 @@ export default createStartHandler({
   --- BEGIN hooks.ts ---
 // 📄 store/hooks.ts
 
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { actions, selectors, store, type Conversation, type Prompt, type UserSettings } from './store';
 import type { Message } from '../utils/ai';
 import { supabase } from '../utils/supabase';
 import { useAuth } from '../providers/AuthProvider';
 
+// useSettings и usePrompts остаются без изменений...
 export function useSettings() {
     const { user } = useAuth();
     const settings = useStore(store, s => selectors.getSettings(s));
@@ -1869,6 +2032,33 @@ export function useConversations() {
   const conversations = useStore(store, s => selectors.getConversations(s));
   const currentConversationId = useStore(store, s => selectors.getCurrentConversationId(s));
   const currentConversation = useStore(store, s => selectors.getCurrentConversation(s));
+  const currentMessages = useStore(store, s => selectors.getCurrentMessages(s));
+
+  useEffect(() => {
+    if (currentConversationId && user) {
+      const loadMessages = async () => {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', currentConversationId)
+          .order('created_at', { ascending: true });
+        
+        if (error) {
+          console.error('Error loading messages:', error);
+          actions.setMessages([]);
+        } else {
+          const formattedMessages = data.map(m => ({
+            id: m.id,
+            role: m.role,
+            content: m.content
+          })) as Message[];
+          actions.setMessages(formattedMessages);
+        }
+      };
+      loadMessages();
+    }
+  }, [currentConversationId, user]);
+
 
   const setCurrentConversationId = useCallback((id: string | null) => {
       actions.setCurrentConversationId(id);
@@ -1876,19 +2066,34 @@ export function useConversations() {
 
   const loadConversations = useCallback(async () => {
       if (!user) return;
-      const { data, error } = await supabase.from('conversations').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
-      if (error) { console.error('Error loading conversations:', error); return; }
-      const formattedConversations = data.map(conv => ({ ...conv, messages: conv.messages || [] }));
-      actions.setConversations(formattedConversations as Conversation[]);
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) { 
+        console.error('Error loading conversations:', error); 
+        return; 
+      }
+      actions.setConversations(data as Conversation[]);
   }, [user]);
 
   const createNewConversation = useCallback(async (title: string = 'New Conversation') => {
       if (!user) return null;
-      const { data, error } = await supabase.from('conversations').insert({ title, messages: [], user_id: user.id }).select().single();
-      if (error || !data) { console.error('Failed to create conversation in Supabase:', error); return null; }
-      const newConversation: Conversation = { id: data.id, title: data.title, messages: data.messages || [] };
+      const { data, error } = await supabase
+        .from('conversations')
+        .insert({ title, user_id: user.id })
+        .select()
+        .single();
+      
+      if (error || !data) { 
+        console.error('Failed to create conversation in Supabase:', error); 
+        return null; 
+      }
+      
+      const newConversation: Conversation = data as Conversation;
       actions.addConversation(newConversation);
-      actions.setCurrentConversationId(newConversation.id);
       return newConversation.id;
   }, [user]);
 
@@ -1905,55 +2110,135 @@ export function useConversations() {
   }, []);
   
   const addMessage = useCallback(async (conversationId: string, message: Message) => {
-      const conversation = selectors.getConversations(store.state).find(c => c.id === conversationId);
-      if (!conversation) return;
-      
-      const updatedMessages = [...conversation.messages, message];
-      
-      actions.addMessage(conversationId, message);
+    if (!user) return;
 
-      const { error } = await supabase.from('conversations').update({ messages: updatedMessages }).eq('id', conversationId);
-      if (error) console.error('Failed to add message to Supabase:', error);
-  }, []);
+    actions.addMessage(message);
 
-  // -> ИЗМЕНЕНИЕ: Новая функция для редактирования
-  const editMessageAndUpdate = useCallback(async (conversationId: string, messageId: string, newContent: string) => {
-    // 1. Оптимистично обновляем UI
-    actions.editMessage(conversationId, messageId, newContent);
+    const { error } = await supabase.from('messages').insert({
+      id: message.id,
+      conversation_id: conversationId,
+      user_id: user.id,
+      role: message.role,
+      content: message.content
+    });
 
-    // 2. Получаем обновленное состояние из стора
-    // Используем setTimeout, чтобы дождаться, пока setState из store завершится
-    await new Promise(resolve => setTimeout(resolve, 0));
-    const updatedConversation = selectors.getConversations(store.state).find(c => c.id === conversationId);
-
-    if (!updatedConversation) {
-        console.error("Conversation not found after editing.");
-        // Здесь можно было бы откатить изменения, но пока просто логируем
-        return null;
-    }
-
-    // 3. Отправляем обрезанный массив сообщений в Supabase
-    const { error } = await supabase.from('conversations').update({ messages: updatedConversation.messages }).eq('id', conversationId);
     if (error) {
-        console.error('Failed to update messages in Supabase after edit:', error);
-        // Тут тоже нужна логика отката, но пока пропустим для простоты
+      console.error('Failed to add message to Supabase:', error);
+    }
+  }, [user]);
+
+  // -> ИЗМЕНЕНИЕ: Убираем неиспользуемый параметр 'conversationId' и улучшаем логику
+  const editMessageAndUpdate = useCallback(async (messageId: string, newContent: string) => {
+    // Получаем оригинальные сообщения ДО изменения состояния
+    const originalMessages = selectors.getCurrentMessages(store.state);
+    const originalMessageIndex = originalMessages.findIndex(m => m.id === messageId);
+    if (originalMessageIndex === -1) return null;
+
+    // Определяем ID сообщений, которые будут удалены из истории
+    const idsToDelete = originalMessages
+      .slice(originalMessageIndex + 1)
+      .map(m => m.id);
+
+    // 1. Оптимистично обновляем UI
+    actions.editMessage(messageId, newContent);
+    
+    try {
+      // 2. Параллельно выполняем операции с БД
+      const promises = [];
+
+      // Удаляем "устаревшие" сообщения
+      if (idsToDelete.length > 0) {
+        promises.push(supabase.from('messages').delete().in('id', idsToDelete));
+      }
+
+      // Обновляем контент отредактированного сообщения
+      promises.push(
+        supabase
+          .from('messages')
+          .update({ content: newContent })
+          .eq('id', messageId)
+      );
+      
+      const results = await Promise.all(promises);
+      results.forEach(res => {
+        if (res.error) throw res.error;
+      });
+
+    } catch (error) {
+      console.error('Failed to update messages in Supabase after edit:', error);
+      // Откатываем UI в случае ошибки
+      actions.setMessages(originalMessages);
+      return null;
     }
 
-    // 4. Возвращаем новое (обрезанное) сообщение пользователя для повторной отправки в AI
-    return updatedConversation.messages[updatedConversation.messages.length - 1];
+    // 3. Возвращаем новое (отредактированное) сообщение пользователя для повторной отправки в AI
+    const updatedMessages = selectors.getCurrentMessages(store.state);
+    return updatedMessages.at(-1) || null;
   }, []);
+  
+  const duplicateConversation = useCallback(async (id: string) => {
+    if (!user) return;
+    
+    const originalConversation = conversations.find(c => c.id === id);
+    if (!originalConversation) return;
+
+    const { data: messagesToCopy, error: messagesError } = await supabase
+      .from('messages')
+      .select('role, content, user_id')
+      .eq('conversation_id', id)
+      .order('created_at', { ascending: true });
+
+    if (messagesError) {
+      console.error('Failed to load messages for duplication:', messagesError);
+      return;
+    }
+
+    const newTitle = `copy_${originalConversation.title}`;
+    const { data: newConvData, error: newConvError } = await supabase
+      .from('conversations')
+      .insert({ title: newTitle, user_id: user.id })
+      .select()
+      .single();
+
+    if (newConvError || !newConvData) {
+      console.error('Failed to create duplicated conversation:', newConvError);
+      return;
+    }
+
+    const newConversation = newConvData as Conversation;
+
+    if (messagesToCopy && messagesToCopy.length > 0) {
+        const newMessages = messagesToCopy.map(msg => ({
+            ...msg,
+            conversation_id: newConversation.id,
+            id: undefined
+        }));
+        
+        const { error: insertError } = await supabase.from('messages').insert(newMessages);
+        if (insertError) {
+            console.error('Failed to insert duplicated messages:', insertError);
+            return;
+        }
+    }
+    
+    actions.addConversation(newConversation);
+
+  }, [user, conversations]);
+
 
   return {
     conversations,
     currentConversationId,
     currentConversation,
+    messages: currentMessages,
     setCurrentConversationId,
     loadConversations,
     createNewConversation,
     updateConversationTitle,
     deleteConversation,
     addMessage,
-    editMessageAndUpdate, // -> ИЗМЕНЕНИЕ: Экспортируем новую функцию
+    editMessageAndUpdate,
+    duplicateConversation,
   };
 }
   --- END hooks.ts ---
@@ -1982,16 +2267,20 @@ export interface UserSettings {
   system_instruction: string
 }
 
+// -> ИЗМЕНЕНИЕ: Убираем массив 'messages' отсюда
 export interface Conversation {
   id: string
   title: string
-  messages: Message[]
+  user_id: string
+  created_at: string
 }
 
 export interface State {
   prompts: Prompt[]
   settings: UserSettings | null
   conversations: Conversation[]
+  // -> НОВОЕ: Отдельное состояние для сообщений текущего диалога
+  currentMessages: Message[] 
   currentConversationId: string | null
   isLoading: boolean
 }
@@ -2000,6 +2289,7 @@ const initialState: State = {
   prompts: [],
   settings: null,
   conversations: [],
+  currentMessages: [], // -> НОВОЕ
   currentConversationId: null,
   isLoading: false
 }
@@ -2007,31 +2297,33 @@ const initialState: State = {
 export const store = new Store<State>(initialState)
 
 export const actions = {
-  // -> ИЗМЕНЕНИЕ: Заменяем updateMessageContent на более универсальный
-  editMessage: (conversationId: string, messageId: string, newContent: string) => {
+  // -> ИЗМЕНЕНИЕ: Полностью переписываем логику работы с сообщениями
+  setMessages: (messages: Message[]) => {
+    store.setState(state => ({ ...state, currentMessages: messages }));
+  },
+
+  addMessage: (message: Message) => {
+    store.setState(state => ({
+      ...state,
+      currentMessages: [...state.currentMessages, message]
+    }));
+  },
+
+  editMessage: (messageId: string, newContent: string) => {
     store.setState(state => {
-      const convIndex = state.conversations.findIndex(c => c.id === conversationId);
-      if (convIndex === -1) return state;
-
-      const newConversations = [...state.conversations];
-      const conversation = { ...newConversations[convIndex] };
-      
-      const msgIndex = conversation.messages.findIndex(m => m.id === messageId);
+      const msgIndex = state.currentMessages.findIndex(m => m.id === messageId);
       if (msgIndex === -1) return state;
-
-      const newMessages = [...conversation.messages];
+      
+      const newMessages = [...state.currentMessages];
       // Обновляем сообщение
       newMessages[msgIndex] = { ...newMessages[msgIndex], content: newContent };
-      // Удаляем все сообщения *после* отредактированного
-      newMessages.splice(msgIndex + 1);
+      // Обрезаем историю после отредактированного сообщения
+      const finalMessages = newMessages.slice(0, msgIndex + 1);
 
-      conversation.messages = newMessages;
-      newConversations[convIndex] = conversation;
-
-      return { ...state, conversations: newConversations };
+      return { ...state, currentMessages: finalMessages };
     });
   },
-  
+
   // Остальные actions
   setSettings: (settings: UserSettings) => {
     store.setState(state => ({ ...state, settings }));
@@ -2046,15 +2338,22 @@ export const actions = {
   },
 
   setCurrentConversationId: (id: string | null) => {
-    store.setState(state => ({ ...state, currentConversationId: id }))
+    store.setState(state => {
+      // При смене диалога очищаем старые сообщения
+      if (state.currentConversationId !== id) {
+        return { ...state, currentConversationId: id, currentMessages: [] };
+      }
+      return { ...state, currentConversationId: id };
+    });
   },
 
   addConversation: (conversation: Conversation) => {
     store.setState(state => ({
       ...state,
-      conversations: [...state.conversations, conversation],
-      currentConversationId: conversation.id
-    }))
+      conversations: [conversation, ...state.conversations],
+      currentConversationId: conversation.id,
+      currentMessages: [] // Новый диалог всегда пустой
+    }));
   },
 
   updateConversationTitle: (id: string, title: string) => {
@@ -2070,21 +2369,12 @@ export const actions = {
     store.setState(state => ({
       ...state,
       conversations: state.conversations.filter(conv => conv.id !== id),
-      currentConversationId: state.currentConversationId === id ? null : state.currentConversationId
-    }))
+      currentConversationId: state.currentConversationId === id ? null : state.currentConversationId,
+      // Если удалили текущий, чистим сообщения
+      currentMessages: state.currentConversationId === id ? [] : state.currentMessages,
+    }));
   },
-
-  addMessage: (conversationId: string, message: Message) => {
-    store.setState(state => ({
-      ...state,
-      conversations: state.conversations.map(conv =>
-        conv.id === conversationId
-          ? { ...conv, messages: [...conv.messages, message] }
-          : conv
-      )
-    }))
-  },
-
+  
   setLoading: (isLoading: boolean) => {
     store.setState(state => ({ ...state, isLoading }))
   }
@@ -2099,7 +2389,9 @@ export const selectors = {
     state.conversations.find(c => c.id === state.currentConversationId),
   getConversations: (state: State) => state.conversations,
   getCurrentConversationId: (state: State) => state.currentConversationId,
-  getIsLoading: (state: State) => state.isLoading
+  getIsLoading: (state: State) => state.isLoading,
+  // -> НОВОЕ: Селектор для получения сообщений
+  getCurrentMessages: (state: State) => state.currentMessages,
 }
   --- END store.ts ---
 
