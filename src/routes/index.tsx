@@ -1,7 +1,7 @@
 // 📄 src/routes/index.tsx
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
@@ -11,7 +11,8 @@ import {
   Sidebar,
   WelcomeScreen,
 } from '../components'
-import { useConversations, usePrompts, useSettings, useAppState, store, type Conversation } from '../store'
+// -> ИЗМЕНЕНИЕ: Убираем неиспользуемый импорт 'Conversation'
+import { useConversations, usePrompts, useSettings, useAppState } from '../store' 
 import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
@@ -32,8 +33,7 @@ function Home() {
   const navigate = useNavigate()
   const { user } = useAuth()
   
-  // -> ИЗМЕНЕНИЕ: Достаем новую функцию из хука
-  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation, editMessageAndUpdate, duplicateConversation } = useConversations()
+  const { conversations, messages, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, editMessageAndUpdate, duplicateConversation } = useConversations()
   const { isLoading, setLoading } = useAppState()
   const { settings, loadSettings } = useSettings()
   const { activePrompt, loadPrompts } = usePrompts()
@@ -61,8 +61,6 @@ function Home() {
       loadSettings()
     }
   }, [user, loadConversations, loadPrompts, loadSettings])
-
-  const messages = useMemo(() => currentConversation?.messages || [], [currentConversation])
   
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
@@ -122,14 +120,12 @@ function Home() {
       }
       
       finalContentRef.current = ''; 
-      const initialAssistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
+      const initialAssistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '' };
       
       try {
-        const previousMessages = store.state.conversations.find((c: Conversation) => c.id === currentConversationId)?.messages || [];
-        
-        const history = previousMessages.at(-1)?.id === userMessage.id 
-            ? previousMessages.slice(0, -1) 
-            : previousMessages;
+        const history = messages.at(-1)?.id === userMessage.id 
+            ? messages.slice(0, -1) 
+            : messages;
 
         const response = await genAIResponse({
           data: {
@@ -183,7 +179,7 @@ function Home() {
         return null;
       }
     },
-    [settings, activePrompt, currentConversationId], 
+    [settings, activePrompt, messages],
 );
 
   const handleSubmit = useCallback(
@@ -201,24 +197,24 @@ function Home() {
       setLoading(true)
 
       const conversationTitle = createTitleFromInput(currentInput)
-      const userMessage: Message = { id: Date.now().toString(), role: 'user' as const, content: currentInput.trim() }
+      const userMessage: Message = { id: crypto.randomUUID(), role: 'user' as const, content: currentInput.trim() }
 
-      let conversationId = currentConversationId;
+      let convId = currentConversationId;
       
       try {
-        if (!conversationId) {
+        if (!convId) {
           const newConvId = await createNewConversation(conversationTitle || t('newChat'))
-          if (newConvId) conversationId = newConvId
+          if (newConvId) convId = newConvId
         }
         
-        if (!conversationId) throw new Error('Failed to create or find conversation ID.');
+        if (!convId) throw new Error('Failed to create or find conversation ID.');
 
-        await addMessage(conversationId, userMessage);
+        await addMessage(convId, userMessage);
         
         const finalAiMessage = await processAIResponse(userMessage);
         
         if (finalAiMessage && finalAiMessage.content.trim()) {
-            await addMessage(conversationId, finalAiMessage);
+            await addMessage(convId, finalAiMessage);
         }
 
       } catch (error) {
@@ -254,7 +250,8 @@ function Home() {
     setPendingMessage(null);
 
     try {
-      const updatedUserMessage = await editMessageAndUpdate(currentConversationId, messageId, newContent);
+      // -> ИЗМЕНЕНИЕ: Убираем 'currentConversationId' из вызова
+      const updatedUserMessage = await editMessageAndUpdate(messageId, newContent);
 
       if (!updatedUserMessage) {
         throw new Error("Failed to get updated user message after edit.");
@@ -274,6 +271,7 @@ function Home() {
         setLoading(false);
         setPendingMessage(null);
     }
+    // -> ИЗМЕНЕНИЕ: Убираем зависимость
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
 
@@ -281,7 +279,6 @@ function Home() {
   const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation])
   const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle])
   const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
-  // -> НОВЫЙ ОБРАБОТЧИК
   const handleDuplicateChat = useCallback(async (id: string) => { await duplicateConversation(id) }, [duplicateConversation])
 
   const MainContent = () => (
@@ -332,7 +329,7 @@ function Home() {
                     conversations, 
                     currentConversationId, 
                     handleDeleteChat, 
-                    handleDuplicateChat, // -> ИЗМЕНЕНИЕ
+                    handleDuplicateChat, 
                     editingChatId, 
                     setEditingChatId, 
                     editingTitle, 
