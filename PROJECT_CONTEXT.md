@@ -20,12 +20,19 @@
 ├── 📁 components/
 │   ├── 📄 ChatInput.tsx
 │   ├── 📄 ChatMessage.tsx
+│   ├── 📄 CodeBlock.tsx
 │   ├── 📄 index.ts
 │   ├── 📄 LoadingIndicator.tsx
 │   ├── 📄 SettingsDialog.tsx
 │   ├── 📄 Sidebar.tsx
 │   └── 📄 WelcomeScreen.tsx
 ├── 📄 convex.tsx
+├── 📄 i18n.ts
+├── 📁 locales/
+│   ├── 📁 en/
+│   │   └── 📄 translation.json
+│   └── 📁 ru/
+│       └── 📄 translation.json
 ├── 📁 providers/
 │   └── 📄 AuthProvider.tsx
 ├── 📄 router.tsx
@@ -120,6 +127,7 @@ VITE_ANTHROPIC_API_KEY="Add your Anthropic API key here"
   "lucide-react",
   "react",
   "react-dom",
+  "react-i18next",
   "react-markdown",
   "react-resizable-panels",
   "tailwindcss"
@@ -199,27 +207,31 @@ export default createStartAPIHandler(defaultAPIFileRouteHandler)
 
 📄 client.tsx
 --- BEGIN client.tsx ---
+// 📄 src/client.tsx (Исправленная версия)
+
 import { hydrateRoot } from 'react-dom/client'
 import { StartClient } from '@tanstack/react-start'
 import * as Sentry from '@sentry/react'
+// import { Suspense } from 'react' // -> ИЗМЕНЕНИЕ: Suspense больше не нужен здесь
 
 import { createRouter } from './router'
 import { initSentry } from './sentry'
 
-// Initialize Sentry (will be skipped if DSN is not defined)
+// Импортируем конфигурацию i18n
+import './i18n'
+
 initSentry()
 
 const router = createRouter()
 
-// Check if Sentry DSN is defined before creating error boundary
 const AppComponent = process.env.SENTRY_DSN
   ? Sentry.withErrorBoundary(StartClient, {
       fallback: () => <div>An error has occurred. Our team has been notified.</div>,
     })
   : StartClient
 
+// -> ИЗМЕНЕНИЕ: Убираем обертку Suspense
 hydrateRoot(document, <AppComponent router={router} />)
-
 --- END client.tsx ---
 
 📁 components/
@@ -228,6 +240,7 @@ hydrateRoot(document, <AppComponent router={router} />)
 // 📄 src/components/ChatInput.tsx
 
 import { Send } from 'lucide-react';
+import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
 
 interface ChatInputProps {
   input: string;
@@ -241,86 +254,212 @@ export const ChatInput = ({
   setInput, 
   handleSubmit, 
   isLoading 
-}: ChatInputProps) => (
-  <div className="bg-gray-900/80 backdrop-blur-sm border-t border-orange-500/10 p-4">
-    <form onSubmit={handleSubmit}>
-      <div className="relative flex items-center">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              handleSubmit(e)
-            }
-          }}
-          placeholder="Напишите что-нибудь умное..."
-          className="w-full pl-4 pr-12 py-2.5 overflow-y-auto text-sm text-white placeholder-gray-400 border rounded-lg shadow-lg resize-none border-orange-500/20 bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent"
-          rows={1}
-          style={{ maxHeight: '200px' }}
-          onInput={(e) => {
-            const target = e.target as HTMLTextAreaElement
-            target.style.height = 'auto'
-            target.style.height = (target.scrollHeight) + 'px'
-          }}
-        />
-        <button
-          type="submit"
-          disabled={!input.trim() || isLoading}
-          className="absolute p-2 text-orange-500 transition-colors right-3 hover:text-orange-400 disabled:text-gray-500 focus:outline-none"
-        >
-          <Send className="w-4 h-4" />
-        </button>
-      </div>
-    </form>
-  </div>
-);
+}: ChatInputProps) => {
+  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
+
+  return (
+    <div className="bg-gray-900/80 backdrop-blur-sm border-t border-orange-500/10 p-4">
+      <form onSubmit={handleSubmit}>
+        <div className="relative flex items-center">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleSubmit(e)
+              }
+            }}
+            placeholder={t('chatInputPlaceholder')} // -> ИЗМЕНЕНИЕ
+            className="w-full pl-4 pr-12 py-2.5 overflow-y-auto text-sm text-white placeholder-gray-400 border rounded-lg shadow-lg resize-none border-orange-500/20 bg-gray-800/50 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent"
+            rows={1}
+            style={{ maxHeight: '200px' }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement
+              target.style.height = 'auto'
+              target.style.height = (target.scrollHeight) + 'px'
+            }}
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isLoading}
+            className="absolute p-2 text-orange-500 transition-colors right-3 hover:text-orange-400 disabled:text-gray-500 focus:outline-none"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
   --- END ChatInput.tsx ---
 
   📄 ChatMessage.tsx
   --- BEGIN ChatMessage.tsx ---
 // 📄 src/components/ChatMessage.tsx
 
-import ReactMarkdown from 'react-markdown'
-import rehypeRaw from 'rehype-raw'
-import rehypeSanitize from 'rehype-sanitize'
-import rehypeHighlight from 'rehype-highlight'
-import type { Message } from '../utils/ai'
+import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import rehypeHighlight from 'rehype-highlight';
+import { Pencil, Copy, Check, X } from 'lucide-react';
+import type { Message } from '../utils/ai';
+import { CodeBlock } from './CodeBlock';
 
-export const ChatMessage = ({ message }: { message: Message }) => {
+interface ChatMessageProps {
+  message: Message;
+  isEditing: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (newContent: string) => void;
+  onCopyMessage: () => void;
+}
+
+export const ChatMessage = ({ 
+  message,
+  isEditing,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onCopyMessage
+}: ChatMessageProps) => {
   const isAssistant = message.role === 'assistant';
+  const [editedContent, setEditedContent] = useState(message.content);
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleSave = () => {
+    if (editedContent.trim() !== message.content.trim() && editedContent.trim()) {
+      onSaveEdit(editedContent.trim());
+    } else {
+      onCancelEdit();
+    }
+  };
+
+  const handleCopyMessage = () => {
+    onCopyMessage();
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
 
   return (
-    // -> ИЗМЕНЕНИЕ: Внешний div-обертка для выравнивания пузыря влево или вправо
-    <div className={`flex w-full ${isAssistant ? 'justify-start' : 'justify-end'}`}>
-      
-      {/* -> ИЗМЕНЕНИЕ: Сам "пузырь" сообщения */}
+    <div className={`group relative flex flex-col w-full ${isAssistant ? 'items-start' : 'items-end'}`}>
       <div
-        className={`rounded-lg px-4 py-2 ${
-          // -> ИЗМЕНЕНИЕ: Правильные цвета и ширина
+        className={`isolate rounded-lg px-4 py-2 transition-colors duration-200 ${
           isAssistant
-            ? 'bg-gradient-to-r from-orange-500/5 to-red-600/5' // AI: Оригинальный градиент, вся доступная ширина
-            : 'bg-gray-700/50 max-w-2xl'                          // User: Серый, ограниченная ширина
+            ? 'w-full bg-gradient-to-r from-orange-500/5 to-red-600/5'
+            : isEditing
+              ? 'w-full bg-gray-600/50'
+              : 'max-w-2xl bg-gray-700/50'
         }`}
-        // -> ИЗМЕНЕНИЕ: Добавляем overflow: 'hidden', чтобы скругленные углы обрезали внутренний контент, например, таблицы
-        style={{ overflow: 'hidden' }}
       >
-        <ReactMarkdown
-          className="prose dark:prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-pre:bg-gray-800/50 prose-pre:overflow-x-auto prose-pre:p-4 prose-pre:rounded-md"
-          rehypePlugins={[
-            rehypeRaw,
-            rehypeSanitize,
-            rehypeHighlight,
-          ]}
-        >
-          {message.content}
-        </ReactMarkdown>
+        {isEditing && !isAssistant ? (
+          <div className="w-full">
+            <textarea
+              value={editedContent}
+              onChange={(e) => setEditedContent(e.target.value)}
+              className="w-full p-0 text-sm text-white bg-transparent border-0 resize-none focus:outline-none focus:ring-0"
+              style={{ minHeight: '6rem' }} 
+              autoFocus
+              onFocus={(e) => e.currentTarget.select()}
+            />
+          </div>
+        ) : (
+          <ReactMarkdown
+            className="prose dark:prose-invert max-w-none"
+            rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
+            components={{
+              pre: CodeBlock,
+            }}
+          >
+            {message.content}
+          </ReactMarkdown>
+        )}
       </div>
 
+      <div className="flex items-center justify-end gap-1.5 mt-1.5 px-2 h-6 transition-opacity md:opacity-0 group-hover:opacity-100">
+          {/* ... кнопки ... */}
+          {isEditing ? (
+          <>
+            <button onClick={handleSave} className="p-1.5 rounded-full text-green-400 bg-gray-800/50 hover:bg-gray-700" title="Save changes">
+              <Check className="w-4 h-4" />
+            </button>
+            <button onClick={() => { setEditedContent(message.content); onCancelEdit(); }} className="p-1.5 rounded-full text-red-400 bg-gray-800/50 hover:bg-gray-700" title="Cancel editing">
+              <X className="w-4 h-4" />
+            </button>
+          </>
+        ) : (
+          <>
+            {!isAssistant && (
+              <button onClick={onStartEdit} className="p-1.5 rounded-full text-gray-400 hover:text-white" title="Edit message">
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button onClick={handleCopyMessage} className="p-1.5 rounded-full text-gray-400 hover:text-white" title="Copy message">
+              {isCopied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 };
   --- END ChatMessage.tsx ---
+
+  📄 CodeBlock.tsx
+  --- BEGIN CodeBlock.tsx ---
+// 📄 src/components/CodeBlock.tsx
+
+import { useState, type ReactNode, type HTMLAttributes } from 'react';
+import { Copy, Check } from 'lucide-react';
+
+interface CodeBlockProps extends HTMLAttributes<HTMLPreElement> {
+  children?: ReactNode;
+}
+
+export const CodeBlock = ({ children, ...props }: CodeBlockProps) => {
+  const [isCopied, setIsCopied] = useState(false);
+  
+  let language = 'text';
+  let codeContent = '';
+
+  if (children && typeof children === 'object' && 'props' in children) {
+    const codeProps = (children as { props: { className?: string; children?: ReactNode } }).props;
+    const langMatch = /language-(\w+)/.exec(codeProps.className || '');
+    if (langMatch) {
+      language = langMatch[1];
+    }
+    if (codeProps.children) {
+      codeContent = String(codeProps.children).replace(/\n$/, '');
+    }
+  }
+
+  const handleCopy = () => {
+    if (codeContent) {
+      navigator.clipboard.writeText(codeContent);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }
+  };
+
+  return (
+    <div className="relative my-4 bg-gray-800/50 rounded-md">
+      <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-1 border-b border-gray-700/50 bg-gray-800 rounded-t-md">
+        <span className="font-sans text-xs font-semibold text-gray-400 uppercase">{language}</span>
+        <button
+          onClick={handleCopy}
+          className="p-1 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white"
+        >
+          {isCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+        </button>
+      </div>
+      <pre {...props} className="overflow-x-auto p-4 text-sm">
+        {children}
+      </pre>
+    </div>
+  );
+};
+  --- END CodeBlock.tsx ---
 
   📄 index.ts
   --- BEGIN index.ts ---
@@ -329,47 +468,56 @@ export { LoadingIndicator } from './LoadingIndicator';
 export { ChatInput } from './ChatInput';
 export { Sidebar } from './Sidebar';
 export { WelcomeScreen } from './WelcomeScreen';
-export { SettingsDialog } from './SettingsDialog'; 
+export { SettingsDialog } from './SettingsDialog';
+export { CodeBlock } from './CodeBlock';
   --- END index.ts ---
 
   📄 LoadingIndicator.tsx
   --- BEGIN LoadingIndicator.tsx ---
-export const LoadingIndicator = () => (
-  <div className="px-6 py-6 bg-gradient-to-r from-orange-500/5 to-red-600/5">
-    <div className="flex items-start w-full max-w-3xl gap-4 mx-auto">
-      <div className="relative flex-shrink-0 w-8 h-8">
-        <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-orange-500 via-red-500 to-orange-500 animate-[spin_2s_linear_infinite]"></div>
-        <div className="absolute inset-[2px] rounded-lg bg-gray-900 flex items-center justify-center">
-          <div className="relative flex items-center justify-center w-full h-full rounded-lg bg-gradient-to-r from-orange-500 to-red-600">
-            <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-orange-500 to-red-600 animate-pulse"></div>
-            <span className="relative z-10 text-sm font-medium text-white">
-              AI
-            </span>
+// 📄 src/components/LoadingIndicator.tsx
+
+import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
+
+export const LoadingIndicator = () => {
+  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
+  
+  return (
+    <div className="px-6 py-6 bg-gradient-to-r from-orange-500/5 to-red-600/5">
+      <div className="flex items-start w-full max-w-3xl gap-4 mx-auto">
+        <div className="relative flex-shrink-0 w-8 h-8">
+          <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-orange-500 via-red-500 to-orange-500 animate-[spin_2s_linear_infinite]"></div>
+          <div className="absolute inset-[2px] rounded-lg bg-gray-900 flex items-center justify-center">
+            <div className="relative flex items-center justify-center w-full h-full rounded-lg bg-gradient-to-r from-orange-500 to-red-600">
+              <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-orange-500 to-red-600 animate-pulse"></div>
+              <span className="relative z-10 text-sm font-medium text-white">
+                AI
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-lg font-medium text-gray-400">
+            {t('thinking')} {/* -> ИЗМЕНЕНИЕ */}
+          </div>
+          <div className="flex gap-2">
+            <div
+              className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
+              style={{ animationDelay: '0ms' }}
+            ></div>
+            <div
+              className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
+              style={{ animationDelay: '200ms' }}
+            ></div>
+            <div
+              className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
+              style={{ animationDelay: '400ms' }}
+            ></div>
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="text-lg font-medium text-gray-400">
-          Thinking
-        </div>
-        <div className="flex gap-2">
-          <div
-            className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
-            style={{ animationDelay: '0ms' }}
-          ></div>
-          <div
-            className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
-            style={{ animationDelay: '200ms' }}
-          ></div>
-          <div
-            className="w-2 h-2 rounded-full bg-orange-500 animate-[bounce_0.8s_infinite]"
-            style={{ animationDelay: '400ms' }}
-          ></div>
-        </div>
-      </div>
     </div>
-  </div>
-); 
+  );
+}
   --- END LoadingIndicator.tsx ---
 
   📄 SettingsDialog.tsx
@@ -379,6 +527,7 @@ import { useState, useEffect } from 'react'
 import { PlusCircle, Trash2 } from 'lucide-react'
 import { usePrompts, useSettings } from '../store/hooks'
 import { type UserSettings } from '../store'
+import { useTranslation } from 'react-i18next'
 
 interface SettingsDialogProps {
   isOpen: boolean
@@ -386,24 +535,23 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
+  // -> ИЗМЕНЕНИЕ: Добавляем i18n из хука useTranslation
+  const { t, i18n } = useTranslation(); 
   const [promptForm, setPromptForm] = useState({ name: '', content: '' })
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
 
   const { prompts, createPrompt, deletePrompt, setPromptActive, loadPrompts } = usePrompts();
   const { settings, updateSettings, loadSettings } = useSettings();
 
-  // Локальное состояние для полей формы, чтобы избежать "мерцания"
   const [localSettings, setLocalSettings] = useState<UserSettings | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      // Загружаем актуальные данные из БД при каждом открытии диалога
       loadPrompts();
       loadSettings();
     }
   }, [isOpen, loadPrompts, loadSettings]);
 
-  // Синхронизируем локальное состояние с глобальным, когда оно загрузится или обновится
   useEffect(() => {
     if (settings) {
       setLocalSettings(settings);
@@ -417,10 +565,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setIsAddingPrompt(false)
   }
 
-  // Сохраняем все изменения и закрываем окно
   const handleSaveChanges = () => {
     if (localSettings) {
-      // Сравниваем, были ли изменения, чтобы не делать лишних запросов к API
       if (JSON.stringify(localSettings) !== JSON.stringify(settings)) {
           updateSettings(localSettings);
       }
@@ -428,16 +574,19 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     onClose();
   };
 
-  // Закрываем окно, не сохраняя изменения
   const handleClose = () => {
-    // Сбрасываем локальные изменения на те, что сейчас в глобальном сторе
     setLocalSettings(settings);
     onClose()
     setIsAddingPrompt(false)
     setPromptForm({ name: '', content: '' })
   }
+  
+  // -> ИЗМЕНЕНИЕ: Функция для смены языка
+  const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const lang = e.target.value;
+    i18n.changeLanguage(lang);
+  };
 
-  // Не рендерим компонент, пока данные не загружены и не синхронизированы
   if (!isOpen || !localSettings) return null;
 
   return (
@@ -447,59 +596,70 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-semibold text-white">Settings</h2>
+            <h2 className="text-2xl font-semibold text-white">{t('settings')}</h2>
             <button onClick={handleClose} className="text-gray-400 hover:text-white focus:outline-none">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
           
           <div className="space-y-6">
-            {/* Общие настройки */}
             <div className="space-y-4">
-                <h3 className="text-lg font-medium text-white">General Settings</h3>
+                <h3 className="text-lg font-medium text-white">{t('generalSettings')}</h3>
+
+                {/* -> ИЗМЕНЕНИЕ: Новый блок для выбора языка */}
                 <div className="p-3 rounded-lg bg-gray-700/50">
-                  <label htmlFor="model-select" className="block text-sm font-medium text-gray-300 mb-2">AI Model</label>
+                  <label htmlFor="language-select" className="block text-sm font-medium text-gray-300 mb-2">{t('language')}</label>
+                  <select
+                      id="language-select"
+                      value={i18n.language}
+                      onChange={handleLanguageChange}
+                      className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  >
+                      <option value="en">English</option>
+                      <option value="ru">Русский</option>
+                  </select>
+                </div>
+                
+                <div className="p-3 rounded-lg bg-gray-700/50">
+                  <label htmlFor="model-select" className="block text-sm font-medium text-gray-300 mb-2">{t('aiModel')}</label>
                   <select
                       id="model-select"
                       value={localSettings.model}
-                      // Обновляем локальное состояние, а не глобальное
                       onChange={(e) => setLocalSettings(prev => prev ? { ...prev, model: e.target.value as UserSettings['model'] } : null)}
                       className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                   >
-                      <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Cost-Effective)</option>
-                      <option value="gemini-2.5-pro">Gemini 2.5 Pro (Advanced & Powerful)</option>
+                      <option value="gemini-2.5-flash">{t('modelFlash')}</option>
+                      <option value="gemini-2.5-pro">{t('modelPro')}</option>
                   </select>
                 </div>
                 <div className="p-3 rounded-lg bg-gray-700/50">
-                  <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300 mb-2">System Instruction</label>
+                  <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300 mb-2">{t('systemInstruction')}</label>
                   <textarea
                       id="system-instruction"
                       value={localSettings.system_instruction}
-                      // Обновляем локальное состояние, а не глобальное
                       onChange={(e) => setLocalSettings(prev => prev ? { ...prev, system_instruction: e.target.value } : null)}
-                      placeholder="e.g., You are a helpful assistant that speaks like a pirate."
+                      placeholder={t('systemInstructionPlaceholder')}
                       className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                   />
-                  <p className="text-xs text-gray-400 mt-1">This is the base instruction for the AI. An active prompt (if any) will be added to this.</p>
+                  <p className="text-xs text-gray-400 mt-1">{t('systemInstructionNote')}</p>
                 </div>
             </div>
 
-            {/* Prompts Management */}
             <div className="space-y-2">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-white">Custom Prompts</h3>
+                <h3 className="text-lg font-medium text-white">{t('customPrompts')}</h3>
                 <button onClick={() => setIsAddingPrompt(true)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-600 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">
-                  <PlusCircle className="w-4 h-4" /> Add Prompt
+                  <PlusCircle className="w-4 h-4" /> {t('addPrompt')}
                 </button>
               </div>
 
               {isAddingPrompt && (
                 <div className="p-3 mb-4 space-y-3 rounded-lg bg-gray-700/50">
-                  <input type="text" value={promptForm.name} onChange={(e) => setPromptForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Prompt name..." className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
-                  <textarea value={promptForm.content} onChange={(e) => setPromptForm(prev => ({ ...prev, content: e.target.value }))} placeholder="Enter prompt content..." className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
+                  <input type="text" value={promptForm.name} onChange={(e) => setPromptForm(prev => ({ ...prev, name: e.target.value }))} placeholder={t('promptNamePlaceholder')} className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
+                  <textarea value={promptForm.content} onChange={(e) => setPromptForm(prev => ({ ...prev, content: e.target.value }))} placeholder={t('promptContentPlaceholder')} className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setIsAddingPrompt(false)} className="px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">Cancel</button>
-                    <button onClick={handleAddPrompt} className="px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-600 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">Save Prompt</button>
+                    <button onClick={() => setIsAddingPrompt(false)} className="px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">{t('cancel')}</button>
+                    <button onClick={handleAddPrompt} className="px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-600 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">{t('savePrompt')}</button>
                   </div>
                 </div>
               )}
@@ -523,13 +683,13 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-gray-400">Manage custom prompts. Activating one will automatically deactivate others.</p>
+              <p className="text-xs text-gray-400">{t('promptsNote')}</p>
             </div>
           </div>
 
           <div className="flex justify-end gap-3 mt-6">
-            <button onClick={handleClose} className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">Cancel</button>
-            <button onClick={handleSaveChanges} className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">Save & Close</button>
+            <button onClick={handleClose} className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">{t('cancel')}</button>
+            <button onClick={handleSaveChanges} className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">{t('saveAndClose')}</button>
           </div>
         </div>
       </div>
@@ -544,6 +704,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
 import { PlusCircle, MessageCircle, Trash2, Edit2, X } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string }>;
@@ -576,9 +737,8 @@ export const Sidebar = ({
   setIsOpen,
   isCollapsed,
 }: SidebarProps) => {
-
+  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
   const [contextMenuChatId, setContextMenuChatId] = useState<string | null>(null);
-  // -> ИЗМЕНЕНИЕ: Добавляем тип и начальное значение null
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
 
@@ -615,7 +775,7 @@ export const Sidebar = ({
           className="flex items-center justify-center w-full gap-2 px-3 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90"
         >
           <PlusCircle className="w-4 h-4" />
-          New Chat
+          {t('newChat')} {/* -> ИЗМЕНЕНИЕ */}
         </button>
         <button 
           onClick={() => setIsOpen(false)}
@@ -717,17 +877,23 @@ export const Sidebar = ({
   --- BEGIN WelcomeScreen.tsx ---
 // 📄 src/components/WelcomeScreen.tsx
 
-export const WelcomeScreen = () => (
-  <div className="w-full max-w-3xl mx-auto text-center px-4">
-    <h1 className="mb-4 text-5xl md:text-6xl font-bold text-transparent uppercase bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text">
-      <span className="text-white">AI</span> Chat
-    </h1>
-    <p className="w-full md:w-2/3 mx-auto mb-6 text-lg text-gray-400">
-      Вы можете спросить меня о чем угодно, у меня может быть хороший ответ,
-       а может и не быть, но вы все равно можете спросить.
-    </p>
-  </div>
-);
+import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
+
+export const WelcomeScreen = () => {
+  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
+
+  return (
+    <div className="w-full max-w-3xl mx-auto text-center px-4">
+      <h1 className="mb-4 text-5xl md:text-6xl font-bold text-transparent uppercase bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text">
+        {/* -> ИЗМЕНЕНИЕ */}
+        <span className="text-white">AI</span> {t('welcomeTitle').split(' ')[1]} 
+      </h1>
+      <p className="w-full md:w-2/3 mx-auto mb-6 text-lg text-gray-400">
+        {t('welcomeMessage')} {/* -> ИЗМЕНЕНИЕ */}
+      </p>
+    </div>
+  );
+}
   --- END WelcomeScreen.tsx ---
 
 📄 convex.tsx
@@ -752,6 +918,69 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
   return <ConvexProvider client={convex}>{children}</ConvexProvider>;
 }
 --- END convex.tsx ---
+
+📄 i18n.ts
+--- BEGIN i18n.ts ---
+// 📄 src/i18n.ts (Новая версия)
+
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import LanguageDetector from 'i18next-browser-languagedetector';
+
+// -> ИЗМЕНЕНИЕ: Импортируем переводы напрямую, как ресурсы
+import translationEN from './locales/en/translation.json';
+import translationRU from './locales/ru/translation.json';
+
+const resources = {
+  en: {
+    translation: translationEN,
+  },
+  ru: {
+    translation: translationRU,
+  },
+};
+
+i18n
+  // -> ИЗМЕНЕНИЕ: Убираем HttpBackend, так как ресурсы теперь встроены
+  // .use(HttpBackend) 
+  .use(LanguageDetector)
+  .use(initReactI18next)
+  .init({
+    resources, // -> ИЗМЕНЕНИЕ: Передаем ресурсы напрямую
+    fallbackLng: 'ru',
+    supportedLngs: ['en', 'ru'],
+    debug: import.meta.env.DEV,
+
+    detection: {
+      order: ['localStorage', 'navigator'],
+      caches: ['localStorage'],
+    },
+    
+    interpolation: {
+      escapeValue: false, 
+    },
+
+    // -> ИЗМЕНЕНИЕ: Добавляем эти опции для корректной работы в SSR
+    // Не загружать языки, которые не переданы в 'lng'
+    // (важно для сервера, чтобы он не пытался что-то догружать)
+    react: {
+      useSuspense: false, 
+    },
+    // Не загружать неполные переводы
+    partialBundledLanguages: true,
+  });
+
+export default i18n;
+--- END i18n.ts ---
+
+📁 locales/
+  📁 en/
+    📄 translation.json
+    // Файл translation.json (содержимое пропущено для экономии места)
+
+  📁 ru/
+    📄 translation.json
+    // Файл translation.json (содержимое пропущено для экономии места)
 
 📁 providers/
   📄 AuthProvider.tsx
@@ -821,22 +1050,26 @@ export const useAuth = () => {
 // 📄 src/router.tsx
 
 import { createRouter as createTanstackRouter } from '@tanstack/react-router'
+import { useTranslation } from 'react-i18next' // -> ИЗМЕНЕНИЕ
 
 // Import the generated route tree
 import { routeTree } from './routeTree.gen'
 
 import './styles.css'
 
-// ++ НОВОЕ: Простой компонент для страницы 404
-const NotFoundComponent = () => (
-  <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white">
-    <h1 className="text-6xl font-bold text-orange-500">404</h1>
-    <p className="mt-4 text-2xl">Page Not Found</p>
-    <a href="/" className="mt-8 px-4 py-2 text-white bg-orange-600 rounded hover:bg-orange-700">
-      Go Home
-    </a>
-  </div>
-);
+// -> ИЗМЕНЕНИЕ: Компонент теперь использует хук для перевода
+const NotFoundComponent = () => {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white">
+      <h1 className="text-6xl font-bold text-orange-500">404</h1>
+      <p className="mt-4 text-2xl">{t('pageNotFound')}</p>
+      <a href="/" className="mt-8 px-4 py-2 text-white bg-orange-600 rounded hover:bg-orange-700">
+        {t('goHome')}
+      </a>
+    </div>
+  );
+};
 
 
 // Create a new router instance
@@ -844,7 +1077,6 @@ export const createRouter = () => {
   const router = createTanstackRouter({
     routeTree,
     scrollRestoration: true,
-    // ++ НОВОЕ: Добавляем компонент 404 по умолчанию
     defaultNotFoundComponent: NotFoundComponent,
   })
   return router
@@ -876,11 +1108,11 @@ import {
   Sidebar,
   WelcomeScreen,
 } from '../components'
-import { useConversations, usePrompts, useSettings, useAppState } from '../store'
+import { useConversations, usePrompts, useSettings, useAppState, store, type Conversation } from '../store' //
 import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
-
+import { useTranslation } from 'react-i18next'
 import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels'
 
 
@@ -893,10 +1125,12 @@ export const Route = createFileRoute('/')({
 })
 
 function Home() {
+  const { t } = useTranslation(); 
   const navigate = useNavigate()
   const { user } = useAuth()
   
-  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation } = useConversations()
+  // -> ИЗМЕНЕНИЕ: Достаем новую функцию из хука
+  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation, editMessageAndUpdate } = useConversations()
   const { isLoading, setLoading } = useAppState()
   const { settings, loadSettings } = useSettings()
   const { activePrompt, loadPrompts } = usePrompts()
@@ -907,8 +1141,10 @@ function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
-  const mobileMessagesContainerRef = useRef<HTMLElement>(null);
-  const desktopMessagesContainerRef = useRef<HTMLElement>(null);
+  // -> ИЗМЕНЕНИЕ: Новое состояние для отслеживания ID редактируемого сообщения
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
+  const messagesContainerRef = useRef<HTMLElement>(null);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -957,7 +1193,7 @@ function Home() {
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    const container = mobileMessagesContainerRef.current || desktopMessagesContainerRef.current;
+    const container = messagesContainerRef.current;
     if (container) {
         setTimeout(() => {
             container.scrollTo({
@@ -987,15 +1223,22 @@ function Home() {
       const initialAssistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
       
       try {
+        // -> ИЗМЕНЕНИЕ: Используем store.state вместо store.getState()
+        const previousMessages = store.state.conversations.find((c: Conversation) => c.id === currentConversationId)?.messages || [];
+        
+        const history = previousMessages.at(-1)?.id === userMessage.id 
+            ? previousMessages.slice(0, -1) 
+            : previousMessages;
+
         const response = await genAIResponse({
           data: {
-            messages: [...messages, userMessage],
+            messages: [...history, userMessage],
             model: settings.model,
             mainSystemInstruction: settings.system_instruction,
             activePromptContent: activePrompt?.content,
           },
         })
-
+        
         if (!response.body) throw new Error('No response body');
         
         const reader = response.body.getReader();
@@ -1039,8 +1282,8 @@ function Home() {
         return null;
       }
     },
-    [messages, settings, activePrompt],
-  );
+    [settings, activePrompt, currentConversationId], 
+);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -1063,7 +1306,7 @@ function Home() {
       
       try {
         if (!conversationId) {
-          const newConvId = await createNewConversation(conversationTitle)
+          const newConvId = await createNewConversation(conversationTitle || t('newChat'))
           if (newConvId) conversationId = newConvId
         }
         
@@ -1095,8 +1338,45 @@ function Home() {
       processAIResponse,
       setLoading,
       createTitleFromInput,
+      t,
     ],
   )
+  
+  // -> ИЗМЕНЕНИЕ: Новая функция для сохранения отредактированного сообщения
+  const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
+    if (!currentConversationId) return;
+
+    setEditingMessageId(null); // Выключаем режим редактирования
+    setLoading(true);
+    setError(null);
+    textQueueRef.current = '';
+    finalContentRef.current = '';
+    setPendingMessage(null);
+
+    try {
+      const updatedUserMessage = await editMessageAndUpdate(currentConversationId, messageId, newContent);
+
+      if (!updatedUserMessage) {
+        throw new Error("Failed to get updated user message after edit.");
+      }
+      
+      // Повторно запускаем генерацию ответа AI
+      const finalAiMessage = await processAIResponse(updatedUserMessage);
+        
+      if (finalAiMessage && finalAiMessage.content.trim()) {
+          await addMessage(currentConversationId, finalAiMessage);
+      }
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during edit.';
+        console.error('Error in handleSaveEdit:', error)
+        setError(errorMessage);
+    } finally {
+        setLoading(false);
+        setPendingMessage(null);
+    }
+  }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
+
 
   const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId])
   const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation])
@@ -1110,7 +1390,7 @@ function Home() {
                 <div className="flex">
                     <div className="py-1"><AlertTriangle className="h-5 w-5 text-red-400 mr-3" /></div>
                     <div>
-                        <p className="font-bold">An error occurred</p>
+                        <p className="font-bold">{t('errorOccurred')}</p>
                         <p className="text-sm">{error}</p>
                     </div>
                 </div>
@@ -1119,12 +1399,23 @@ function Home() {
         <div className="space-y-6">
           {currentConversationId ? (
               <>
-                  {messages.map((message) => <ChatMessage key={message.id} message={message} />)}
-                  {pendingMessage && <ChatMessage message={pendingMessage} />}
+                  {/* -> ИЗМЕНЕНИЕ: Передаем новые пропсы в ChatMessage */}
+                  {messages.map((message) => (
+                    <ChatMessage 
+                      key={message.id} 
+                      message={message} 
+                      isEditing={editingMessageId === message.id}
+                      onStartEdit={() => setEditingMessageId(message.id)}
+                      onCancelEdit={() => setEditingMessageId(null)}
+                      onSaveEdit={(newContent) => handleSaveEdit(message.id, newContent)}
+                      onCopyMessage={() => navigator.clipboard.writeText(message.content)}
+                    />
+                  ))}
+                  {pendingMessage && <ChatMessage message={pendingMessage} isEditing={false} onStartEdit={()=>{}} onCancelEdit={()=>{}} onSaveEdit={()=>{}} onCopyMessage={()=>{}} />}
                   {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
               </>
           ) : (
-              <div className="flex h-full items-center justify-center pt-20 md:pt-0"><WelcomeScreen /></div>
+              <WelcomeScreen />
           )}
         </div>
     </div>
@@ -1132,7 +1423,7 @@ function Home() {
 
 
   return (
-    <div className="h-screen bg-gray-900 text-white overflow-hidden">
+    <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
         {/* Мобильная версия */}
         <div className="md:hidden h-full flex flex-col">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
@@ -1160,23 +1451,24 @@ function Home() {
                 }} 
             />
             
-            <div className="flex-1 flex flex-col relative min-h-0">
-                <header className="absolute top-0 left-0 right-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4">
-                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white rounded-lg hover:bg-gray-700"><Menu className="w-6 h-6" /></button>
-                    <div className="flex items-center gap-2">
-                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
-                        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
-                    </div>
-                </header>
-                
-                <main ref={mobileMessagesContainerRef} className="flex-1 pt-16 pb-4 overflow-y-auto">
-                    <MainContent />
-                </main>
-                
-                <footer className="w-full">
-                    <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
-                </footer>
-            </div>
+            <header className="flex-shrink-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 border-b border-gray-700">
+                <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white rounded-lg hover:bg-gray-700"><Menu className="w-6 h-6" /></button>
+                <div className="flex items-center gap-2">
+                    <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
+                    <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
+                </div>
+            </header>
+            
+            <main 
+                ref={messagesContainerRef} 
+                className={`flex-1 overflow-y-auto min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
+            >
+                <MainContent />
+            </main>
+            
+            <footer className="flex-shrink-0 w-full">
+                <ChatInput {...{ input, setInput, handleSubmit, isLoading }} />
+            </footer>
         </div>
 
         {/* Десктопная версия */}
@@ -1186,16 +1478,14 @@ function Home() {
                     <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
                 </Panel>
                 <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
-                {/* -> ИЗМЕНЕНИЕ: ref убран с <Panel> */}
                 <Panel className="flex-1 flex flex-col relative min-h-0">
                      <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
-                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">Logout</button>
+                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
                         <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
                     </header>
                     
-                    {/* -> ИЗМЕНЕНИЕ: ref теперь на <main> */}
-                    <main ref={desktopMessagesContainerRef} className="flex-1 overflow-y-auto">
-                        <div className="w-full max-w-5xl mx-auto">
+                    <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
+                        <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
                            <MainContent />
                         </div>
                     </main>
@@ -1213,15 +1503,19 @@ function Home() {
 
   📄 login.tsx
   --- BEGIN login.tsx ---
+// 📄 src/routes/login.tsx
+
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
+import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
 
 export const Route = createFileRoute('/login')({
   component: LoginComponent,
 })
 
 function LoginComponent() {
+  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -1244,11 +1538,11 @@ function LoginComponent() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
       <div className="w-full max-w-md p-8 space-y-6 bg-gray-800 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-bold text-center">Login</h2>
+        <h2 className="text-2xl font-bold text-center">{t('login')}</h2>
         <form onSubmit={handleLogin} className="space-y-6">
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t('emailPlaceholder')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -1256,21 +1550,21 @@ function LoginComponent() {
           />
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t('passwordPlaceholder')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
             required
           />
           <button type="submit" disabled={loading} className="w-full px-4 py-2 font-bold text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:bg-gray-500">
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? t('loggingIn') : t('login')}
           </button>
           {error && <p className="text-red-500 text-center">{error}</p>}
         </form>
         <p className="text-center">
-          Don't have an account?{' '}
+          {t('loginPrompt')}{' '}
           <Link to="/signup" className="text-orange-400 hover:underline">
-            Sign up
+            {t('signup')}
           </Link>
         </p>
       </div>
@@ -1281,15 +1575,19 @@ function LoginComponent() {
 
   📄 signup.tsx
   --- BEGIN signup.tsx ---
+// 📄 src/routes/signup.tsx
+
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
+import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
 
 export const Route = createFileRoute('/signup')({
   component: SignupComponent,
 })
 
 function SignupComponent() {
+  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -1306,8 +1604,7 @@ function SignupComponent() {
     if (error) {
       setError(error.message)
     } else {
-      setMessage('Registration successful! Please login.')
-      // navigate({ to: '/login' }) // Можно перенаправить сразу
+      setMessage(t('signupSuccess'))
     }
     setLoading(false)
   }
@@ -1315,11 +1612,11 @@ function SignupComponent() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
       <div className="w-full max-w-md p-8 space-y-6 bg-gray-800 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-bold text-center">Sign Up</h2>
+        <h2 className="text-2xl font-bold text-center">{t('signup')}</h2>
         <form onSubmit={handleSignup} className="space-y-6">
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t('emailPlaceholder')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -1327,22 +1624,22 @@ function SignupComponent() {
           />
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t('passwordPlaceholder')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
             required
           />
           <button type="submit" disabled={loading} className="w-full px-4 py-2 font-bold text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:bg-gray-500">
-            {loading ? 'Signing up...' : 'Sign Up'}
+            {loading ? t('signingUp') : t('signup')}
           </button>
           {error && <p className="text-red-500 text-center">{error}</p>}
           {message && <p className="text-green-500 text-center">{message}</p>}
         </form>
         <p className="text-center">
-          Already have an account?{' '}
+          {t('signupPrompt')}{' '}
           <Link to="/login" className="text-orange-400 hover:underline">
-            Login
+            {t('login')}
           </Link>
         </p>
       </div>
@@ -1363,31 +1660,37 @@ import {
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
 import { AuthProvider } from '../providers/AuthProvider' 
+import { useTranslation } from 'react-i18next' // Импорт остается
 
 import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
+  // -> ИЗМЕНЕНИЕ: Возвращаем `head` к простому объекту без вызова хука.
+  // Заголовок `title` отсюда убираем, мы установим его динамически.
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'AI Chat (Supabase & Gemini)' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' },
     ],
     links: [{ rel: 'stylesheet', href: appCss }],
   }),
   component: () => (
     <RootDocument>
       <Outlet />
-      {/* -> ИЗМЕНЕНИЕ: Devtools теперь рендерится только в режиме разработки */}
       {import.meta.env.DEV && <TanStackRouterDevtools />}
     </RootDocument>
   ),
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  // -> ИЗМЕНЕНИЕ: Хук `useTranslation` теперь вызывается здесь, ВНУТРИ компонента React. Это правильно.
+  const { t } = useTranslation();
+
   return (
     <html>
       <head>
+        {/* -> ИЗМЕНЕНИЕ: Вставляем тег <title> с переведенным текстом прямо сюда. */}
+        <title>{t('appTitle')}</title> 
         <HeadContent />
       </head>
       <body>
@@ -1437,6 +1740,8 @@ export function initSentry() {
 
 📄 ssr.tsx
 --- BEGIN ssr.tsx ---
+// 📄 src/ssr.tsx (Исправленная версия)
+
 import {
   createStartHandler,
   defaultStreamHandler,
@@ -1446,6 +1751,9 @@ import * as Sentry from '@sentry/react'
 
 import { createRouter } from './router'
 import { initSentry } from './sentry'
+
+// -> ИЗМЕНЕНИЕ: Импортируем нашу универсальную конфигурацию i18n
+import './i18n'; 
 
 // Initialize Sentry in SSR context (will be skipped if DSN is not defined)
 initSentry()
@@ -1471,7 +1779,6 @@ export default createStartHandler({
   createRouter,
   getRouterManifest,
 })(streamHandler)
-
 --- END ssr.tsx ---
 
 📁 store/
@@ -1597,22 +1904,44 @@ export function useConversations() {
       if (error) console.error('Failed to delete conversation from Supabase:', error);
   }, []);
   
-  // --- ВОЗВРАЩАЕМ `addMessage` К ПРОСТОМУ ВИДУ ---
   const addMessage = useCallback(async (conversationId: string, message: Message) => {
       const conversation = selectors.getConversations(store.state).find(c => c.id === conversationId);
       if (!conversation) return;
       
-      // Просто добавляем сообщение в массив
       const updatedMessages = [...conversation.messages, message];
       
-      // Оптимистично обновляем UI
       actions.addMessage(conversationId, message);
 
-      // Отправляем обновленный массив в Supabase
       const { error } = await supabase.from('conversations').update({ messages: updatedMessages }).eq('id', conversationId);
       if (error) console.error('Failed to add message to Supabase:', error);
   }, []);
 
+  // -> ИЗМЕНЕНИЕ: Новая функция для редактирования
+  const editMessageAndUpdate = useCallback(async (conversationId: string, messageId: string, newContent: string) => {
+    // 1. Оптимистично обновляем UI
+    actions.editMessage(conversationId, messageId, newContent);
+
+    // 2. Получаем обновленное состояние из стора
+    // Используем setTimeout, чтобы дождаться, пока setState из store завершится
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const updatedConversation = selectors.getConversations(store.state).find(c => c.id === conversationId);
+
+    if (!updatedConversation) {
+        console.error("Conversation not found after editing.");
+        // Здесь можно было бы откатить изменения, но пока просто логируем
+        return null;
+    }
+
+    // 3. Отправляем обрезанный массив сообщений в Supabase
+    const { error } = await supabase.from('conversations').update({ messages: updatedConversation.messages }).eq('id', conversationId);
+    if (error) {
+        console.error('Failed to update messages in Supabase after edit:', error);
+        // Тут тоже нужна логика отката, но пока пропустим для простоты
+    }
+
+    // 4. Возвращаем новое (обрезанное) сообщение пользователя для повторной отправки в AI
+    return updatedConversation.messages[updatedConversation.messages.length - 1];
+  }, []);
 
   return {
     conversations,
@@ -1624,6 +1953,7 @@ export function useConversations() {
     updateConversationTitle,
     deleteConversation,
     addMessage,
+    editMessageAndUpdate, // -> ИЗМЕНЕНИЕ: Экспортируем новую функцию
   };
 }
   --- END hooks.ts ---
@@ -1677,21 +2007,29 @@ const initialState: State = {
 export const store = new Store<State>(initialState)
 
 export const actions = {
-  // --- НОВЫЙ ACTION ---
-  updateMessageContent: (conversationId: string, messageId: string, content: string) => {
-    store.setState(state => ({
-      ...state,
-      conversations: state.conversations.map(conv =>
-        conv.id === conversationId
-          ? {
-              ...conv,
-              messages: conv.messages.map(msg =>
-                msg.id === messageId ? { ...msg, content: content } : msg
-              ),
-            }
-          : conv
-      ),
-    }));
+  // -> ИЗМЕНЕНИЕ: Заменяем updateMessageContent на более универсальный
+  editMessage: (conversationId: string, messageId: string, newContent: string) => {
+    store.setState(state => {
+      const convIndex = state.conversations.findIndex(c => c.id === conversationId);
+      if (convIndex === -1) return state;
+
+      const newConversations = [...state.conversations];
+      const conversation = { ...newConversations[convIndex] };
+      
+      const msgIndex = conversation.messages.findIndex(m => m.id === messageId);
+      if (msgIndex === -1) return state;
+
+      const newMessages = [...conversation.messages];
+      // Обновляем сообщение
+      newMessages[msgIndex] = { ...newMessages[msgIndex], content: newContent };
+      // Удаляем все сообщения *после* отредактированного
+      newMessages.splice(msgIndex + 1);
+
+      conversation.messages = newMessages;
+      newConversations[convIndex] = conversation;
+
+      return { ...state, conversations: newConversations };
+    });
   },
   
   // Остальные actions
@@ -1777,6 +2115,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* -> ИЗМЕНЕНИЕ: Добавлено для плавной прокрутки на iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 code {
@@ -2000,6 +2340,14 @@ html {
   background-color: transparent;
   padding: 0;
   border-radius: 0;
+}
+
+.prose pre {
+  background-color: rgba(31, 41, 55, 0.5); /* prose-pre:bg-gray-800/50 */
+  border-radius: 0.5rem; /* prose-pre:rounded-md */
+  padding: 1rem; /* prose-pre:p-4 */
+  margin: 1em 0;
+  overflow-x: auto;
 }
 --- END styles.css ---
 

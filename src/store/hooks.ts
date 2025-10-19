@@ -100,7 +100,8 @@ export function useConversations() {
       if (!user) return null;
       const { data, error } = await supabase.from('conversations').insert({ title, messages: [], user_id: user.id }).select().single();
       if (error || !data) { console.error('Failed to create conversation in Supabase:', error); return null; }
-      const newConversation: Conversation = { id: data.id, title: data.title, messages: data.messages || [] };
+      // -> ИЗМЕНЕНИЕ: Добавил created_at, чтобы соответствовать типу
+      const newConversation: Conversation = { id: data.id, title: data.title, messages: data.messages || [], created_at: data.created_at };
       actions.addConversation(newConversation);
       actions.setCurrentConversationId(newConversation.id);
       return newConversation.id;
@@ -130,32 +131,65 @@ export function useConversations() {
       if (error) console.error('Failed to add message to Supabase:', error);
   }, []);
 
-  // -> ИЗМЕНЕНИЕ: Новая функция для редактирования
   const editMessageAndUpdate = useCallback(async (conversationId: string, messageId: string, newContent: string) => {
-    // 1. Оптимистично обновляем UI
     actions.editMessage(conversationId, messageId, newContent);
 
-    // 2. Получаем обновленное состояние из стора
-    // Используем setTimeout, чтобы дождаться, пока setState из store завершится
     await new Promise(resolve => setTimeout(resolve, 0));
     const updatedConversation = selectors.getConversations(store.state).find(c => c.id === conversationId);
 
     if (!updatedConversation) {
         console.error("Conversation not found after editing.");
-        // Здесь можно было бы откатить изменения, но пока просто логируем
         return null;
     }
 
-    // 3. Отправляем обрезанный массив сообщений в Supabase
     const { error } = await supabase.from('conversations').update({ messages: updatedConversation.messages }).eq('id', conversationId);
     if (error) {
         console.error('Failed to update messages in Supabase after edit:', error);
-        // Тут тоже нужна логика отката, но пока пропустим для простоты
     }
-
-    // 4. Возвращаем новое (обрезанное) сообщение пользователя для повторной отправки в AI
     return updatedConversation.messages[updatedConversation.messages.length - 1];
   }, []);
+  
+  // -> НОВОЕ: Функция для дублирования диалога
+  const duplicateConversation = useCallback(async (id: string) => {
+    if (!user) return;
+    
+    const originalConversation = selectors.getConversations(store.state).find(c => c.id === id);
+    if (!originalConversation) {
+      console.error('Original conversation not found for duplication.');
+      return;
+    }
+
+    const newTitle = `copy_${originalConversation.title}`;
+    
+    // Создаем новую запись в БД
+    const { data, error } = await supabase
+      .from('conversations')
+      .insert({ 
+        title: newTitle, 
+        messages: originalConversation.messages, 
+        user_id: user.id 
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      console.error('Failed to duplicate conversation in Supabase:', error);
+      return;
+    }
+    
+    // -> ИЗМЕНЕНИЕ: Добавил created_at, чтобы соответствовать типу
+    const newConversation: Conversation = { id: data.id, title: data.title, messages: data.messages || [], created_at: data.created_at };
+    
+    // Добавляем в локальное состояние и делаем активным
+    actions.addConversation(newConversation);
+    actions.setCurrentConversationId(newConversation.id);
+    
+    // Перезагружаем список, чтобы сохранить порядок сортировки
+    await loadConversations();
+    actions.setCurrentConversationId(newConversation.id);
+
+  }, [user, loadConversations]);
+
 
   return {
     conversations,
@@ -167,6 +201,7 @@ export function useConversations() {
     updateConversationTitle,
     deleteConversation,
     addMessage,
-    editMessageAndUpdate, // -> ИЗМЕНЕНИЕ: Экспортируем новую функцию
+    editMessageAndUpdate,
+    duplicateConversation, // -> НОВОЕ: Экспортируем новую функцию
   };
 }
