@@ -118,22 +118,44 @@ export function useConversations() {
       if (error) console.error('Failed to delete conversation from Supabase:', error);
   }, []);
   
-  // --- ВОЗВРАЩАЕМ `addMessage` К ПРОСТОМУ ВИДУ ---
   const addMessage = useCallback(async (conversationId: string, message: Message) => {
       const conversation = selectors.getConversations(store.state).find(c => c.id === conversationId);
       if (!conversation) return;
       
-      // Просто добавляем сообщение в массив
       const updatedMessages = [...conversation.messages, message];
       
-      // Оптимистично обновляем UI
       actions.addMessage(conversationId, message);
 
-      // Отправляем обновленный массив в Supabase
       const { error } = await supabase.from('conversations').update({ messages: updatedMessages }).eq('id', conversationId);
       if (error) console.error('Failed to add message to Supabase:', error);
   }, []);
 
+  // -> ИЗМЕНЕНИЕ: Новая функция для редактирования
+  const editMessageAndUpdate = useCallback(async (conversationId: string, messageId: string, newContent: string) => {
+    // 1. Оптимистично обновляем UI
+    actions.editMessage(conversationId, messageId, newContent);
+
+    // 2. Получаем обновленное состояние из стора
+    // Используем setTimeout, чтобы дождаться, пока setState из store завершится
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const updatedConversation = selectors.getConversations(store.state).find(c => c.id === conversationId);
+
+    if (!updatedConversation) {
+        console.error("Conversation not found after editing.");
+        // Здесь можно было бы откатить изменения, но пока просто логируем
+        return null;
+    }
+
+    // 3. Отправляем обрезанный массив сообщений в Supabase
+    const { error } = await supabase.from('conversations').update({ messages: updatedConversation.messages }).eq('id', conversationId);
+    if (error) {
+        console.error('Failed to update messages in Supabase after edit:', error);
+        // Тут тоже нужна логика отката, но пока пропустим для простоты
+    }
+
+    // 4. Возвращаем новое (обрезанное) сообщение пользователя для повторной отправки в AI
+    return updatedConversation.messages[updatedConversation.messages.length - 1];
+  }, []);
 
   return {
     conversations,
@@ -145,5 +167,6 @@ export function useConversations() {
     updateConversationTitle,
     deleteConversation,
     addMessage,
+    editMessageAndUpdate, // -> ИЗМЕНЕНИЕ: Экспортируем новую функцию
   };
 }

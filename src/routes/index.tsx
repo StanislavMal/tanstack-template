@@ -11,12 +11,11 @@ import {
   Sidebar,
   WelcomeScreen,
 } from '../components'
-import { useConversations, usePrompts, useSettings, useAppState } from '../store'
+import { useConversations, usePrompts, useSettings, useAppState, store, type Conversation } from '../store' //
 import { genAIResponse, type Message } from '../utils'
 import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
-import { useTranslation } from 'react-i18next' // -> ИЗМЕНЕНИЕ
-
+import { useTranslation } from 'react-i18next'
 import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels'
 
 
@@ -29,11 +28,12 @@ export const Route = createFileRoute('/')({
 })
 
 function Home() {
-  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
+  const { t } = useTranslation(); 
   const navigate = useNavigate()
   const { user } = useAuth()
   
-  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation } = useConversations()
+  // -> ИЗМЕНЕНИЕ: Достаем новую функцию из хука
+  const { conversations, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, currentConversation, editMessageAndUpdate } = useConversations()
   const { isLoading, setLoading } = useAppState()
   const { settings, loadSettings } = useSettings()
   const { activePrompt, loadPrompts } = usePrompts()
@@ -44,6 +44,9 @@ function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
+  // -> ИЗМЕНЕНИЕ: Новое состояние для отслеживания ID редактируемого сообщения
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
   const messagesContainerRef = useRef<HTMLElement>(null);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
@@ -123,15 +126,22 @@ function Home() {
       const initialAssistantMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' };
       
       try {
+        // -> ИЗМЕНЕНИЕ: Используем store.state вместо store.getState()
+        const previousMessages = store.state.conversations.find((c: Conversation) => c.id === currentConversationId)?.messages || [];
+        
+        const history = previousMessages.at(-1)?.id === userMessage.id 
+            ? previousMessages.slice(0, -1) 
+            : previousMessages;
+
         const response = await genAIResponse({
           data: {
-            messages: [...messages, userMessage],
+            messages: [...history, userMessage],
             model: settings.model,
             mainSystemInstruction: settings.system_instruction,
             activePromptContent: activePrompt?.content,
           },
         })
-
+        
         if (!response.body) throw new Error('No response body');
         
         const reader = response.body.getReader();
@@ -175,8 +185,8 @@ function Home() {
         return null;
       }
     },
-    [messages, settings, activePrompt],
-  );
+    [settings, activePrompt, currentConversationId], 
+);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -199,7 +209,6 @@ function Home() {
       
       try {
         if (!conversationId) {
-          // -> ИЗМЕНЕНИЕ: Используем t() для заголовка нового чата, если он создается без ввода
           const newConvId = await createNewConversation(conversationTitle || t('newChat'))
           if (newConvId) conversationId = newConvId
         }
@@ -232,9 +241,45 @@ function Home() {
       processAIResponse,
       setLoading,
       createTitleFromInput,
-      t, // -> ИЗМЕНЕНИЕ: Добавили t в зависимости
+      t,
     ],
   )
+  
+  // -> ИЗМЕНЕНИЕ: Новая функция для сохранения отредактированного сообщения
+  const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
+    if (!currentConversationId) return;
+
+    setEditingMessageId(null); // Выключаем режим редактирования
+    setLoading(true);
+    setError(null);
+    textQueueRef.current = '';
+    finalContentRef.current = '';
+    setPendingMessage(null);
+
+    try {
+      const updatedUserMessage = await editMessageAndUpdate(currentConversationId, messageId, newContent);
+
+      if (!updatedUserMessage) {
+        throw new Error("Failed to get updated user message after edit.");
+      }
+      
+      // Повторно запускаем генерацию ответа AI
+      const finalAiMessage = await processAIResponse(updatedUserMessage);
+        
+      if (finalAiMessage && finalAiMessage.content.trim()) {
+          await addMessage(currentConversationId, finalAiMessage);
+      }
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during edit.';
+        console.error('Error in handleSaveEdit:', error)
+        setError(errorMessage);
+    } finally {
+        setLoading(false);
+        setPendingMessage(null);
+    }
+  }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
+
 
   const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId])
   const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation])
@@ -248,7 +293,7 @@ function Home() {
                 <div className="flex">
                     <div className="py-1"><AlertTriangle className="h-5 w-5 text-red-400 mr-3" /></div>
                     <div>
-                        <p className="font-bold">{t('errorOccurred')}</p> {/* -> ИЗМЕНЕНИЕ */}
+                        <p className="font-bold">{t('errorOccurred')}</p>
                         <p className="text-sm">{error}</p>
                     </div>
                 </div>
@@ -257,8 +302,19 @@ function Home() {
         <div className="space-y-6">
           {currentConversationId ? (
               <>
-                  {messages.map((message) => <ChatMessage key={message.id} message={message} />)}
-                  {pendingMessage && <ChatMessage message={pendingMessage} />}
+                  {/* -> ИЗМЕНЕНИЕ: Передаем новые пропсы в ChatMessage */}
+                  {messages.map((message) => (
+                    <ChatMessage 
+                      key={message.id} 
+                      message={message} 
+                      isEditing={editingMessageId === message.id}
+                      onStartEdit={() => setEditingMessageId(message.id)}
+                      onCancelEdit={() => setEditingMessageId(null)}
+                      onSaveEdit={(newContent) => handleSaveEdit(message.id, newContent)}
+                      onCopyMessage={() => navigator.clipboard.writeText(message.content)}
+                    />
+                  ))}
+                  {pendingMessage && <ChatMessage message={pendingMessage} isEditing={false} onStartEdit={()=>{}} onCancelEdit={()=>{}} onSaveEdit={()=>{}} onCopyMessage={()=>{}} />}
                   {isLoading && (!pendingMessage || pendingMessage.content === '') && <LoadingIndicator />}
               </>
           ) : (
@@ -301,7 +357,7 @@ function Home() {
             <header className="flex-shrink-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 border-b border-gray-700">
                 <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white rounded-lg hover:bg-gray-700"><Menu className="w-6 h-6" /></button>
                 <div className="flex items-center gap-2">
-                    <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button> {/* -> ИЗМЕНЕНИЕ */}
+                    <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
                     <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
                 </div>
             </header>
@@ -327,7 +383,7 @@ function Home() {
                 <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
                 <Panel className="flex-1 flex flex-col relative min-h-0">
                      <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
-                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button> {/* -> ИЗМЕНЕНИЕ */}
+                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
                         <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
                     </header>
                     
