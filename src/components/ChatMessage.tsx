@@ -1,4 +1,4 @@
-// 📄 src/components/ChatMessage.tsx (Финальная, работающая версия)
+// 📄 src/components/ChatMessage.tsx
 
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -46,16 +46,14 @@ export const ChatMessage = ({
 
   return (
     <div className={`group relative flex flex-col w-full ${isAssistant ? 'items-start' : 'items-end'}`}>
-      {/* -> ИЗМЕНЕНИЕ: Возвращаем overflow: 'hidden'. Теперь он не мешает. */}
       <div
-        className={`rounded-lg px-4 py-2 transition-colors duration-200 ${
+        className={`isolate rounded-lg px-4 py-2 transition-colors duration-200 ${
           isAssistant
             ? 'w-full bg-gradient-to-r from-orange-500/5 to-red-600/5'
             : isEditing
               ? 'w-full bg-gray-600/50'
               : 'max-w-2xl bg-gray-700/50'
         }`}
-        style={{ overflow: 'hidden' }}
       >
         {isEditing && !isAssistant ? (
           <div className="w-full">
@@ -69,7 +67,6 @@ export const ChatMessage = ({
             />
           </div>
         ) : (
-          // -> ИЗМЕНЕНИЕ: Просто и чисто. Заменяем <pre> на наш CodeBlock.
           <ReactMarkdown
             className="prose dark:prose-invert max-w-none"
             rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
