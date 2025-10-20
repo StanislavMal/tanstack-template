@@ -1,4 +1,4 @@
-// 📄 src/routes/index.tsx (Финальная версия с отслеживанием направления скролла)
+// 📄 src/routes/index.tsx (Новая, упрощенная и надежная логика скролла)
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react'
@@ -50,7 +50,6 @@ function Home() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const isLockedToBottomRef = useRef(true);
-  // -> ИЗМЕНЕНИЕ: Добавляем ref для хранения последней позиции скролла
   const lastScrollTopRef = useRef(0);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
@@ -116,39 +115,49 @@ function Home() {
   }, []);
 
   useLayoutEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // Вместо сложной логики, просто проверяем, пристегнуты ли мы.
+    // Этот флаг теперь управляется исключительно из обработчика скролла.
     if (isLockedToBottomRef.current) {
       forceScrollToBottom();
     }
   }, [displayMessages, forceScrollToBottom]);
 
-  // -> ИЗМЕНЕНИЕ: Полностью переработанный обработчик скролла
+  // -> ИЗМЕНЕНИЕ: Полностью переработанный, простой и надежный обработчик скролла
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
+    
+    // Устанавливаем начальное значение lastScrollTop при монтировании
+    lastScrollTopRef.current = container.scrollTop;
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
       
-      // Определяем, скроллит ли пользователь вверх
-      if (scrollTop < lastScrollTopRef.current && !isLockedToBottomRef.current) {
-        // Пользователь скроллит вверх, ничего не делаем, он имеет контроль
-      } else {
-        // Определяем, находится ли пользователь внизу
-        const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
-        isLockedToBottomRef.current = isAtBottom;
+      // Правило №1: Если пользователь скроллит вверх, НЕМЕДЛЕННО отключаем блокировку.
+      if (scrollTop < lastScrollTopRef.current) {
+        isLockedToBottomRef.current = false;
+      }
+      
+      // Правило №2: Если пользователь сам вернулся в самый низ, снова включаем блокировку.
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 1; // 1px буфер для точности
+      if (isAtBottom) {
+        isLockedToBottomRef.current = true;
       }
       
       // Обновляем позицию для следующего события
-      lastScrollTopRef.current = scrollTop <= 0 ? 0 : scrollTop;
+      lastScrollTopRef.current = scrollTop;
       
-      // Показываем/скрываем кнопку
-      const isScrolledUp = scrollHeight - scrollTop - clientHeight >= 150;
+      // Показываем/скрываем кнопку на основе того, отскроллил ли пользователь вверх
+      const isScrolledUp = scrollHeight - scrollTop - clientHeight > 150;
       setShowScrollDownButton(isScrolledUp);
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, []); // Зависимости не нужны, вся логика внутри замыкания работает с refs
+  }, []); // Пустой массив зависимостей, т.к. мы работаем только с refs
 
 
   const createTitleFromInput = useCallback((text: string) => {
