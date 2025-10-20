@@ -1,7 +1,7 @@
 // 📄 src/routes/index.tsx
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react' // -> ИЗМЕНЕНИЕ: Добавили useLayoutEffect
+import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react'
 import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
@@ -48,15 +48,14 @@ function Home() {
 
   const messagesContainerRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // -> ИЗМЕНЕНИЕ: Заменяем useState на useRef для управления блокировкой прокрутки.
-  // Это предотвращает лишние ререндеры и гонки состояний.
   const isLockedToBottomRef = useRef(true);
+  // -> ИЗМЕНЕНИЕ: Добавляем ref для отслеживания начальной точки касания на сенсорных экранах.
+  const touchStartY = useRef(0);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  // -> ИЗМЕНЕНИЕ: Это состояние теперь отвечает ТОЛЬКО за видимость кнопки.
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -108,40 +107,65 @@ function Home() {
     };
   }, []);
 
-  const forceScrollToBottom = useCallback(() => {
+  const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
     const container = messagesContainerRef.current;
     if (container) {
-      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      container.scrollTo({ top: container.scrollHeight, behavior });
     }
   }, []);
 
-  // -> ИЗМЕНЕНИЕ: Этот хук теперь использует useLayoutEffect и новую логику.
-  // Он срабатывает после каждого обновления DOM (когда добавляется новый текст).
   useLayoutEffect(() => {
-    // Если пользователь заблокировал прокрутку внизу, мы её выполняем.
     if (isLockedToBottomRef.current) {
-      forceScrollToBottom();
+      forceScrollToBottom('auto'); // Используем 'auto' для мгновенной прокрутки без рывков
     }
   }, [displayMessages, forceScrollToBottom]);
 
-  // -> ИЗМЕНЕНИЕ: Этот хук теперь только обновляет флаг и видимость кнопки.
+  // -> ИЗМЕНЕНИЕ: Основной блок логики скролла. Теперь он отслеживает намерение пользователя.
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    // Этот обработчик определяет, когда пользователь САМ вернулся вниз.
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
-      // Даем небольшой "запас" в 150px, чтобы скролл считался "нижним".
       const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
-      
-      // Обновляем наш ref-флаг. Это не вызовет перерисовку.
       isLockedToBottomRef.current = isAtBottom;
-      // Обновляем состояние для показа/скрытия кнопки.
       setShowScrollDownButton(!isAtBottom);
     };
 
+    // Этот обработчик немедленно отключает автопрокрутку при прокрутке колесиком мыши вверх.
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) { // deltaY < 0 означает скролл вверх
+        isLockedToBottomRef.current = false;
+        setShowScrollDownButton(true);
+      }
+    };
+
+    // Запоминаем начальную точку касания.
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY.current = e.touches[0].clientY;
+    };
+
+    // При движении пальца вверх отключаем автопрокрутку.
+    const handleTouchMove = (e: TouchEvent) => {
+      const currentY = e.touches[0].clientY;
+      if (currentY < touchStartY.current) { // Движение вверх
+        isLockedToBottomRef.current = false;
+        setShowScrollDownButton(true);
+      }
+    };
+
     container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
+    container.addEventListener('wheel', handleWheel, { passive: true });
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: true });
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      container.removeEventListener('wheel', handleWheel);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+    };
   }, [messagesContainerRef.current]);
 
 
@@ -238,10 +262,9 @@ function Home() {
       setPendingMessage(null);
       setError(null);
       
-      // -> ИЗМЕНЕНИЕ: Принудительно включаем блокировку прокрутки вниз при отправке нового сообщения.
       isLockedToBottomRef.current = true;
       setShowScrollDownButton(false);
-      forceScrollToBottom();
+      forceScrollToBottom('auto');
 
       const currentInput = input
       setInput('')
@@ -301,12 +324,11 @@ function Home() {
 
     setEditingMessageId(null);
     setLoading(true);
-    setError(null);
+setError(null);
     textQueueRef.current = '';
     finalContentRef.current = '';
     setPendingMessage(null);
     
-    // -> ИЗМЕНЕНИЕ: Так же, как и в handleSubmit, блокируем скролл внизу.
     isLockedToBottomRef.current = true;
     setShowScrollDownButton(false);
 
@@ -334,9 +356,8 @@ function Home() {
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
   const handleScrollDownClick = useCallback(() => {
-    // -> ИЗМЕНЕНИЕ: При клике на кнопку мы не только скроллим, но и снова "запираем" скролл внизу.
     isLockedToBottomRef.current = true;
-    forceScrollToBottom();
+    forceScrollToBottom('smooth');
     setShowScrollDownButton(false);
   }, [forceScrollToBottom]);
 
