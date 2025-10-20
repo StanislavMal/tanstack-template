@@ -6,9 +6,4 @@ dist-ssr
 .vinxi
 .netlify
 .env
-SUPABASE_SCHEMA.md
-export-supabase-schema.mjs
-generate_project_summary.mjs
-project_summary.txt
-inspect-db-performance.mjs
-DB_PERFORMANCE_REPORT.md
+/_scripts/
