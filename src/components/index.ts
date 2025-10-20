@@ -5,5 +5,4 @@ export { Sidebar } from './Sidebar';
 export { WelcomeScreen } from './WelcomeScreen';
 export { SettingsDialog } from './SettingsDialog';
 export { CodeBlock } from './CodeBlock';
-export { StreamableCodeBlock } from './StreamableCodeBlock';
 export { ScrollDownButton } from './ScrollDownButton';

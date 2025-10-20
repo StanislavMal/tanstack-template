@@ -8,9 +8,6 @@ import rehypeHighlight from 'rehype-highlight';
 import { Pencil, Copy, Check, X } from 'lucide-react';
 import type { Message } from '../utils/ai';
 import { CodeBlock } from './CodeBlock';
-// -> ИЗМЕНЕНИЕ: Импортируем новый компонент
-import { StreamableCodeBlock } from './StreamableCodeBlock';
-import { useAppState } from '../store';
 
 interface ChatMessageProps {
   message: Message;
@@ -33,11 +30,6 @@ export const ChatMessage = ({
   const [editedContent, setEditedContent] = useState(message.content);
   const [isCopied, setIsCopied] = useState(false);
 
-  // -> ИЗМЕНЕНИЕ: Получаем глобальное состояние isLoading
-  const { isLoading } = useAppState();
-  // -> ИЗМЕНЕНИЕ: Определяем, является ли это сообщение стримящимся
-  const isStreamingMessage = isAssistant && isLoading && message.content.length > 0;
-
   const handleSave = () => {
     if (editedContent.trim() !== message.content.trim() && editedContent.trim()) {
       onSaveEdit(editedContent.trim());
@@ -51,15 +43,6 @@ export const ChatMessage = ({
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
-
-  // -> ИЗМЕНЕНИЕ: Определяем, какой компонент кода использовать
-  const CodeComponent = (props: any) => {
-    if (isStreamingMessage) {
-      return <StreamableCodeBlock {...props} isStreaming={true} />;
-    }
-    return <CodeBlock {...props} />;
-  };
-
 
   return (
     <div className={`group relative flex flex-col w-full ${isAssistant ? 'items-start' : 'items-end'}`}>
@@ -88,8 +71,7 @@ export const ChatMessage = ({
             className="prose dark:prose-invert max-w-none"
             rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
             components={{
-              // -> ИЗМЕНЕНИЕ: Используем наш условный компонент
-              pre: CodeComponent,
+              pre: CodeBlock,
             }}
           >
             {message.content}
@@ -98,6 +80,7 @@ export const ChatMessage = ({
       </div>
 
       <div className="flex items-center justify-end gap-1.5 mt-1.5 px-2 h-6 transition-opacity md:opacity-0 group-hover:opacity-100">
+          {/* ... кнопки ... */}
           {isEditing ? (
           <>
             <button onClick={handleSave} className="p-1.5 rounded-full text-green-400 bg-gray-800/50 hover:bg-gray-700" title="Save changes">
