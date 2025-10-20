@@ -33,7 +33,6 @@ export const CodeBlock = ({ children, ...props }: CodeBlockProps) => {
   };
 
   return (
-    // -> ИЗМЕНЕНИЕ: Убран класс `overflow-hidden`
     <div className="relative my-4 bg-gray-800/50 rounded-md">
       <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-1 border-b border-gray-700/50 bg-gray-800 rounded-t-md">
         <span className="font-sans text-xs font-semibold text-gray-400 uppercase">{language}</span>
@@ -44,8 +43,7 @@ export const CodeBlock = ({ children, ...props }: CodeBlockProps) => {
           {isCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
         </button>
       </div>
-      {/* -> ИЗМЕНЕНИЕ: Добавлен класс `contain-layout` для оптимизации рендеринга */}
-      <pre {...props} className="overflow-x-auto p-4 text-sm contain-layout">
+      <pre {...props} className="overflow-x-auto p-4 text-sm">
         {children}
       </pre>
     </div>
