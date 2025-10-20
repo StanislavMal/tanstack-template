@@ -1,10 +1,10 @@
-// 📄 src/i18n.ts (Новая версия)
+// 📄 src/i18n.ts (Новая, исправленная версия)
 
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
-// -> ИЗМЕНЕНИЕ: Импортируем переводы напрямую, как ресурсы
+// Импортируем переводы напрямую, как ресурсы
 import translationEN from './locales/en/translation.json';
 import translationRU from './locales/ru/translation.json';
 
@@ -17,13 +17,19 @@ const resources = {
   },
 };
 
-i18n
-  // -> ИЗМЕНЕНИЕ: Убираем HttpBackend, так как ресурсы теперь встроены
-  // .use(HttpBackend) 
-  .use(LanguageDetector)
-  .use(initReactI18next)
-  .init({
-    resources, // -> ИЗМЕНЕНИЕ: Передаем ресурсы напрямую
+const i18nInstance = i18n
+  .use(initReactI18next);
+
+// -> ИЗМЕНЕНИЕ: Используем детектор языка только на стороне клиента
+if (!import.meta.env.SSR) {
+  i18nInstance.use(LanguageDetector);
+}
+
+i18nInstance.init({
+    resources, 
+    // -> ИЗМЕНЕНИЕ: На сервере всегда используем fallbackLng, чтобы избежать расхождений.
+    // На клиенте `lng` будет `undefined`, что позволит LanguageDetector'у сработать.
+    lng: import.meta.env.SSR ? 'ru' : undefined,
     fallbackLng: 'ru',
     supportedLngs: ['en', 'ru'],
     debug: import.meta.env.DEV,
@@ -37,13 +43,10 @@ i18n
       escapeValue: false, 
     },
 
-    // -> ИЗМЕНЕНИЕ: Добавляем эти опции для корректной работы в SSR
-    // Не загружать языки, которые не переданы в 'lng'
-    // (важно для сервера, чтобы он не пытался что-то догружать)
     react: {
       useSuspense: false, 
     },
-    // Не загружать неполные переводы
+
     partialBundledLanguages: true,
   });
 

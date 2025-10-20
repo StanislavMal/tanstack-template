@@ -23,6 +23,7 @@
 │   ├── 📄 CodeBlock.tsx
 │   ├── 📄 index.ts
 │   ├── 📄 LoadingIndicator.tsx
+│   ├── 📄 ScrollDownButton.tsx
 │   ├── 📄 SettingsDialog.tsx
 │   ├── 📄 Sidebar.tsx
 │   └── 📄 WelcomeScreen.tsx
@@ -475,6 +476,7 @@ export { Sidebar } from './Sidebar';
 export { WelcomeScreen } from './WelcomeScreen';
 export { SettingsDialog } from './SettingsDialog';
 export { CodeBlock } from './CodeBlock';
+export { ScrollDownButton } from './ScrollDownButton';
   --- END index.ts ---
 
   📄 LoadingIndicator.tsx
@@ -530,6 +532,30 @@ export const LoadingIndicator = () => {
   );
 }
   --- END LoadingIndicator.tsx ---
+
+  📄 ScrollDownButton.tsx
+  --- BEGIN ScrollDownButton.tsx ---
+// 📄 src/components/ScrollDownButton.tsx
+
+import { ArrowDown } from 'lucide-react';
+import type { FC } from 'react';
+
+interface ScrollDownButtonProps {
+  onClick: () => void;
+  className?: string; // Позволяет передавать классы для позиционирования
+}
+
+export const ScrollDownButton: FC<ScrollDownButtonProps> = ({ onClick, className }) => {
+  return (
+    <button
+      onClick={onClick}
+      className={`absolute z-10 w-10 h-10 rounded-full bg-gray-700/80 backdrop-blur-sm text-white flex items-center justify-center shadow-lg hover:bg-gray-600 ${className}`}
+    >
+      <ArrowDown className="w-5 h-5" />
+    </button>
+  );
+};
+  --- END ScrollDownButton.tsx ---
 
   📄 SettingsDialog.tsx
   --- BEGIN SettingsDialog.tsx ---
@@ -1204,8 +1230,7 @@ declare module '@tanstack/react-router' {
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react' 
-// -> ИЗМЕНЕНИЕ: Добавляем иконку для кнопки скролла
-import { Settings, Menu, AlertTriangle, ArrowDown } from 'lucide-react'
+import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
   ChatMessage,
@@ -1213,6 +1238,7 @@ import {
   ChatInput,
   Sidebar,
   WelcomeScreen,
+  ScrollDownButton, // <-- ДОБАВЛЕНО
 } from '../components'
 import { useConversations, usePrompts, useSettings, useAppState } from '../store' 
 import { genAIResponse, type Message } from '../utils'
@@ -1247,7 +1273,6 @@ function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  // ->ИЗМЕНЕНИЕ: Добавляем ref для textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLElement>(null);
 
@@ -1255,7 +1280,6 @@ function Home() {
   const [error, setError] = useState<string | null>(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  // -> ИЗМЕНЕНИЕ: Новое состояние для управления прокруткой
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
@@ -1306,7 +1330,6 @@ function Home() {
     };
   }, []);
 
-  // -> ИЗМЕНЕНИЕ: Логика прокрутки
   const forceScrollToBottom = useCallback(() => {
     const container = messagesContainerRef.current;
     if (container) {
@@ -1326,7 +1349,7 @@ function Home() {
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 150; // Порог в 150px
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
       
       setUserHasScrolled(!isAtBottom);
       setShowScrollDownButton(!isAtBottom);
@@ -1430,7 +1453,6 @@ function Home() {
       setPendingMessage(null);
       setError(null);
       
-      // -> ИЗМЕНЕНИЕ: Немедленно сбрасываем флаг скролла и прокручиваем
       setUserHasScrolled(false);
       setShowScrollDownButton(false);
       forceScrollToBottom();
@@ -1438,7 +1460,6 @@ function Home() {
       const currentInput = input
       setInput('')
       
-      // -> ИЗМЕНЕНИЕ: Сбрасываем высоту textarea
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -1485,7 +1506,7 @@ function Home() {
       setLoading,
       createTitleFromInput,
       t,
-      forceScrollToBottom, // -> ИЗМЕНЕНИЕ: Добавляем зависимость
+      forceScrollToBottom,
     ],
   )
   
@@ -1499,7 +1520,6 @@ function Home() {
     finalContentRef.current = '';
     setPendingMessage(null);
     
-    // -> ИЗМЕНЕНИЕ: Сбрасываем скролл
     setUserHasScrolled(false);
     setShowScrollDownButton(false);
 
@@ -1527,6 +1547,13 @@ function Home() {
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
 
+  // -> ИЗМЕНЕНИЕ: Новый обработчик для кнопки скролла
+  const handleScrollDownClick = useCallback(() => {
+    forceScrollToBottom();
+    setUserHasScrolled(false);
+    setShowScrollDownButton(false);
+  }, [forceScrollToBottom]);
+
   const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId])
   const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation])
   const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle])
@@ -1546,7 +1573,6 @@ function Home() {
                 </div>
             </div>
         )}
-        {/* -> ИЗМЕНЕНИЕ: Уменьшаем отступ */}
         <div className="space-y-4">
           {currentConversationId ? (
               <>
@@ -1574,7 +1600,7 @@ function Home() {
   return (
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
         {/* Мобильная версия */}
-        <div className="md:hidden h-full flex flex-col relative"> {/* -> ИЗМЕНЕНИЕ: Добавляем 'relative' */}
+        <div className="md:hidden h-full flex flex-col relative">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
             <Sidebar 
                 {...{ 
@@ -1599,18 +1625,12 @@ function Home() {
                 <MainContent />
             </main>
             
-            {/* -> ИЗМЕНЕНИЕ: Кнопка скролла вниз */}
+            {/* -> ИЗМЕНЕНИЕ: Используем новый компонент */}
             {showScrollDownButton && (
-                <button
-                    onClick={() => {
-                        forceScrollToBottom();
-                        setUserHasScrolled(false);
-                        setShowScrollDownButton(false);
-                    }}
-                    className="absolute bottom-24 right-4 z-10 w-10 h-10 rounded-full bg-gray-700/80 backdrop-blur-sm text-white flex items-center justify-center shadow-lg hover:bg-gray-600"
-                >
-                    <ArrowDown className="w-5 h-5" />
-                </button>
+                <ScrollDownButton
+                    onClick={handleScrollDownClick}
+                    className="bottom-24 right-4"
+                />
             )}
             
             <footer className="flex-shrink-0 w-full">
@@ -1637,18 +1657,12 @@ function Home() {
                         </div>
                     </main>
                     
-                    {/* -> ИЗМЕНЕНИЕ: Кнопка скролла вниз для десктопа */}
+                    {/* -> ИЗМЕНЕНИЕ: Используем новый компонент */}
                     {showScrollDownButton && (
-                        <button
-                            onClick={() => {
-                                forceScrollToBottom();
-                                setUserHasScrolled(false);
-                                setShowScrollDownButton(false);
-                            }}
-                            className="absolute bottom-28 right-10 z-10 w-10 h-10 rounded-full bg-gray-700/80 backdrop-blur-sm text-white flex items-center justify-center shadow-lg hover:bg-gray-600"
-                        >
-                            <ArrowDown className="w-5 h-5" />
-                        </button>
+                        <ScrollDownButton
+                            onClick={handleScrollDownClick}
+                            className="bottom-28 right-10"
+                        />
                     )}
 
                     <footer className="w-full max-w-5xl mx-auto">
@@ -1946,7 +1960,7 @@ export default createStartHandler({
 📁 store/
   📄 hooks.ts
   --- BEGIN hooks.ts ---
-// 📄 store/hooks.ts
+// 📄 src/store/hooks.ts
 
 import { useCallback, useEffect } from 'react';
 import { useStore } from '@tanstack/react-store';
@@ -2127,31 +2141,24 @@ export function useConversations() {
     }
   }, [user]);
 
-  // -> ИЗМЕНЕНИЕ: Убираем неиспользуемый параметр 'conversationId' и улучшаем логику
   const editMessageAndUpdate = useCallback(async (messageId: string, newContent: string) => {
-    // Получаем оригинальные сообщения ДО изменения состояния
     const originalMessages = selectors.getCurrentMessages(store.state);
     const originalMessageIndex = originalMessages.findIndex(m => m.id === messageId);
     if (originalMessageIndex === -1) return null;
 
-    // Определяем ID сообщений, которые будут удалены из истории
     const idsToDelete = originalMessages
       .slice(originalMessageIndex + 1)
       .map(m => m.id);
 
-    // 1. Оптимистично обновляем UI
     actions.editMessage(messageId, newContent);
     
     try {
-      // 2. Параллельно выполняем операции с БД
       const promises = [];
 
-      // Удаляем "устаревшие" сообщения
       if (idsToDelete.length > 0) {
         promises.push(supabase.from('messages').delete().in('id', idsToDelete));
       }
 
-      // Обновляем контент отредактированного сообщения
       promises.push(
         supabase
           .from('messages')
@@ -2166,12 +2173,10 @@ export function useConversations() {
 
     } catch (error) {
       console.error('Failed to update messages in Supabase after edit:', error);
-      // Откатываем UI в случае ошибки
       actions.setMessages(originalMessages);
       return null;
     }
 
-    // 3. Возвращаем новое (отредактированное) сообщение пользователя для повторной отправки в AI
     const updatedMessages = selectors.getCurrentMessages(store.state);
     return updatedMessages.at(-1) || null;
   }, []);
@@ -2182,6 +2187,7 @@ export function useConversations() {
     const originalConversation = conversations.find(c => c.id === id);
     if (!originalConversation) return;
 
+    // 1. Загружаем сообщения для копирования
     const { data: messagesToCopy, error: messagesError } = await supabase
       .from('messages')
       .select('role, content, user_id')
@@ -2193,6 +2199,7 @@ export function useConversations() {
       return;
     }
 
+    // 2. Создаем новую беседу в БД
     const newTitle = `copy_${originalConversation.title}`;
     const { data: newConvData, error: newConvError } = await supabase
       .from('conversations')
@@ -2207,23 +2214,30 @@ export function useConversations() {
 
     const newConversation = newConvData as Conversation;
 
+    // 3. Копируем сообщения в новую беседу
     if (messagesToCopy && messagesToCopy.length > 0) {
         const newMessages = messagesToCopy.map(msg => ({
             ...msg,
             conversation_id: newConversation.id,
-            id: undefined
+            // id будет сгенерирован базой данных
         }));
         
         const { error: insertError } = await supabase.from('messages').insert(newMessages);
         if (insertError) {
             console.error('Failed to insert duplicated messages:', insertError);
+            // Здесь можно добавить логику отката - удалить созданную беседу
+            await supabase.from('conversations').delete().eq('id', newConversation.id);
             return;
         }
     }
     
-    actions.addConversation(newConversation);
+    // 4. Обновляем список бесед с сервера
+    await loadConversations();
 
-  }, [user, conversations]);
+    // 5. Переключаемся на новую беседу
+    setCurrentConversationId(newConversation.id);
+
+  }, [user, conversations, loadConversations, setCurrentConversationId]);
 
 
   return {
