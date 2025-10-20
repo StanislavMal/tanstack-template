@@ -33,7 +33,8 @@ export const CodeBlock = ({ children, ...props }: CodeBlockProps) => {
   };
 
   return (
-    <div className="relative my-4 bg-gray-800/50 rounded-md">
+    // -> ИЗМЕНЕНИЕ: Добавлен класс `overflow-hidden` к этому div
+    <div className="relative my-4 bg-gray-800/50 rounded-md overflow-hidden">
       <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-1 border-b border-gray-700/50 bg-gray-800 rounded-t-md">
         <span className="font-sans text-xs font-semibold text-gray-400 uppercase">{language}</span>
         <button
