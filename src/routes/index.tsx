@@ -1,7 +1,7 @@
-// 📄 src/routes/index.tsx (ВОССТАНОВЛЕННАЯ ВЕРСИЯ С ЛОГАМИ И ИСПРАВЛЕННЫМ ИМПОРТОМ)
+// 📄 src/routes/index.tsx (Финальная версия с useRef)
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react' // -> ИЗМЕНЕНИЕ: Убрали неиспользуемый useLayoutEffect
+import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react' // Возвращаем useLayoutEffect
 import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
@@ -48,13 +48,14 @@ function Home() {
 
   const messagesContainerRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // -> ИЗМЕНЕНИЕ: Заменяем useState на useRef. Это наш флаг блокировки.
+  const isLockedToBottomRef = useRef(true);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  // ---> ИСХОДНАЯ ЛОГИКА
-  const [userHasScrolled, setUserHasScrolled] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -106,27 +107,22 @@ function Home() {
     };
   }, []);
 
-  const forceScrollToBottom = useCallback(() => {
+  const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
     const container = messagesContainerRef.current;
     if (container) {
-      // ---> ЛОГ 1: Логируем каждый вызов принудительной прокрутки
-      console.log(`%c[FORCE_SCROLL] Попытка прокрутки. userHasScrolled: ${userHasScrolled}`, 'color: #8A2BE2;');
-      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-    } else {
-      console.error('[FORCE_SCROLL] Контейнер не найден!');
+      container.scrollTo({ top: container.scrollHeight, behavior });
     }
-  }, [userHasScrolled]); // ---> Важно: зависимость от userHasScrolled
+  }, []);
 
-  // ---> ИСХОДНАЯ ЛОГИКА
-  useEffect(() => {
-    // ---> ЛОГ 2: Логируем, когда срабатывает этот эффект
-    console.log(`%c[EFFECT_SCROLL] Эффект сработал. userHasScrolled: ${userHasScrolled}`, 'color: #FFD700;');
-    if (!userHasScrolled) {
+  // -> ИЗМЕНЕНИЕ: Этот хук вызывается после обновления DOM, но до отрисовки. Идеально для скролла.
+  useLayoutEffect(() => {
+    // Если флаг блокировки включен, прокручиваем вниз.
+    if (isLockedToBottomRef.current) {
       forceScrollToBottom();
     }
-  }, [displayMessages, userHasScrolled, forceScrollToBottom]);
+  }, [displayMessages, forceScrollToBottom]);
 
-  // ---> ИСХОДНАЯ ЛОГИКА
+  // -> ИЗМЕНЕНИЕ: Этот хук теперь управляет флагом блокировки и кнопкой.
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -135,31 +131,15 @@ function Home() {
       const { scrollTop, scrollHeight, clientHeight } = container;
       const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
       
-      // ---> ЛОГ 3: Логируем состояние при каждом скролле
-      console.log(
-        `%c[ON_SCROLL] scrollTop: ${Math.round(scrollTop)}, scrollHeight: ${scrollHeight}, clientHeight: ${clientHeight}. Is at bottom: ${isAtBottom}`, 
-        'color: #4682B4;'
-      );
-
-      if (!isAtBottom) {
-        // ---> ЛОГ 4: Логируем момент, когда пользователь "отрывается" от низа
-        if (!userHasScrolled) { // Логируем только при изменении состояния
-            console.log('%c[SET_SCROLLED] Устанавливаю userHasScrolled в TRUE', 'color: #f00; font-weight: bold;');
-            setUserHasScrolled(true);
-        }
-      } else {
-        // ---> ЛОГ 5: Логируем момент, когда пользователь возвращается вниз
-        if (userHasScrolled) { // Логируем только при изменении состояния
-            console.log('%c[SET_SCROLLED] Устанавливаю userHasScrolled в FALSE', 'color: #0f0; font-weight: bold;');
-            setUserHasScrolled(false);
-        }
-      }
+      // Напрямую меняем значение ref. Это не вызывает ре-рендер.
+      isLockedToBottomRef.current = isAtBottom;
+      // А вот это вызывает ре-рендер, но только когда нужно показать/скрыть кнопку.
       setShowScrollDownButton(!isAtBottom);
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [messagesContainerRef.current, userHasScrolled]); // -> ИЗМЕНЕНИЕ: Добавил userHasScrolled для чистоты
+  }, []); // Зависимости не нужны, т.к. ref и так доступен
 
 
   const createTitleFromInput = useCallback((text: string) => {
@@ -255,11 +235,10 @@ function Home() {
       setPendingMessage(null);
       setError(null);
       
-      // ---> ИСХОДНАЯ ЛОГИКА
-      setUserHasScrolled(false);
+      // -> ИЗМЕНЕНИЕ: Принудительно включаем блокировку
+      isLockedToBottomRef.current = true;
       setShowScrollDownButton(false);
-      // forceScrollToBottom(); // Убрал отсюда, так как useEffect и так сработает
-
+      
       const currentInput = input
       setInput('')
       
@@ -322,8 +301,8 @@ function Home() {
     finalContentRef.current = '';
     setPendingMessage(null);
     
-    // ---> ИСХОДНАЯ ЛОГИКА
-    setUserHasScrolled(false);
+    // -> ИЗМЕНЕНИЕ: Принудительно включаем блокировку
+    isLockedToBottomRef.current = true;
     setShowScrollDownButton(false);
 
     try {
@@ -350,10 +329,9 @@ function Home() {
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
   const handleScrollDownClick = useCallback(() => {
-    forceScrollToBottom();
-    // ---> ИСХОДНАЯ ЛОГИКА
-    setUserHasScrolled(false);
-    setShowScrollDownButton(false);
+    // -> ИЗМЕНЕНИЕ: Принудительно включаем блокировку
+    isLockedToBottomRef.current = true;
+    forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
   const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId])
