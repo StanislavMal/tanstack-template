@@ -1,7 +1,7 @@
 // 📄 src/routes/index.tsx
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react' 
+import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react' // -> ИЗМЕНЕНИЕ: Добавили useLayoutEffect
 import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
@@ -18,7 +18,7 @@ import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
 import { useTranslation } from 'react-i18next'
 import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels'
-import { useMediaQuery } from '../hooks/useMediaQuery' // -> ИЗМЕНЕНИЕ: Импортируем наш новый хук
+import { useMediaQuery } from '../hooks/useMediaQuery'
 
 
 export const Route = createFileRoute('/')({
@@ -46,18 +46,19 @@ function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  // -> ИЗМЕНЕНИЕ: Ref остаётся один, но теперь он будет корректно применяться
   const messagesContainerRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // -> ИЗМЕНЕНИЕ: Заменяем useState на useRef для управления блокировкой прокрутки.
+  // Это предотвращает лишние ререндеры и гонки состояний.
+  const isLockedToBottomRef = useRef(true);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  const [userHasScrolled, setUserHasScrolled] = useState(false);
+  // -> ИЗМЕНЕНИЕ: Это состояние теперь отвечает ТОЛЬКО за видимость кнопки.
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
-  // -> ИЗМЕНЕНИЕ: Используем хук для определения типа устройства
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
 
@@ -114,27 +115,34 @@ function Home() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!userHasScrolled) {
+  // -> ИЗМЕНЕНИЕ: Этот хук теперь использует useLayoutEffect и новую логику.
+  // Он срабатывает после каждого обновления DOM (когда добавляется новый текст).
+  useLayoutEffect(() => {
+    // Если пользователь заблокировал прокрутку внизу, мы её выполняем.
+    if (isLockedToBottomRef.current) {
       forceScrollToBottom();
     }
-  }, [displayMessages, userHasScrolled, forceScrollToBottom]);
+  }, [displayMessages, forceScrollToBottom]);
 
+  // -> ИЗМЕНЕНИЕ: Этот хук теперь только обновляет флаг и видимость кнопки.
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
+      // Даем небольшой "запас" в 150px, чтобы скролл считался "нижним".
       const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
       
-      setUserHasScrolled(!isAtBottom);
+      // Обновляем наш ref-флаг. Это не вызовет перерисовку.
+      isLockedToBottomRef.current = isAtBottom;
+      // Обновляем состояние для показа/скрытия кнопки.
       setShowScrollDownButton(!isAtBottom);
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [messagesContainerRef.current]); // -> ИЗМЕНЕНИЕ: Добавил зависимость, чтобы эффект перезапускался
+  }, [messagesContainerRef.current]);
 
 
   const createTitleFromInput = useCallback((text: string) => {
@@ -230,7 +238,8 @@ function Home() {
       setPendingMessage(null);
       setError(null);
       
-      setUserHasScrolled(false);
+      // -> ИЗМЕНЕНИЕ: Принудительно включаем блокировку прокрутки вниз при отправке нового сообщения.
+      isLockedToBottomRef.current = true;
       setShowScrollDownButton(false);
       forceScrollToBottom();
 
@@ -297,7 +306,8 @@ function Home() {
     finalContentRef.current = '';
     setPendingMessage(null);
     
-    setUserHasScrolled(false);
+    // -> ИЗМЕНЕНИЕ: Так же, как и в handleSubmit, блокируем скролл внизу.
+    isLockedToBottomRef.current = true;
     setShowScrollDownButton(false);
 
     try {
@@ -324,8 +334,9 @@ function Home() {
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
   const handleScrollDownClick = useCallback(() => {
+    // -> ИЗМЕНЕНИЕ: При клике на кнопку мы не только скроллим, но и снова "запираем" скролл внизу.
+    isLockedToBottomRef.current = true;
     forceScrollToBottom();
-    setUserHasScrolled(false);
     setShowScrollDownButton(false);
   }, [forceScrollToBottom]);
 
@@ -375,7 +386,6 @@ function Home() {
   return (
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
       {isDesktop ? (
-        // -> ИЗМЕНЕНИЕ: Десктопная версия, рендерится только при isDesktop === true
         <PanelGroup direction="horizontal">
             <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
                 <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
@@ -406,7 +416,6 @@ function Home() {
             </Panel>
         </PanelGroup>
       ) : (
-        // -> ИЗМЕНЕНИЕ: Мобильная версия, рендерится только при isDesktop === false
         <div className="h-full flex flex-col relative">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
             <Sidebar 

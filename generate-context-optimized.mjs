@@ -9,7 +9,7 @@ const IGNORE_LIST = [
   'package-lock.json', 'yarn.lock', 'README.md', 'LICENSE', '.gitignore', 'PROJECT_SCOUT_REPORT.md', 'PROJECT_CONTEXT.md', 
   // Игнорируем сами скрипты-сборщики
   path.basename(import.meta.url.substring(7)), // Игнорирует сам себя (для Windows/Linux)
-  'export-supabase-schema.mjs', 'SUPABASE_SCHEMA.md', 'universal-context-scout.mjs', 'generate_project_summary.mjs', 'project_summary.txt', 
+  'export-supabase-schema.mjs', 'SUPABASE_SCHEMA.md', 'universal-context-scout.mjs', 'generate_project_summary.mjs', 'project_summary.txt', 'inspect-db-performance.mjs', 'DB_PERFORMANCE_REPORT.md',
   // Игнорируем специфичные для IDE/OS файлы
   '.DS_Store', 'Thumbs.db'
 ];
