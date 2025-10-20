@@ -1,7 +1,7 @@
-// 📄 src/routes/index.tsx
+// 📄 src/routes/index.tsx (Финальная версия с ResizeObserver)
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react' 
+import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react'
 import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
@@ -18,7 +18,7 @@ import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
 import { useTranslation } from 'react-i18next'
 import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels'
-import { useMediaQuery } from '../hooks/useMediaQuery' // -> ИЗМЕНЕНИЕ: Импортируем наш новый хук
+import { useMediaQuery } from '../hooks/useMediaQuery'
 
 
 export const Route = createFileRoute('/')({
@@ -46,18 +46,20 @@ function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  // -> ИЗМЕНЕНИЕ: Ref остаётся один, но теперь он будет корректно применяться
   const messagesContainerRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // -> ИЗМЕНЕНИЕ: Новый ref для внутреннего контейнера с контентом
+  const contentRef = useRef<HTMLDivElement>(null);
+  
+  const isLockedToBottomRef = useRef(true);
+  const lastScrollTopRef = useRef(0);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  const [userHasScrolled, setUserHasScrolled] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
-  // -> ИЗМЕНЕНИЕ: Используем хук для определения типа устройства
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
 
@@ -107,35 +109,59 @@ function Home() {
     };
   }, []);
 
-  const forceScrollToBottom = useCallback(() => {
+  const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
     const container = messagesContainerRef.current;
     if (container) {
-      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      container.scrollTo({ top: container.scrollHeight, behavior });
     }
   }, []);
+  
+  // -> ИЗМЕНЕНИЕ: Используем ResizeObserver для надежного отслеживания автопрокрутки.
+  // Этот хук заменил старый useLayoutEffect, который зависел от [displayMessages].
+  useLayoutEffect(() => {
+    const contentElement = contentRef.current;
+    if (!contentElement) return;
 
-  useEffect(() => {
-    if (!userHasScrolled) {
-      forceScrollToBottom();
-    }
-  }, [displayMessages, userHasScrolled, forceScrollToBottom]);
+    const observer = new ResizeObserver(() => {
+      if (isLockedToBottomRef.current) {
+        forceScrollToBottom();
+      }
+    });
+
+    observer.observe(contentElement);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [forceScrollToBottom]); // forceScrollToBottom стабилен, так что эффект запустится один раз
 
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
+    
+    lastScrollTopRef.current = container.scrollTop;
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
       
-      setUserHasScrolled(!isAtBottom);
-      setShowScrollDownButton(!isAtBottom);
+      if (scrollTop < lastScrollTopRef.current) {
+        isLockedToBottomRef.current = false;
+      }
+      
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 1;
+      if (isAtBottom) {
+        isLockedToBottomRef.current = true;
+      }
+      
+      lastScrollTopRef.current = scrollTop;
+      
+      const isScrolledUp = scrollHeight - scrollTop - clientHeight > 150;
+      setShowScrollDownButton(isScrolledUp);
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [messagesContainerRef.current]); // -> ИЗМЕНЕНИЕ: Добавил зависимость, чтобы эффект перезапускался
-
+  }, []); 
 
   const createTitleFromInput = useCallback((text: string) => {
     const words = text.trim().split(/\s+/)
@@ -230,10 +256,9 @@ function Home() {
       setPendingMessage(null);
       setError(null);
       
-      setUserHasScrolled(false);
+      isLockedToBottomRef.current = true;
       setShowScrollDownButton(false);
-      forceScrollToBottom();
-
+      
       const currentInput = input
       setInput('')
       
@@ -282,8 +307,7 @@ function Home() {
       processAIResponse,
       setLoading,
       createTitleFromInput,
-      t,
-      forceScrollToBottom,
+      t
     ],
   )
   
@@ -297,7 +321,7 @@ function Home() {
     finalContentRef.current = '';
     setPendingMessage(null);
     
-    setUserHasScrolled(false);
+    isLockedToBottomRef.current = true;
     setShowScrollDownButton(false);
 
     try {
@@ -324,9 +348,8 @@ function Home() {
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
   const handleScrollDownClick = useCallback(() => {
-    forceScrollToBottom();
-    setUserHasScrolled(false);
-    setShowScrollDownButton(false);
+    isLockedToBottomRef.current = true;
+    forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
   const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId])
@@ -375,7 +398,6 @@ function Home() {
   return (
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
       {isDesktop ? (
-        // -> ИЗМЕНЕНИЕ: Десктопная версия, рендерится только при isDesktop === true
         <PanelGroup direction="horizontal">
             <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
                 <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
@@ -388,8 +410,11 @@ function Home() {
                 </header>
                 
                 <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
-                    <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                        <MainContent />
+                    {/* -> ИЗМЕНЕНИЕ: Обертка для ResizeObserver */}
+                    <div ref={contentRef}>
+                        <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
+                          <MainContent />
+                        </div>
                     </div>
                 </main>
                 
@@ -406,7 +431,6 @@ function Home() {
             </Panel>
         </PanelGroup>
       ) : (
-        // -> ИЗМЕНЕНИЕ: Мобильная версия, рендерится только при isDesktop === false
         <div className="h-full flex flex-col relative">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
             <Sidebar 
@@ -427,9 +451,12 @@ function Home() {
             
             <main 
                 ref={messagesContainerRef} 
-                className={`flex-1 overflow-y-auto min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
+                className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
             >
-                <MainContent />
+                {/* -> ИЗМЕНЕНИЕ: Обертка для ResizeObserver */}
+                <div ref={contentRef}>
+                    <MainContent />
+                </div>
             </main>
             
             {showScrollDownButton && (
