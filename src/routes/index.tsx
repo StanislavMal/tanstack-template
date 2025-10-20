@@ -49,8 +49,6 @@ function Home() {
   const messagesContainerRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isLockedToBottomRef = useRef(true);
-  // -> ИЗМЕНЕНИЕ: Добавляем ref для отслеживания начальной точки касания на сенсорных экранах.
-  const touchStartY = useRef(0);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -107,65 +105,46 @@ function Home() {
     };
   }, []);
 
-  const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
+  // -> ИЗМЕНЕНИЕ: Функция принимает тип поведения скролла. По умолчанию - 'auto'.
+  const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'auto') => {
     const container = messagesContainerRef.current;
     if (container) {
       container.scrollTo({ top: container.scrollHeight, behavior });
     }
   }, []);
 
+  // -> ИЗМЕНЕНИЕ: Этот хук отвечает за автопрокрутку.
   useLayoutEffect(() => {
-    if (isLockedToBottomRef.current) {
-      forceScrollToBottom('auto'); // Используем 'auto' для мгновенной прокрутки без рывков
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // Проверяем, был ли скролл В САМОМ НИЗУ *до* добавления нового контента.
+    // Даем погрешность в 30px, на всякий случай.
+    const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= 30;
+
+    // Если пользователь был внизу ИЛИ если блокировка включена вручную (после отправки сообщения),
+    // то мы остаемся внизу.
+    if (wasAtBottom || isLockedToBottomRef.current) {
+        forceScrollToBottom('auto'); // Мгновенная прокрутка, чтобы не было "сопротивления".
+        isLockedToBottomRef.current = true; // Подтверждаем, что мы внизу.
     }
   }, [displayMessages, forceScrollToBottom]);
 
-  // -> ИЗМЕНЕНИЕ: Основной блок логики скролла. Теперь он отслеживает намерение пользователя.
+  // -> ИЗМЕНЕНИЕ: Этот хук теперь ТОЛЬКО управляет видимостью кнопки.
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
-    // Этот обработчик определяет, когда пользователь САМ вернулся вниз.
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
       const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
-      isLockedToBottomRef.current = isAtBottom;
+      
+      // Просто показываем или скрываем кнопку. Логику блокировки отсюда убрали.
       setShowScrollDownButton(!isAtBottom);
     };
 
-    // Этот обработчик немедленно отключает автопрокрутку при прокрутке колесиком мыши вверх.
-    const handleWheel = (e: WheelEvent) => {
-      if (e.deltaY < 0) { // deltaY < 0 означает скролл вверх
-        isLockedToBottomRef.current = false;
-        setShowScrollDownButton(true);
-      }
-    };
-
-    // Запоминаем начальную точку касания.
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartY.current = e.touches[0].clientY;
-    };
-
-    // При движении пальца вверх отключаем автопрокрутку.
-    const handleTouchMove = (e: TouchEvent) => {
-      const currentY = e.touches[0].clientY;
-      if (currentY < touchStartY.current) { // Движение вверх
-        isLockedToBottomRef.current = false;
-        setShowScrollDownButton(true);
-      }
-    };
-
     container.addEventListener('scroll', handleScroll, { passive: true });
-    container.addEventListener('wheel', handleWheel, { passive: true });
-    container.addEventListener('touchstart', handleTouchStart, { passive: true });
-    container.addEventListener('touchmove', handleTouchMove, { passive: true });
-
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-      container.removeEventListener('wheel', handleWheel);
-      container.removeEventListener('touchstart', handleTouchStart);
-      container.removeEventListener('touchmove', handleTouchMove);
-    };
+    return () => container.removeEventListener('scroll', handleScroll);
   }, [messagesContainerRef.current]);
 
 
@@ -262,10 +241,9 @@ function Home() {
       setPendingMessage(null);
       setError(null);
       
-      isLockedToBottomRef.current = true;
+      isLockedToBottomRef.current = true; // Принудительно включаем блокировку
       setShowScrollDownButton(false);
-      forceScrollToBottom('auto');
-
+      
       const currentInput = input
       setInput('')
       
@@ -314,8 +292,7 @@ function Home() {
       processAIResponse,
       setLoading,
       createTitleFromInput,
-      t,
-      forceScrollToBottom,
+      t
     ],
   )
   
@@ -324,12 +301,12 @@ function Home() {
 
     setEditingMessageId(null);
     setLoading(true);
-setError(null);
+    setError(null);
     textQueueRef.current = '';
     finalContentRef.current = '';
     setPendingMessage(null);
     
-    isLockedToBottomRef.current = true;
+    isLockedToBottomRef.current = true; // Принудительно включаем блокировку
     setShowScrollDownButton(false);
 
     try {
@@ -356,9 +333,7 @@ setError(null);
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
   const handleScrollDownClick = useCallback(() => {
-    isLockedToBottomRef.current = true;
-    forceScrollToBottom('smooth');
-    setShowScrollDownButton(false);
+    forceScrollToBottom('smooth'); // Здесь прокрутка плавная, т.к. это действие пользователя
   }, [forceScrollToBottom]);
 
   const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId])
