@@ -1,3 +1,4 @@
+Это мой проект, над которым я работаю:
 # Project Structure
 ├── 📄 .env.example
 ├── 📁 .vscode/
@@ -2808,3 +2809,235 @@ export default defineConfig({
   },
 });
 --- END vite.config.js ---
+
+Структура и дополнительная информация по базе данных:
+# Supabase Database Schema
+
+Generated: 2025-10-20T08:29:52.468Z
+
+## Общее количество таблиц: 4
+
+### Таблица: `conversations`
+
+| Колонка | Тип | Nullable | Default |
+|---------|-----|----------|---------|
+| id | uuid | NO | gen_random_uuid() |
+| created_at | timestamp with time zone | NO | timezone('utc'::text, now()) |
+| title | text | NO | NULL |
+| user_id | uuid | NO | NULL |
+
+### Таблица: `messages`
+
+| Колонка | Тип | Nullable | Default |
+|---------|-----|----------|---------|
+| id | uuid | NO | gen_random_uuid() |
+| created_at | timestamp with time zone | NO | now() |
+| content | text | NO | NULL |
+| role | text | NO | NULL |
+| conversation_id | uuid | NO | NULL |
+| user_id | uuid | NO | NULL |
+
+### Таблица: `profiles`
+
+| Колонка | Тип | Nullable | Default |
+|---------|-----|----------|---------|
+| id | uuid | NO | NULL |
+| settings | jsonb | YES | NULL |
+
+### Таблица: `prompts`
+
+| Колонка | Тип | Nullable | Default |
+|---------|-----|----------|---------|
+| id | uuid | NO | uuid_generate_v4() |
+| user_id | uuid | NO | NULL |
+| name | text | NO | NULL |
+| content | text | NO | NULL |
+| is_active | boolean | YES | false |
+| created_at | timestamp with time zone | NO | now() |
+
+## Row Level Security Policies
+
+### Общее количество политик: 13
+
+#### Таблица: `conversations` - Политика: `Users can create their own conversations`
+- **Операции:** INSERT
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `conversations` - Политика: `Users can delete their own conversations`
+- **Операции:** DELETE
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `conversations` - Политика: `Users can update their own conversations.`
+- **Операции:** UPDATE
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `conversations` - Политика: `Users can view their own conversations`
+- **Операции:** SELECT
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `messages` - Политика: `Users can delete their own messages`
+- **Операции:** DELETE
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `messages` - Политика: `Users can insert their own messages`
+- **Операции:** INSERT
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `messages` - Политика: `Users can update their own messages`
+- **Операции:** UPDATE
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `messages` - Политика: `Users can view their own messages`
+- **Операции:** SELECT
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `profiles` - Политика: `Users can manage their own profile`
+- **Операции:** ALL
+- **Роли:** {public}
+- **Условие доступа:** `USING: (auth.uid() = id) | CHECK: true`
+
+#### Таблица: `prompts` - Политика: `Users can delete their own prompts`
+- **Операции:** DELETE
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `prompts` - Политика: `Users can insert their own prompts`
+- **Операции:** INSERT
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `prompts` - Политика: `Users can update their own prompts`
+- **Операции:** UPDATE
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+#### Таблица: `prompts` - Политика: `Users can view their own prompts`
+- **Операции:** SELECT
+- **Роли:** {public}
+- **Условие доступа:** `(auth.uid() = user_id)`
+
+## Индексы
+
+### Общее количество индексов: 8
+
+#### Таблица: `conversations` - Индекс: `conversations_pkey`
+```sql
+CREATE UNIQUE INDEX conversations_pkey ON public.conversations USING btree (id)
+```
+
+#### Таблица: `conversations` - Индекс: `idx_conversations_user_id`
+```sql
+CREATE INDEX idx_conversations_user_id ON public.conversations USING btree (user_id)
+```
+
+#### Таблица: `messages` - Индекс: `idx_messages_conversation_id`
+```sql
+CREATE INDEX idx_messages_conversation_id ON public.messages USING btree (conversation_id)
+```
+
+#### Таблица: `messages` - Индекс: `idx_messages_user_id`
+```sql
+CREATE INDEX idx_messages_user_id ON public.messages USING btree (user_id)
+```
+
+#### Таблица: `messages` - Индекс: `messages_pkey`
+```sql
+CREATE UNIQUE INDEX messages_pkey ON public.messages USING btree (id)
+```
+
+#### Таблица: `profiles` - Индекс: `profiles_pkey`
+```sql
+CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)
+```
+
+#### Таблица: `prompts` - Индекс: `idx_prompts_user_id`
+```sql
+CREATE INDEX idx_prompts_user_id ON public.prompts USING btree (user_id)
+```
+
+#### Таблица: `prompts` - Индекс: `prompts_pkey`
+```sql
+CREATE UNIQUE INDEX prompts_pkey ON public.prompts USING btree (id)
+```
+
+## RLS Статус по таблицам
+
+| Таблица | RLS Включен |
+|---|---|
+| conversations | ✅ Да |
+| messages | ✅ Да |
+| profiles | ✅ Да |
+| prompts | ✅ Да |
+
+## Ограничения
+
+### Общее количество ограничений: 9
+
+#### Ограничение: `conversations_user_id_fkey`
+- **Таблица:** `conversations`
+- **Тип:** FOREIGN KEY
+- **Колонки:** `user_id`
+- **Ссылается на:** `null()`
+
+#### Ограничение: `conversations_pkey`
+- **Таблица:** `conversations`
+- **Тип:** PRIMARY KEY
+- **Колонки:** `id`
+
+#### Ограничение: `messages_conversation_id_fkey`
+- **Таблица:** `messages`
+- **Тип:** FOREIGN KEY
+- **Колонки:** `conversation_id`
+- **Ссылается на:** `conversations(id)`
+
+#### Ограничение: `messages_user_id_fkey`
+- **Таблица:** `messages`
+- **Тип:** FOREIGN KEY
+- **Колонки:** `user_id`
+- **Ссылается на:** `null()`
+
+#### Ограничение: `messages_pkey`
+- **Таблица:** `messages`
+- **Тип:** PRIMARY KEY
+- **Колонки:** `id`
+
+#### Ограничение: `profiles_id_fkey`
+- **Таблица:** `profiles`
+- **Тип:** FOREIGN KEY
+- **Колонки:** `id`
+- **Ссылается на:** `null()`
+
+#### Ограничение: `profiles_pkey`
+- **Таблица:** `profiles`
+- **Тип:** PRIMARY KEY
+- **Колонки:** `id`
+
+#### Ограничение: `prompts_user_id_fkey`
+- **Таблица:** `prompts`
+- **Тип:** FOREIGN KEY
+- **Колонки:** `user_id`
+- **Ссылается на:** `null()`
+
+#### Ограничение: `prompts_pkey`
+- **Таблица:** `prompts`
+- **Тип:** PRIMARY KEY
+- **Колонки:** `id`
+
+
+
+Готов моим гидом по моему проекту, а также помогать мне заниматься улучшением и разработкой дополнительных функций и улучшений? Жду от тебя профессионального качественного, аккуратного и внимательного подхода.
+Для начала, хочу максимально заверить что модели gemini-2.5-flash и gemini-2.5-pro абсолютно новые и протестированные, приложение уже работает на них.
+Теперь о нашем взаимодействии, важно что когда ты предлагаешь мне менять файл с кодом - я прошу передавать мне полный (не сокращенный) код файла, чтобы не случилось ошибок с моей стороны, и к тому же гораздо удобнее сразу же целиком заменять файл. Исключения могут быть только если изменения потребуют замены - одной двух строк кода, при этом будет ясно понятно, где именно происходит замена.
+Также, если изменения проекта слишком объемные и затронут множество файлов, и ты понимаешь что не сможешь заключить все это в одном сообщении, то разбей ответ на две или даже три части, и когда окончил первую часть напиши продолжение в следующем сообщении, я напишу "продолжай" и ты пришлешь следующую часть.
+
+Теперь, с чего мы начнем:
+
+- Дай небольшой фидбэк по проекту.
