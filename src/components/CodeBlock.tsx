@@ -1,4 +1,4 @@
-// 📄 src/components/CodeBlock.tsx
+// 📄 src/components/CodeBlock.tsx (Оригинальная версия)
 
 import { useState, type ReactNode, type HTMLAttributes } from 'react';
 import { Copy, Check } from 'lucide-react';

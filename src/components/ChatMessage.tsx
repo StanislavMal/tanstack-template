@@ -1,6 +1,6 @@
-// 📄 src/components/ChatMessage.tsx
+// 📄 src/components/ChatMessage.tsx (Откат к memo)
 
-import { useState } from 'react';
+import { useState, memo } from 'react'; // ИЗМЕНЕНИЕ: Убран forwardRef
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
@@ -18,7 +18,8 @@ interface ChatMessageProps {
   onCopyMessage: () => void;
 }
 
-export const ChatMessage = ({ 
+// ИЗМЕНЕНИЕ: Оборачиваем только в memo
+export const ChatMessage = memo(({ 
   message,
   isEditing,
   onStartEdit,
@@ -45,6 +46,7 @@ export const ChatMessage = ({
   };
 
   return (
+    // ИЗМЕНЕНИЕ: ref убран
     <div className={`group relative flex flex-col w-full ${isAssistant ? 'items-start' : 'items-end'}`}>
       <div
         className={`isolate rounded-lg px-4 py-2 transition-colors duration-200 ${
@@ -80,7 +82,6 @@ export const ChatMessage = ({
       </div>
 
       <div className="flex items-center justify-end gap-1.5 mt-1.5 px-2 h-6 transition-opacity md:opacity-0 group-hover:opacity-100">
-          {/* ... кнопки ... */}
           {isEditing ? (
           <>
             <button onClick={handleSave} className="p-1.5 rounded-full text-green-400 bg-gray-800/50 hover:bg-gray-700" title="Save changes">
@@ -105,4 +106,6 @@ export const ChatMessage = ({
       </div>
     </div>
   );
-};
+});
+
+ChatMessage.displayName = 'ChatMessage';
