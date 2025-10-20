@@ -1,7 +1,7 @@
-// 📄 src/routes/index.tsx (Финальная версия с useRef)
+// 📄 src/routes/index.tsx (Финальная версия с отслеживанием направления скролла)
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react' // Возвращаем useLayoutEffect
+import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react'
 import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
@@ -49,8 +49,9 @@ function Home() {
   const messagesContainerRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  // -> ИЗМЕНЕНИЕ: Заменяем useState на useRef. Это наш флаг блокировки.
   const isLockedToBottomRef = useRef(true);
+  // -> ИЗМЕНЕНИЕ: Добавляем ref для хранения последней позиции скролла
+  const lastScrollTopRef = useRef(0);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -114,32 +115,40 @@ function Home() {
     }
   }, []);
 
-  // -> ИЗМЕНЕНИЕ: Этот хук вызывается после обновления DOM, но до отрисовки. Идеально для скролла.
   useLayoutEffect(() => {
-    // Если флаг блокировки включен, прокручиваем вниз.
     if (isLockedToBottomRef.current) {
       forceScrollToBottom();
     }
   }, [displayMessages, forceScrollToBottom]);
 
-  // -> ИЗМЕНЕНИЕ: Этот хук теперь управляет флагом блокировки и кнопкой.
+  // -> ИЗМЕНЕНИЕ: Полностью переработанный обработчик скролла
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
       
-      // Напрямую меняем значение ref. Это не вызывает ре-рендер.
-      isLockedToBottomRef.current = isAtBottom;
-      // А вот это вызывает ре-рендер, но только когда нужно показать/скрыть кнопку.
-      setShowScrollDownButton(!isAtBottom);
+      // Определяем, скроллит ли пользователь вверх
+      if (scrollTop < lastScrollTopRef.current && !isLockedToBottomRef.current) {
+        // Пользователь скроллит вверх, ничего не делаем, он имеет контроль
+      } else {
+        // Определяем, находится ли пользователь внизу
+        const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
+        isLockedToBottomRef.current = isAtBottom;
+      }
+      
+      // Обновляем позицию для следующего события
+      lastScrollTopRef.current = scrollTop <= 0 ? 0 : scrollTop;
+      
+      // Показываем/скрываем кнопку
+      const isScrolledUp = scrollHeight - scrollTop - clientHeight >= 150;
+      setShowScrollDownButton(isScrolledUp);
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, []); // Зависимости не нужны, т.к. ref и так доступен
+  }, []); // Зависимости не нужны, вся логика внутри замыкания работает с refs
 
 
   const createTitleFromInput = useCallback((text: string) => {
@@ -235,7 +244,6 @@ function Home() {
       setPendingMessage(null);
       setError(null);
       
-      // -> ИЗМЕНЕНИЕ: Принудительно включаем блокировку
       isLockedToBottomRef.current = true;
       setShowScrollDownButton(false);
       
@@ -301,7 +309,6 @@ function Home() {
     finalContentRef.current = '';
     setPendingMessage(null);
     
-    // -> ИЗМЕНЕНИЕ: Принудительно включаем блокировку
     isLockedToBottomRef.current = true;
     setShowScrollDownButton(false);
 
@@ -329,7 +336,6 @@ function Home() {
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
   const handleScrollDownClick = useCallback(() => {
-    // -> ИЗМЕНЕНИЕ: Принудительно включаем блокировку
     isLockedToBottomRef.current = true;
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
