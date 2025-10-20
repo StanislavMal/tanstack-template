@@ -8,3 +8,5 @@ dist-ssr
 .env
 SUPABASE_SCHEMA.md
 export-supabase-schema.mjs
+generate_project_summary.mjs
+project_summary.txt
