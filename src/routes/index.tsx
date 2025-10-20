@@ -10,7 +10,7 @@ import {
   ChatInput,
   Sidebar,
   WelcomeScreen,
-  ScrollDownButton, // <-- ДОБАВЛЕНО
+  ScrollDownButton,
 } from '../components'
 import { useConversations, usePrompts, useSettings, useAppState } from '../store' 
 import { genAIResponse, type Message } from '../utils'
@@ -18,6 +18,7 @@ import { supabase } from '../utils/supabase'
 import { useAuth } from '../providers/AuthProvider'
 import { useTranslation } from 'react-i18next'
 import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels'
+import { useMediaQuery } from '../hooks/useMediaQuery' // -> ИЗМЕНЕНИЕ: Импортируем наш новый хук
 
 
 export const Route = createFileRoute('/')({
@@ -45,8 +46,9 @@ function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // -> ИЗМЕНЕНИЕ: Ref остаётся один, но теперь он будет корректно применяться
   const messagesContainerRef = useRef<HTMLElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +56,9 @@ function Home() {
   
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
+
+  // -> ИЗМЕНЕНИЕ: Используем хук для определения типа устройства
+  const isDesktop = useMediaQuery('(min-width: 768px)');
 
 
   useEffect(() => {
@@ -129,7 +134,7 @@ function Home() {
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [messagesContainerRef.current]); // -> ИЗМЕНЕНИЕ: Добавил зависимость, чтобы эффект перезапускался
 
 
   const createTitleFromInput = useCallback((text: string) => {
@@ -318,8 +323,6 @@ function Home() {
     }
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
 
-
-  // -> ИЗМЕНЕНИЕ: Новый обработчик для кнопки скролла
   const handleScrollDownClick = useCallback(() => {
     forceScrollToBottom();
     setUserHasScrolled(false);
@@ -371,8 +374,40 @@ function Home() {
 
   return (
     <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
-        {/* Мобильная версия */}
-        <div className="md:hidden h-full flex flex-col relative">
+      {isDesktop ? (
+        // -> ИЗМЕНЕНИЕ: Десктопная версия, рендерится только при isDesktop === true
+        <PanelGroup direction="horizontal">
+            <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
+                <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
+            </Panel>
+            <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
+            <Panel className="flex-1 flex flex-col relative min-h-0">
+                  <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
+                    <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
+                    <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
+                </header>
+                
+                <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
+                    <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
+                        <MainContent />
+                    </div>
+                </main>
+                
+                {showScrollDownButton && (
+                    <ScrollDownButton
+                        onClick={handleScrollDownClick}
+                        className="bottom-28 right-10"
+                    />
+                )}
+
+                <footer className="w-full max-w-5xl mx-auto">
+                      <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
+                </footer>
+            </Panel>
+        </PanelGroup>
+      ) : (
+        // -> ИЗМЕНЕНИЕ: Мобильная версия, рендерится только при isDesktop === false
+        <div className="h-full flex flex-col relative">
             {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
             <Sidebar 
                 {...{ 
@@ -397,7 +432,6 @@ function Home() {
                 <MainContent />
             </main>
             
-            {/* -> ИЗМЕНЕНИЕ: Используем новый компонент */}
             {showScrollDownButton && (
                 <ScrollDownButton
                     onClick={handleScrollDownClick}
@@ -409,41 +443,9 @@ function Home() {
                 <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
             </footer>
         </div>
-
-        {/* Десктопная версия */}
-        <div className="hidden md:flex h-full">
-            <PanelGroup direction="horizontal">
-                <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
-                    <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
-                </Panel>
-                <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
-                <Panel className="flex-1 flex flex-col relative min-h-0">
-                     <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
-                        <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
-                        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
-                    </header>
-                    
-                    <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
-                        <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                           <MainContent />
-                        </div>
-                    </main>
-                    
-                    {/* -> ИЗМЕНЕНИЕ: Используем новый компонент */}
-                    {showScrollDownButton && (
-                        <ScrollDownButton
-                            onClick={handleScrollDownClick}
-                            className="bottom-28 right-10"
-                        />
-                    )}
-
-                    <footer className="w-full max-w-5xl mx-auto">
-                         <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
-                    </footer>
-                </Panel>
-            </PanelGroup>
-        </div>
-        <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      )}
+        
+      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   )
 }
