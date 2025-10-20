@@ -1,4 +1,4 @@
-// 📄 src/routes/index.tsx (Новая, упрощенная и надежная логика скролла)
+// 📄 src/routes/index.tsx (Фикс горизонтального скролла и финальная логика)
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react'
@@ -115,50 +115,41 @@ function Home() {
   }, []);
 
   useLayoutEffect(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
-
-    // Вместо сложной логики, просто проверяем, пристегнуты ли мы.
-    // Этот флаг теперь управляется исключительно из обработчика скролла.
     if (isLockedToBottomRef.current) {
       forceScrollToBottom();
     }
   }, [displayMessages, forceScrollToBottom]);
 
-  // -> ИЗМЕНЕНИЕ: Полностью переработанный, простой и надежный обработчик скролла
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
     
-    // Устанавливаем начальное значение lastScrollTop при монтировании
     lastScrollTopRef.current = container.scrollTop;
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
       
+      // -> ИЗМЕНЕНИЕ: Упрощенная и более надежная логика
       // Правило №1: Если пользователь скроллит вверх, НЕМЕДЛЕННО отключаем блокировку.
       if (scrollTop < lastScrollTopRef.current) {
         isLockedToBottomRef.current = false;
       }
       
       // Правило №2: Если пользователь сам вернулся в самый низ, снова включаем блокировку.
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 1; // 1px буфер для точности
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 1;
       if (isAtBottom) {
         isLockedToBottomRef.current = true;
       }
       
-      // Обновляем позицию для следующего события
       lastScrollTopRef.current = scrollTop;
       
-      // Показываем/скрываем кнопку на основе того, отскроллил ли пользователь вверх
       const isScrolledUp = scrollHeight - scrollTop - clientHeight > 150;
       setShowScrollDownButton(isScrolledUp);
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, []); // Пустой массив зависимостей, т.к. мы работаем только с refs
-
+  }, []); 
 
   const createTitleFromInput = useCallback((text: string) => {
     const words = text.trim().split(/\s+/)
@@ -445,7 +436,8 @@ function Home() {
             
             <main 
                 ref={messagesContainerRef} 
-                className={`flex-1 overflow-y-auto min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
+                // -> ИЗМЕНЕНИЕ: Добавляем overflow-x-hidden для фикса бага с горизонтальным скроллом
+                className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
             >
                 <MainContent />
             </main>
