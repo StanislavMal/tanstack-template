@@ -1,4 +1,4 @@
-// 📄 src/routes/index.tsx (Фикс горизонтального скролла и финальная логика)
+// 📄 src/routes/index.tsx (Финальная версия с ResizeObserver)
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react'
@@ -48,6 +48,8 @@ function Home() {
 
   const messagesContainerRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // -> ИЗМЕНЕНИЕ: Новый ref для внутреннего контейнера с контентом
+  const contentRef = useRef<HTMLDivElement>(null);
   
   const isLockedToBottomRef = useRef(true);
   const lastScrollTopRef = useRef(0);
@@ -113,12 +115,25 @@ function Home() {
       container.scrollTo({ top: container.scrollHeight, behavior });
     }
   }, []);
-
+  
+  // -> ИЗМЕНЕНИЕ: Используем ResizeObserver для надежного отслеживания автопрокрутки.
+  // Этот хук заменил старый useLayoutEffect, который зависел от [displayMessages].
   useLayoutEffect(() => {
-    if (isLockedToBottomRef.current) {
-      forceScrollToBottom();
-    }
-  }, [displayMessages, forceScrollToBottom]);
+    const contentElement = contentRef.current;
+    if (!contentElement) return;
+
+    const observer = new ResizeObserver(() => {
+      if (isLockedToBottomRef.current) {
+        forceScrollToBottom();
+      }
+    });
+
+    observer.observe(contentElement);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [forceScrollToBottom]); // forceScrollToBottom стабилен, так что эффект запустится один раз
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -129,13 +144,10 @@ function Home() {
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
       
-      // -> ИЗМЕНЕНИЕ: Упрощенная и более надежная логика
-      // Правило №1: Если пользователь скроллит вверх, НЕМЕДЛЕННО отключаем блокировку.
       if (scrollTop < lastScrollTopRef.current) {
         isLockedToBottomRef.current = false;
       }
       
-      // Правило №2: Если пользователь сам вернулся в самый низ, снова включаем блокировку.
       const isAtBottom = scrollHeight - scrollTop - clientHeight < 1;
       if (isAtBottom) {
         isLockedToBottomRef.current = true;
@@ -398,8 +410,11 @@ function Home() {
                 </header>
                 
                 <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
-                    <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                        <MainContent />
+                    {/* -> ИЗМЕНЕНИЕ: Обертка для ResizeObserver */}
+                    <div ref={contentRef}>
+                        <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
+                          <MainContent />
+                        </div>
                     </div>
                 </main>
                 
@@ -436,10 +451,12 @@ function Home() {
             
             <main 
                 ref={messagesContainerRef} 
-                // -> ИЗМЕНЕНИЕ: Добавляем overflow-x-hidden для фикса бага с горизонтальным скроллом
                 className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
             >
-                <MainContent />
+                {/* -> ИЗМЕНЕНИЕ: Обертка для ResizeObserver */}
+                <div ref={contentRef}>
+                    <MainContent />
+                </div>
             </main>
             
             {showScrollDownButton && (
