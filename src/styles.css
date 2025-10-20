@@ -1,15 +1,13 @@
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
 
-/* -> ИЗМЕНЕНИЕ: Начало нового блока для фиксации вьюпорта */
 html, body {
-  overscroll-behavior: none; /* Запрещает "резиновый" скролл */
-  overflow: hidden; /* Скрывает любую прокрутку на уровне документа */
-  height: 100%; /* Убедимся, что они занимают всю высоту */
+  overscroll-behavior: none;
+  overflow: hidden;
+  height: 100%;
   width: 100%;
-  position: fixed; /* Фиксирует их на месте */
+  position: fixed;
 }
-/* -> ИЗМЕНЕНИЕ: Конец нового блока */
 
 body {
   @apply m-0;
@@ -44,18 +42,11 @@ code {
   background-color: rgba(156, 163, 175, 0.7);
 }
 
-/* Smooth transitions for dark mode (убрано из html, так как html теперь fixed) */
-
 /* Markdown content styles */
 .prose {
   max-width: none;
   color: #e5e7eb; /* text-gray-200 */
 }
-
-/* .prose p {
-  margin-top: 1.25em;
-  margin-bottom: 1.25em;
-} */
 
 .prose code {
   color: #e5e7eb;
@@ -73,17 +64,20 @@ code {
   overflow-x: auto;
 }
 
+/* -> НАЧАЛО ИЗМЕНЕНИЙ */
 .prose pre code {
   background-color: transparent;
   padding: 0;
   border-radius: 0;
   color: inherit;
+  /* Новые правила для принудительного рендеринга скролла */
+  display: block;
+  min-width: max-content;
 }
+/* -> КОНЕЦ ИЗМЕНЕНИЙ */
 
 .prose h1, .prose h2, .prose h3, .prose h4 {
   color: #f9fafb; /* text-gray-50 */
-  /* margin-top: 2em; */
-  /* margin-bottom: 1em; */
 }
 
 .prose ul, .prose ol {
@@ -158,10 +152,8 @@ code {
   transition: opacity 300ms;
 }
 
-/* Add/update these styles to match AI formatting capabilities */
 .prose h1 {
   font-size: 2em;
-  /* margin-top: 1em; */
   margin-bottom: 0.5em;
 }
 
@@ -219,7 +211,6 @@ code {
   color: #d1d5db; /* text-gray-300 */
 }
 
-/* Ensure code blocks match the AI's formatting */
 .prose code {
   color: #e5e7eb;
   background-color: rgba(31, 41, 55, 0.5);
@@ -233,14 +224,11 @@ code {
   border-radius: 0.5rem;
   padding: 1rem;
   margin: 1em 0;
+  overflow-x: auto;
 }
 
-.prose pre code {
-  background-color: transparent;
-  padding: 0;
-  border-radius: 0;
-}
-
+/* Я нашел дублирующее правило в конце файла и объединил все в одно выше */
+/* поэтому этот блок можно удалить или оставить как есть, изменения уже внесены */
 .prose pre {
   background-color: rgba(31, 41, 55, 0.5); /* prose-pre:bg-gray-800/50 */
   border-radius: 0.5rem; /* prose-pre:rounded-md */
