@@ -9,8 +9,14 @@ export interface Message {
   content: string
 }
 
-// Helper function for our debug stream
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Функция для создания промиса с тайм-аутом
+const createTimeout = (ms: number, message: string) => {
+  return new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(message));
+    }, ms);
+  });
+};
 
 export const genAIResponse = createServerFn({
   method: 'POST',
@@ -25,47 +31,27 @@ export const genAIResponse = createServerFn({
     }) => d,
   )
   .handler(async ({ data }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error('ERROR: GEMINI_API_KEY is not defined in the server environment.');
-      return new Response(JSON.stringify({ error: 'Missing API key on the server.' }), { status: 500 });
+    
+    // --- ИЗМЕНЕНИЕ: ЛОГИКА РОТАЦИИ API-КЛЮЧЕЙ ---
+    // 1. Собираем все определенные ключи Gemini из переменных окружения.
+    const apiKeys = Object.keys(process.env)
+      .filter(key => key.startsWith('GEMINI_API_KEY_') && process.env[key])
+      .map(key => process.env[key] as string);
+
+    // 2. Проверяем, найден ли хотя бы один ключ.
+    if (apiKeys.length === 0) {
+      console.error('CRITICAL ERROR: No GEMINI_API_KEY_... variables found in the server environment.');
+      return new Response(JSON.stringify({ error: 'Server is missing API key configuration.' }), { status: 500 });
     }
 
-    const lastUserMessage = data.messages.at(-1);
-    const prompt = lastUserMessage?.content || '';
-
-    // --- ШАГ 2: РЕАЛИЗАЦИЯ ОТЛАДОЧНОГО РЕЖИМА ---
-    if (prompt.trim() === '__debug_long_stream') {
-      console.log('>>> INITIATING DEBUG LONG STREAM <<<');
-      const stream = new ReadableStream({
-        async start(controller) {
-          const encoder = new TextEncoder();
-          try {
-            for (let i = 0; i < 240; i++) { // Генерируем стрим в течение 120 секунд
-              await sleep(1000); // Пауза 1 секунда
-              const text = `[DEBUG] Chunk ${i + 1}/120. Server time: ${new Date().toISOString()}\n`;
-              const jsonChunk = JSON.stringify({ text });
-              controller.enqueue(encoder.encode(jsonChunk));
-              console.log(`Sent debug chunk ${i + 1}`);
-            }
-            console.log('>>> DEBUG STREAM COMPLETED SUCCESSFULLY <<<');
-          } catch (error) {
-            console.error('--- DEBUG STREAM FAILED ---', error);
-          } finally {
-            try {
-              controller.close();
-            } catch (e) {
-              // Ignore if already closed
-            }
-          }
-        }
-      });
-      return new Response(stream);
-    }
-    // --- КОНЕЦ ОТЛАДОЧНОГО РЕЖИМА ---
+    // 3. Выбираем случайный ключ из пула.
+    const selectedKeyIndex = Math.floor(Math.random() * apiKeys.length);
+    const selectedApiKey = apiKeys[selectedKeyIndex];
+    console.log(`Using Gemini API Key at index ${selectedKeyIndex}. Total keys found: ${apiKeys.length}`);
+    // --- КОНЕЦ ЛОГИКИ РОТАЦИИ ---
 
 
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const genAI = new GoogleGenerativeAI(selectedApiKey); // Используем выбранный ключ
     const model = genAI.getGenerativeModel({ 
       model: data.model || "gemini-1.5-flash",
     });
@@ -111,13 +97,27 @@ export const genAIResponse = createServerFn({
       const stream = new ReadableStream({
         async start(controller) {
           const encoder = new TextEncoder();
-          console.log('>>> GEMINI STREAM STARTED <<<');
+          const iterator = result.stream[Symbol.asyncIterator]();
+          console.log('>>> GEMINI STREAM STARTED (with timeout) <<<');
+          
           try {
-            for await (const chunk of result.stream) {
+            while (true) {
+              // Ждем 20 секунд. Если за это время от Gemini ничего не пришло, считаем, что соединение "умерло".
+              const { value, done } = await Promise.race([
+                iterator.next(),
+                createTimeout(20000, 'Gemini API timed out. No data received for 20 seconds.'),
+              ]) as IteratorResult<any, any>;
+
+              if (done) {
+                console.log('>>> GEMINI STREAM FINISHED GRACEFULLY (iterator.done is true) <<<');
+                break;
+              }
+
+              const chunk = value;
+
               if (chunk.promptFeedback?.blockReason) {
                 console.error('--- GEMINI RESPONSE BLOCKED ---');
                 console.error('Block Reason:', chunk.promptFeedback.blockReason);
-                console.error('Safety Ratings:', chunk.promptFeedback.safetyRatings);
                 const errorJson = JSON.stringify({ error: `Response was blocked due to: ${chunk.promptFeedback.blockReason}` });
                 controller.enqueue(encoder.encode(errorJson));
                 break; 
@@ -129,25 +129,20 @@ export const genAIResponse = createServerFn({
                 controller.enqueue(encoder.encode(jsonChunk));
               }
             }
-            console.log('>>> GEMINI STREAM FINISHED GRACEFULLY (for-await loop ended) <<<');
           } catch (error) {
-            // --- ШАГ 1: РАСШИРЕННАЯ ДИАГНОСТИКА ОШИБКИ ---
-            console.error('--- ERROR DURING GEMINI STREAM PROCESSING ---');
-            // Логируем всю доступную информацию об ошибке
-            if (error instanceof Error) {
+            console.error('--- ERROR DURING GEMINI STREAM PROCESSING (or TIMEOUT) ---');
+             if (error instanceof Error) {
                 console.error(`Error Type: ${error.name}`);
                 console.error(`Error Message: ${error.message}`);
-                console.error(`Error Stack: ${error.stack}`);
+                // Отправляем ошибку тайм-аута на клиент
+                const errorJson = JSON.stringify({ error: `AI response failed: ${error.message}` });
+                controller.enqueue(encoder.encode(errorJson));
             } else {
                 console.error('Caught a non-Error object:', error);
             }
           } finally {
             console.log('>>> GEMINI STREAM "finally" BLOCK REACHED <<<');
-            try {
-              controller.close();
-            } catch (e) {
-              // Игнорируем ошибку - поток уже закрыт, и это нормально.
-            }
+            try { controller.close(); } catch (e) { /* ignore */ }
           }
         },
       });
