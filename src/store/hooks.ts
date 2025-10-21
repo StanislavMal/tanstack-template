@@ -3,21 +3,45 @@
 import { useCallback, useEffect } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { actions, selectors, store, type Conversation, type Prompt, type UserSettings } from './store';
-import type { Message } from '../utils/ai';
+import type { Message } from '../lib/ai/types';
 import { supabase } from '../utils/supabase';
 import { useAuth } from '../providers/AuthProvider';
 
-// useSettings и usePrompts остаются без изменений...
 export function useSettings() {
     const { user } = useAuth();
     const settings = useStore(store, s => selectors.getSettings(s));
 
     const loadSettings = useCallback(async () => {
-        if (!user) return;
-        const { data, error } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
-        if (error) console.error("Error loading settings:", error);
-        if (data && data.settings) actions.setSettings(data.settings as UserSettings);
-    }, [user]);
+    if (!user) return;
+    const { data, error } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
+    if (error) console.error("Error loading settings:", error);
+    if (data && data.settings) {
+        // Добавляем значения по умолчанию для новых полей
+        const loadedSettings = data.settings as UserSettings;
+        const settingsWithDefaults: UserSettings = {
+            model: loadedSettings.model || 'gemini-2.5-flash', // Обновлено на 2.5-flash
+            provider: loadedSettings.provider || 'gemini',
+            system_instruction: loadedSettings.system_instruction || '',
+            temperature: loadedSettings.temperature || 0.7,
+            maxTokens: loadedSettings.maxTokens || 8192,
+            reasoningEffort: loadedSettings.reasoningEffort || 'none',
+        };
+        actions.setSettings(settingsWithDefaults);
+    } else {
+        // Создаем настройки по умолчанию с моделью 2.5
+        const defaultSettings: UserSettings = {
+            model: 'gemini-2.5-flash', // Обновлено на 2.5-flash
+            provider: 'gemini',
+            system_instruction: '',
+            temperature: 0.7,
+            maxTokens: 8192,
+            reasoningEffort: 'none',
+        };
+        actions.setSettings(defaultSettings);
+        // Сохраняем в БД
+        await supabase.from('profiles').update({ settings: defaultSettings }).eq('id', user.id);
+    }
+}, [user]);
 
     const updateSettings = useCallback(async (newSettings: Partial<UserSettings>) => {
         if (!user || !settings) return;
@@ -101,7 +125,7 @@ export function useConversations() {
         } else {
           const formattedMessages = data.map(m => ({
             id: m.id,
-            role: m.role,
+            role: m.role as 'user' | 'assistant' | 'system',
             content: m.content
           })) as Message[];
           actions.setMessages(formattedMessages);
@@ -110,7 +134,6 @@ export function useConversations() {
       loadMessages();
     }
   }, [currentConversationId, user]);
-
 
   const setCurrentConversationId = useCallback((id: string | null) => {
       actions.setCurrentConversationId(id);
@@ -225,7 +248,6 @@ export function useConversations() {
     const originalConversation = conversations.find(c => c.id === id);
     if (!originalConversation) return;
 
-    // 1. Загружаем сообщения для копирования
     const { data: messagesToCopy, error: messagesError } = await supabase
       .from('messages')
       .select('role, content, user_id')
@@ -237,7 +259,6 @@ export function useConversations() {
       return;
     }
 
-    // 2. Создаем новую беседу в БД
     const newTitle = `copy_${originalConversation.title}`;
     const { data: newConvData, error: newConvError } = await supabase
       .from('conversations')
@@ -252,31 +273,24 @@ export function useConversations() {
 
     const newConversation = newConvData as Conversation;
 
-    // 3. Копируем сообщения в новую беседу
     if (messagesToCopy && messagesToCopy.length > 0) {
         const newMessages = messagesToCopy.map(msg => ({
             ...msg,
             conversation_id: newConversation.id,
-            // id будет сгенерирован базой данных
         }));
         
         const { error: insertError } = await supabase.from('messages').insert(newMessages);
         if (insertError) {
             console.error('Failed to insert duplicated messages:', insertError);
-            // Здесь можно добавить логику отката - удалить созданную беседу
             await supabase.from('conversations').delete().eq('id', newConversation.id);
             return;
         }
     }
     
-    // 4. Обновляем список бесед с сервера
     await loadConversations();
-
-    // 5. Переключаемся на новую беседу
     setCurrentConversationId(newConversation.id);
 
   }, [user, conversations, loadConversations, setCurrentConversationId]);
-
 
   return {
     conversations,

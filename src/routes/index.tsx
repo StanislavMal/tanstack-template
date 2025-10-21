@@ -1,483 +1,318 @@
-// 📄 src/routes/index.tsx (ИСПРАВЛЕНА ОШИБКА С useMemo)
+// 📄 src/routes/index.tsx
 
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-// ИЗМЕНЕНИЕ: Возвращаем useMemo в импорт
-import { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } from 'react'
-import { Settings, Menu, AlertTriangle } from 'lucide-react'
+import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels';
+import { supabase } from '../utils/supabase';
+import { useAuth } from '../providers/AuthProvider';
 import {
   SettingsDialog,
-  ChatMessage,
-  LoadingIndicator,
-  ChatInput,
   Sidebar,
-  WelcomeScreen,
   ScrollDownButton,
-} from '../components'
-import { useConversations, usePrompts, useSettings, useAppState } from '../store' 
-import { genAIResponse, type Message } from '../utils'
-import { supabase } from '../utils/supabase'
-import { useAuth } from '../providers/AuthProvider'
-import { useTranslation } from 'react-i18next'
-import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels'
-import { useMediaQuery } from '../hooks/useMediaQuery'
-
+  Header,
+  ChatArea,
+  Footer,
+} from '../components';
+import {
+  useChat,
+  useSidebar,
+  useScrollManagement,
+  useMediaQuery,
+} from '../hooks';
+import { useConversations, useSettings, usePrompts } from '../store';
+import type { Conversation } from '../store/store';
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { throw redirect({ to: '/login' }) }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw redirect({ to: '/login' });
+    }
   },
   component: Home,
-})
+});
 
 function Home() {
-  const { t } = useTranslation(); 
-  const navigate = useNavigate()
-  const { user } = useAuth()
+  const navigate = useNavigate();
+  const { user } = useAuth();
   
-  const { conversations, messages, loadConversations, createNewConversation, updateConversationTitle, deleteConversation, addMessage, setCurrentConversationId, currentConversationId, editMessageAndUpdate, duplicateConversation } = useConversations()
-  const { isLoading, setLoading } = useAppState()
-  const { settings, loadSettings } = useSettings()
-  const { activePrompt, loadPrompts } = usePrompts()
-  
-  const [input, setInput] = useState('')
-  const [editingChatId, setEditingChatId] = useState<string | null>(null)
-  const [editingTitle, setEditingTitle] = useState('')
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  // State управления
+  const [input, setInput] = useState('');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-
-  const messagesContainerRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
   
-  const isLockedToBottomRef = useRef(true);
-  const lastScrollTopRef = useRef(0);
-
-  const [pendingMessage, setPendingMessage] = useState<Message | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
-  const [showScrollDownButton, setShowScrollDownButton] = useState(false);
-
+  // Хуки для функциональности
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  
+  // Store хуки
+  const { messages, currentConversationId } = useConversations();
+  const { loadConversations } = useConversations();
+  const { loadSettings } = useSettings();
+  const { loadPrompts } = usePrompts();
 
-
+  // Загрузка данных при монтировании
   useEffect(() => {
     if (user) {
-      loadConversations()
-      loadPrompts()
-      loadSettings()
+      loadConversations();
+      loadPrompts();
+      loadSettings();
     }
-  }, [user, loadConversations, loadPrompts, loadSettings])
-  
+  }, [user, loadConversations, loadPrompts, loadSettings]);
+
+  // Управление скроллом
+  const {
+    messagesContainerRef,
+    contentRef,
+    showScrollDownButton,
+    scrollToBottom,
+    lockToBottom,
+  } = useScrollManagement();
+
+  // Управление сайдбаром
+  const sidebar = useSidebar();
+
+  // Управление чатом
+  const {
+    sendMessage,
+    editAndRegenerate,
+    isLoading,
+    error,
+    pendingMessage,
+  } = useChat({
+    onMessageSent: () => {
+      lockToBottom();
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    },
+    onResponseComplete: () => {
+      // Можно добавить звуковое уведомление или другую логику
+    },
+    onError: (error) => {
+      console.error('Chat error:', error);
+    },
+  });
+
+  // Комбинируем сообщения для отображения
   const displayMessages = useMemo(() => {
     const combined = [...messages];
     if (pendingMessage && !messages.some(m => m.id === pendingMessage.id)) {
-        combined.push(pendingMessage);
+      combined.push(pendingMessage);
     }
     return combined;
   }, [messages, pendingMessage]);
 
-  const textQueueRef = useRef<string>('');
-  const animationFrameRef = useRef<number | undefined>(undefined);
-  const finalContentRef = useRef<string>(''); 
+  // Обработчики событий
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
 
-  useEffect(() => {
-    const animatePrinting = () => {
-      if (textQueueRef.current.length > 0) {
-        const speed = 2;
-        const charsToPrint = textQueueRef.current.substring(0, speed);
-        textQueueRef.current = textQueueRef.current.substring(speed);
-
-        setPendingMessage(prev => {
-          if (prev) {
-            const newContent = prev.content + charsToPrint;
-            finalContentRef.current = newContent;
-            return { ...prev, content: newContent };
-          }
-          return null;
-        });
-      }
-      animationFrameRef.current = requestAnimationFrame(animatePrinting);
-    };
-
-    animationFrameRef.current = requestAnimationFrame(animatePrinting);
-
-    return () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, []);
-
-  const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
-    const container = messagesContainerRef.current;
-    if (container) {
-      container.scrollTo({ top: container.scrollHeight, behavior });
-    }
-  }, []);
-  
-  useLayoutEffect(() => {
-    const contentElement = contentRef.current;
-    if (!contentElement) return;
-
-    const observer = new ResizeObserver(() => {
-      if (isLockedToBottomRef.current) {
-        forceScrollToBottom(); 
-      }
-    });
-
-    observer.observe(contentElement);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [forceScrollToBottom]);
-
-  useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
+    const currentInput = input;
+    setInput('');
     
-    lastScrollTopRef.current = container.scrollTop;
+    // Создаем заголовок из первых слов
+    const words = currentInput.trim().split(/\s+/);
+    const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
+    
+    await sendMessage(currentInput, title);
+  }, [input, isLoading, sendMessage]);
 
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      
-      if (scrollTop < lastScrollTopRef.current) {
-        isLockedToBottomRef.current = false;
-      }
-      
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 1;
-      if (isAtBottom) {
-        isLockedToBottomRef.current = true;
-      }
-      
-      lastScrollTopRef.current = scrollTop;
-      
-      const isScrolledUp = scrollHeight - scrollTop - clientHeight > 150;
-      setShowScrollDownButton(isScrolledUp);
-    };
+  const handleLogout = useCallback(async () => {
+    await supabase.auth.signOut();
+    navigate({ to: '/login' });
+  }, [navigate]);
 
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, []); 
+  const handleStartEdit = useCallback((id: string) => {
+    setEditingMessageId(id);
+  }, []);
 
-  const createTitleFromInput = useCallback((text: string) => {
-    const words = text.trim().split(/\s+/)
-    const firstThreeWords = words.slice(0, 3).join(' ')
-    return firstThreeWords + (words.length > 3 ? '...' : '')
-  }, [])
-
-  const processAIResponse = useCallback(
-    async (userMessage: Message) => {
-      if (!settings) {
-        setError("User settings not loaded.");
-        setLoading(false);
-        return null;
-      }
-      
-      finalContentRef.current = ''; 
-      const initialAssistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '' };
-      
-      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-      let streamDone = false;
-      
-      try {
-        const history = messages.at(-1)?.id === userMessage.id 
-            ? messages.slice(0, -1) 
-            : messages;
-
-        const response = await genAIResponse({
-          data: {
-            messages: [...history, userMessage],
-            model: settings.model,
-            mainSystemInstruction: settings.system_instruction,
-            activePromptContent: activePrompt?.content,
-          },
-        })
-        
-        if (!response.body) throw new Error('No response body');
-        
-        reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let isFirstChunk = true;
-
-        console.log(`[CLIENT] Stream reading started for message: ${userMessage.id}`);
-        
-        while (true) {
-          const { value, done } = await reader.read();
-          streamDone = done;
-          if (done) break;
-
-          const rawText = decoder.decode(value, { stream: true });
-          rawText.replace(/}\{/g, '}\n{').split('\n').forEach((chunkStr) => {
-            if (chunkStr) {
-              try {
-                const parsed = JSON.parse(chunkStr);
-                if (parsed.text) {
-                  if (isFirstChunk) {
-                    setPendingMessage(initialAssistantMessage);
-                    setLoading(false);
-                    isFirstChunk = false;
-                  }
-                  textQueueRef.current += parsed.text;
-                } else if (parsed.error) {
-                    throw new Error(parsed.error);
-                }
-              } catch (e) { console.warn("[CLIENT] Failed to parse stream chunk:", chunkStr, e) }
-            }
-          })
-        }
-        
-        if (isFirstChunk) setLoading(false);
-
-        await new Promise(resolve => {
-            const interval = setInterval(() => {
-                if (textQueueRef.current.length === 0) {
-                    clearInterval(interval);
-                    resolve(null);
-                }
-            }, 50);
-        });
-        
-        return { ...initialAssistantMessage, content: finalContentRef.current };
-
-      } catch (error) {
-        // --- ШАГ 1: РАСШИРЕННАЯ ДИАГНОСТИКА ОШИБКИ НА КЛИЕНТЕ ---
-        console.error('[CLIENT] Error in processAIResponse stream loop:', error);
-        setError(error instanceof Error ? error.message : 'An error occurred while getting the AI response.');
-        setLoading(false);
-        return null;
-      } finally {
-        // --- ШАГ 1: РАСШИРЕННАЯ ДИАГНОСТИКА ЗАВЕРШЕНИЯ СТРИМА ---
-        console.log(`[CLIENT] Stream processing finished. Was it clean? (done = ${streamDone})`);
-        if (reader) {
-          reader.releaseLock();
-        }
-      }
-    },
-    [settings, activePrompt, messages, setLoading],
-  );
-
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault()
-      if (!input.trim() || isLoading) return
-
-      textQueueRef.current = '';
-      finalContentRef.current = '';
-      setPendingMessage(null);
-      setError(null);
-      
-      isLockedToBottomRef.current = true;
-      setShowScrollDownButton(false);
-      
-      const currentInput = input
-      setInput('')
-      
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
-
-      setLoading(true)
-
-      const conversationTitle = createTitleFromInput(currentInput)
-      const userMessage: Message = { id: crypto.randomUUID(), role: 'user' as const, content: currentInput.trim() }
-
-      let convId = currentConversationId;
-      
-      try {
-        if (!convId) {
-          const newConvId = await createNewConversation(conversationTitle || t('newChat'))
-          if (newConvId) convId = newConvId
-        }
-        
-        if (!convId) throw new Error('Failed to create or find conversation ID.');
-
-        await addMessage(convId, userMessage);
-        
-        const finalAiMessage = await processAIResponse(userMessage);
-        
-        if (finalAiMessage && finalAiMessage.content.trim()) {
-            await addMessage(convId, finalAiMessage);
-        }
-
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
-        console.error('[CLIENT] Error in handleSubmit:', error)
-        setError(errorMessage);
-      } finally {
-        setLoading(false);
-        setPendingMessage(null);
-      }
-    },
-    [
-      input, isLoading, currentConversationId, createNewConversation, addMessage,
-      processAIResponse, setLoading, createTitleFromInput, t
-    ],
-  );
-  
-  const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
-    if (!currentConversationId) return;
-
+  const handleCancelEdit = useCallback(() => {
     setEditingMessageId(null);
-    setLoading(true);
-    setError(null);
-    textQueueRef.current = '';
-    finalContentRef.current = '';
-    setPendingMessage(null);
-    
-    isLockedToBottomRef.current = true;
-    setShowScrollDownButton(false);
+  }, []);
 
-    try {
-      const updatedUserMessage = await editMessageAndUpdate(messageId, newContent);
+  const handleSaveEdit = useCallback(async (id: string, newContent: string) => {
+    setEditingMessageId(null);
+    await editAndRegenerate(id, newContent);
+  }, [editAndRegenerate]);
 
-      if (!updatedUserMessage) {
-        throw new Error("Failed to get updated user message after edit.");
-      }
-      
-      const finalAiMessage = await processAIResponse(updatedUserMessage);
-        
-      if (finalAiMessage && finalAiMessage.content.trim()) {
-          await addMessage(currentConversationId, finalAiMessage);
-      }
+  const handleCopyMessage = useCallback((content: string) => {
+    navigator.clipboard.writeText(content);
+  }, []);
 
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during edit.';
-        console.error('[CLIENT] Error in handleSaveEdit:', error)
-        setError(errorMessage);
-    } finally {
-        setLoading(false);
-        setPendingMessage(null);
-    }
-  }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
-
-  const handleScrollDownClick = useCallback(() => {
-    isLockedToBottomRef.current = true;
-    forceScrollToBottom('smooth');
-  }, [forceScrollToBottom]);
-
-  const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId]);
-  const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation]);
-  const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle]);
-  const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) };
-  const handleDuplicateChat = useCallback(async (id: string) => { await duplicateConversation(id) }, [duplicateConversation]);
-
-  const handleStartEdit = useCallback((id: string) => setEditingMessageId(id), []);
-  const handleCancelEdit = useCallback(() => setEditingMessageId(null), []);
-  const handleCopyMessage = useCallback((content: string) => navigator.clipboard.writeText(content), []);
-
-  const MainContent = () => (
-    <div className="w-full h-full p-4">
-        {error && (
-            <div className="bg-red-500/10 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg" role="alert">
-                <div className="flex">
-                    <div className="py-1"><AlertTriangle className="h-5 w-5 text-red-400 mr-3" /></div>
-                    <div>
-                        <p className="font-bold">{t('errorOccurred')}</p>
-                        <p className="text-sm">{error}</p>
-                    </div>
-                </div>
-            </div>
-        )}
-        <div className="space-y-4">
-          {currentConversationId ? (
-              <>
-                  {/* ИЗМЕНЕНИЕ: Добавляем явный тип для message */}
-                  {displayMessages.map((message: Message) => (
-                    <ChatMessage 
-                      key={message.id} 
-                      message={message} 
-                      isEditing={editingMessageId === message.id}
-                      onStartEdit={() => handleStartEdit(message.id)}
-                      onCancelEdit={handleCancelEdit}
-                      onSaveEdit={(newContent) => handleSaveEdit(message.id, newContent)}
-                      onCopyMessage={() => handleCopyMessage(message.content)}
-                    />
-                  ))}
-                  {isLoading && <LoadingIndicator />}
-              </>
-          ) : (
-              <WelcomeScreen />
-          )}
-        </div>
-    </div>
-  );
-
-
-  return (
-    <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
-      {isDesktop ? (
+  // Рендер для десктопа с панелями
+  if (isDesktop) {
+    return (
+      <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
         <PanelGroup direction="horizontal">
-            <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={setIsSidebarCollapsed as PanelOnCollapse} className="flex flex-col">
-                <Sidebar {...{ conversations, currentConversationId, handleNewChat, setCurrentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: true, setIsOpen: () => {}, isCollapsed: isSidebarCollapsed }} />
-            </Panel>
-            <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
-            <Panel className="flex-1 flex flex-col relative min-h-0">
-                  <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
-                    <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
-                    <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
-                </header>
-                
-                <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
-                    <div ref={contentRef}>
-                        <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                          <MainContent />
-                        </div>
-                    </div>
-                </main>
-                
-                {showScrollDownButton && (
-                    <ScrollDownButton
-                        onClick={handleScrollDownClick}
-                        className="bottom-28 right-10"
-                    />
-                )}
-
-                <footer className="w-full max-w-5xl mx-auto">
-                      <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
-                </footer>
-            </Panel>
-        </PanelGroup>
-      ) : (
-        <div className="h-full flex flex-col relative">
-            {isSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setIsSidebarOpen(false)}></div>}
+          <Panel 
+            defaultSize={20} 
+            minSize={15} 
+            maxSize={30} 
+            collapsible={true} 
+            collapsedSize={0} 
+            onCollapse={sidebar.toggleCollapse as PanelOnCollapse}
+            className="flex flex-col"
+          >
             <Sidebar 
-                {...{ 
-                    conversations, currentConversationId, handleDeleteChat, handleDuplicateChat, editingChatId, setEditingChatId, editingTitle, setEditingTitle, handleUpdateChatTitle, isOpen: isSidebarOpen, setIsOpen: setIsSidebarOpen, isCollapsed: false,
-                    handleNewChat: () => { handleNewChat(); setIsSidebarOpen(false); },
-                    setCurrentConversationId: (id) => { setCurrentConversationId(id); setIsSidebarOpen(false); } 
-                }} 
+              conversations={sidebar.conversations}
+              currentConversationId={sidebar.currentConversationId}
+              handleNewChat={sidebar.handleNewChat}
+              setCurrentConversationId={sidebar.handleSelectChat}
+              handleDeleteChat={sidebar.handleDeleteChat}
+              handleDuplicateChat={sidebar.handleDuplicateChat}
+              editingChatId={sidebar.editingChatId}
+              setEditingChatId={(id) => {
+                const conversation = sidebar.conversations.find((c: Conversation) => c.id === id);
+                if (id && conversation) {
+                  sidebar.handleStartEdit(id, conversation.title);
+                } else {
+                  sidebar.handleCancelEdit();
+                }
+              }}
+              editingTitle={sidebar.editingTitle}
+              setEditingTitle={sidebar.setEditingTitle}
+              handleUpdateChatTitle={(_id, _title) => sidebar.handleSaveEdit()}
+              isOpen={true}
+              setIsOpen={() => {}}
+              isCollapsed={sidebar.isCollapsed}
+            />
+          </Panel>
+          
+          <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
+          
+          <Panel className="flex-1 flex flex-col relative min-h-0">
+            <Header 
+              onMenuClick={() => {}}
+              onSettingsClick={() => setIsSettingsOpen(true)}
+              onLogout={handleLogout}
+              isMobile={false}
             />
             
-            <header className="flex-shrink-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 border-b border-gray-700">
-                <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white rounded-lg hover:bg-gray-700"><Menu className="w-6 h-6" /></button>
-                <div className="flex items-center gap-2">
-                    <button onClick={handleLogout} className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600">{t('logout')}</button>
-                    <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"><Settings className="w-5 h-5" /></button>
+            <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
+              <div ref={contentRef}>
+                <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
+                  <ChatArea
+                    messages={displayMessages}
+                    pendingMessage={pendingMessage}
+                    isLoading={isLoading}
+                    error={error}
+                    currentConversationId={currentConversationId}
+                    editingMessageId={editingMessageId}
+                    onStartEdit={handleStartEdit}
+                    onCancelEdit={handleCancelEdit}
+                    onSaveEdit={handleSaveEdit}
+                    onCopyMessage={handleCopyMessage}
+                  />
                 </div>
-            </header>
-            
-            <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
-                <div ref={contentRef}>
-                    <MainContent />
-                </div>
+              </div>
             </main>
             
             {showScrollDownButton && (
-                <ScrollDownButton
-                    onClick={handleScrollDownClick}
-                    className="bottom-24 right-4"
-                />
+              <ScrollDownButton
+                onClick={scrollToBottom}
+                className="bottom-28 right-10"
+              />
             )}
-            
-            <footer className="flex-shrink-0 w-full">
-                <ChatInput ref={textareaRef} {...{ input, setInput, handleSubmit, isLoading }} />
-            </footer>
-        </div>
-      )}
+
+            <Footer
+              ref={textareaRef}
+              input={input}
+              setInput={setInput}
+              handleSubmit={handleSubmit}
+              isLoading={isLoading}
+            />
+          </Panel>
+        </PanelGroup>
         
-      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+        <SettingsDialog 
+          isOpen={isSettingsOpen} 
+          onClose={() => setIsSettingsOpen(false)} 
+        />
+      </div>
+    );
+  }
+
+  // Рендер для мобильных устройств
+  return (
+    <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
+      {sidebar.isOpen && (
+        <div 
+          className="fixed inset-0 z-20 bg-black/50" 
+          onClick={() => sidebar.setIsOpen(false)}
+        />
+      )}
+      
+      <Sidebar 
+        conversations={sidebar.conversations}
+        currentConversationId={sidebar.currentConversationId}
+        handleNewChat={sidebar.handleNewChat}
+        setCurrentConversationId={sidebar.handleSelectChat}
+        handleDeleteChat={sidebar.handleDeleteChat}
+        handleDuplicateChat={sidebar.handleDuplicateChat}
+        editingChatId={sidebar.editingChatId}
+        setEditingChatId={(id) => {
+          const conversation = sidebar.conversations.find((c: Conversation) => c.id === id);
+          if (id && conversation) {
+            sidebar.handleStartEdit(id, conversation.title);
+          } else {
+            sidebar.handleCancelEdit();
+          }
+        }}
+        editingTitle={sidebar.editingTitle}
+        setEditingTitle={sidebar.setEditingTitle}
+        handleUpdateChatTitle={(_id, _title) => sidebar.handleSaveEdit()}
+        isOpen={sidebar.isOpen}
+        setIsOpen={sidebar.setIsOpen}
+        isCollapsed={false}
+      />
+      
+      <Header 
+        onMenuClick={sidebar.toggleSidebar}
+        onSettingsClick={() => setIsSettingsOpen(true)}
+        onLogout={handleLogout}
+        isMobile={true}
+      />
+      
+      <main 
+        ref={messagesContainerRef} 
+        className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
+      >
+        <div ref={contentRef}>
+          <ChatArea
+            messages={displayMessages}
+            pendingMessage={pendingMessage}
+            isLoading={isLoading}
+            error={error}
+            currentConversationId={currentConversationId}
+            editingMessageId={editingMessageId}
+            onStartEdit={handleStartEdit}
+            onCancelEdit={handleCancelEdit}
+            onSaveEdit={handleSaveEdit}
+            onCopyMessage={handleCopyMessage}
+          />
+        </div>
+      </main>
+      
+      {showScrollDownButton && (
+        <ScrollDownButton
+          onClick={scrollToBottom}
+          className="bottom-24 right-4"
+        />
+      )}
+      
+      <Footer
+        ref={textareaRef}
+        input={input}
+        setInput={setInput}
+        handleSubmit={handleSubmit}
+        isLoading={isLoading}
+      />
+      
+      <SettingsDialog 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+      />
     </div>
-  )
+  );
 }

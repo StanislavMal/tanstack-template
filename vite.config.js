@@ -26,7 +26,34 @@ if (process.env.SENTRY_AUTH_TOKEN) {
 export default defineConfig({
   plugins: basePlugins,
   build: {
-    // Only generate source maps if Sentry is enabled
     sourcemap: !!process.env.SENTRY_AUTH_TOKEN,
+    // Поднимаем лимит - TanStack Start сам управляет code-splitting
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      onwarn(warning, warn) {
+        // Игнорируем THIS_IS_UNDEFINED от openai
+        if (
+          warning.code === 'THIS_IS_UNDEFINED' && 
+          warning.id?.includes('node_modules/openai')
+        ) {
+          return;
+        }
+        
+        // Игнорируем UNUSED_EXTERNAL_IMPORT от TanStack и React
+        if (
+          warning.code === 'UNUSED_EXTERNAL_IMPORT' &&
+          (warning.exporter?.includes('@tanstack') || warning.exporter?.includes('react'))
+        ) {
+          return;
+        }
+        
+        // Игнорируем предупреждения о externalized модулях
+        if (warning.code === 'PLUGIN_WARNING' && warning.plugin === 'vite:resolve') {
+          return;
+        }
+        
+        warn(warning);
+      },
+    },
   },
 });
