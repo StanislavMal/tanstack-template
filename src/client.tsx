@@ -1,9 +1,8 @@
-// 📄 src/client.tsx (Исправленная версия)
+// 📄 src/client.tsx (Исправленная версия с default export)
 
 import { hydrateRoot } from 'react-dom/client'
 import { StartClient } from '@tanstack/react-start'
 import * as Sentry from '@sentry/react'
-// import { Suspense } from 'react' // -> ИЗМЕНЕНИЕ: Suspense больше не нужен здесь
 
 import { createRouter } from './router'
 import { initSentry } from './sentry'
@@ -21,5 +20,13 @@ const AppComponent = process.env.SENTRY_DSN
     })
   : StartClient
 
-// -> ИЗМЕНЕНИЕ: Убираем обертку Suspense
-hydrateRoot(document, <AppComponent router={router} />)
+// Основная функция рендеринга
+function render() {
+  hydrateRoot(document, <AppComponent router={router} />)
+}
+
+// Default export для Vinxi
+export default render
+
+// Вызываем рендеринг
+render()

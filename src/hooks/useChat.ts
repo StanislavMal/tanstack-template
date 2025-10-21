@@ -29,7 +29,7 @@ export function useChat(options: UseChatOptions = {}) {
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
   const finalContentRef = useRef<string>('');
-  const bufferRef = useRef<string>(''); // Новый буфер для накопления данных
+  const bufferRef = useRef<string>(''); // Буфер для неполных строк
 
   // Анимация печатания текста
   const startTextAnimation = useCallback(() => {
@@ -63,40 +63,36 @@ export function useChat(options: UseChatOptions = {}) {
     }
   }, []);
 
-  // Функция для парсинга потоковых данных
-  const parseStreamData = useCallback((data: string) => {
+  // Упрощённый парсинг NDJSON (newline-delimited JSON)
+  const parseNDJSON = useCallback((data: string) => {
     // Добавляем новые данные в буфер
     bufferRef.current += data;
     
+    // Разбиваем по переносам строк
     const lines = bufferRef.current.split('\n');
-    // Оставляем последнюю неполную строку в буфере
+    
+    // Последняя строка может быть неполной - оставляем в буфере
     bufferRef.current = lines.pop() || '';
     
     const chunks = [];
     
     for (const line of lines) {
       const trimmedLine = line.trim();
+      
+      // Пропускаем пустые строки
       if (!trimmedLine) continue;
       
       try {
-        // Пытаемся распарсить каждую строку как JSON
+        // Парсим JSON объект
         const chunk = JSON.parse(trimmedLine);
         chunks.push(chunk);
-      } catch (e) {
-        // Если это невалидный JSON, пробуем извлечь JSON объекты из строки
-        const jsonMatches = trimmedLine.match(/\{.*?\}(?=\{|$)/g);
-        if (jsonMatches) {
-          for (const match of jsonMatches) {
-            try {
-              const chunk = JSON.parse(match);
-              chunks.push(chunk);
-            } catch (parseError) {
-              console.warn('Failed to parse JSON chunk:', match, parseError);
-            }
-          }
-        } else {
-          console.warn('Failed to parse line as JSON:', trimmedLine);
-        }
+      } catch (parseError) {
+        // Логируем невалидный JSON для отладки
+        console.warn('[useChat] Failed to parse NDJSON line:', {
+          line: trimmedLine,
+          error: parseError instanceof Error ? parseError.message : 'Unknown error'
+        });
+        // Не прерываем обработку - пропускаем невалидную строку
       }
     }
     
@@ -112,7 +108,7 @@ export function useChat(options: UseChatOptions = {}) {
         return null;
       }
 
-      // Сбрасываем буфер при новом запросе
+      // Сбрасываем состояние
       bufferRef.current = '';
       finalContentRef.current = '';
       textQueueRef.current = '';
@@ -156,14 +152,16 @@ export function useChat(options: UseChatOptions = {}) {
 
           const rawText = decoder.decode(value, { stream: true });
           
-          // Используем улучшенный парсер
-          const chunks = parseStreamData(rawText);
+          // Парсим NDJSON
+          const chunks = parseNDJSON(rawText);
           
           for (const chunk of chunks) {
+            // Обработка ошибки от сервера
             if (chunk.error) {
               throw new Error(chunk.error);
             }
             
+            // Добавляем текст в очередь для анимации
             if (chunk.text) {
               if (isFirstChunk) {
                 setIsLoading(false);
@@ -172,18 +170,19 @@ export function useChat(options: UseChatOptions = {}) {
               textQueueRef.current += chunk.text;
             }
             
+            // Помечаем завершение стрима
             if (chunk.finished) {
-              // Поток завершен
+              // Можно добавить логику финализации
             }
           }
         }
 
-        // Ждем завершения анимации
-        await new Promise(resolve => {
+        // Ждём завершения анимации печати
+        await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
             if (textQueueRef.current.length === 0) {
               clearInterval(checkInterval);
-              resolve(null);
+              resolve();
             }
           }, 50);
         });
@@ -197,17 +196,17 @@ export function useChat(options: UseChatOptions = {}) {
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'An error occurred';
-        console.error('Error in processAIResponse:', error);
+        console.error('[useChat] Error in processAIResponse:', error);
         setError(errorMsg);
         options.onError?.(errorMsg);
         return null;
       } finally {
         stopTextAnimation();
-        // Очищаем буфер при завершении
+        // Очищаем буфер
         bufferRef.current = '';
       }
     },
-    [settings, activePrompt, messages, startTextAnimation, stopTextAnimation, options, parseStreamData]
+    [settings, activePrompt, messages, startTextAnimation, stopTextAnimation, options, parseNDJSON]
   );
 
   const sendMessage = useCallback(
@@ -248,7 +247,7 @@ export function useChat(options: UseChatOptions = {}) {
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred';
-        console.error('Error in sendMessage:', error);
+        console.error('[useChat] Error in sendMessage:', error);
         setError(errorMsg);
         options.onError?.(errorMsg);
       } finally {
@@ -291,7 +290,7 @@ export function useChat(options: UseChatOptions = {}) {
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'An error occurred during edit';
-        console.error('Error in editAndRegenerate:', error);
+        console.error('[useChat] Error in editAndRegenerate:', error);
         setError(errorMsg);
         options.onError?.(errorMsg);
       } finally {
