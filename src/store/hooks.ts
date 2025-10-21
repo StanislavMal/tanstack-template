@@ -12,36 +12,36 @@ export function useSettings() {
     const settings = useStore(store, s => selectors.getSettings(s));
 
     const loadSettings = useCallback(async () => {
-        if (!user) return;
-        const { data, error } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
-        if (error) console.error("Error loading settings:", error);
-        if (data && data.settings) {
-            // Добавляем значения по умолчанию для новых полей
-            const loadedSettings = data.settings as UserSettings;
-            const settingsWithDefaults: UserSettings = {
-                model: loadedSettings.model || 'gemini-2.0-flash',
-                provider: loadedSettings.provider || 'gemini',
-                system_instruction: loadedSettings.system_instruction || '',
-                temperature: loadedSettings.temperature || 0.7,
-                maxTokens: loadedSettings.maxTokens || 8192,
-                reasoningEffort: loadedSettings.reasoningEffort || 'none',
-            };
-            actions.setSettings(settingsWithDefaults);
-        } else {
-            // Создаем настройки по умолчанию
-            const defaultSettings: UserSettings = {
-                model: 'gemini-2.0-flash',
-                provider: 'gemini',
-                system_instruction: '',
-                temperature: 0.7,
-                maxTokens: 8192,
-                reasoningEffort: 'none',
-            };
-            actions.setSettings(defaultSettings);
-            // Сохраняем в БД
-            await supabase.from('profiles').update({ settings: defaultSettings }).eq('id', user.id);
-        }
-    }, [user]);
+    if (!user) return;
+    const { data, error } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
+    if (error) console.error("Error loading settings:", error);
+    if (data && data.settings) {
+        // Добавляем значения по умолчанию для новых полей
+        const loadedSettings = data.settings as UserSettings;
+        const settingsWithDefaults: UserSettings = {
+            model: loadedSettings.model || 'gemini-2.5-flash', // Обновлено на 2.5-flash
+            provider: loadedSettings.provider || 'gemini',
+            system_instruction: loadedSettings.system_instruction || '',
+            temperature: loadedSettings.temperature || 0.7,
+            maxTokens: loadedSettings.maxTokens || 8192,
+            reasoningEffort: loadedSettings.reasoningEffort || 'none',
+        };
+        actions.setSettings(settingsWithDefaults);
+    } else {
+        // Создаем настройки по умолчанию с моделью 2.5
+        const defaultSettings: UserSettings = {
+            model: 'gemini-2.5-flash', // Обновлено на 2.5-flash
+            provider: 'gemini',
+            system_instruction: '',
+            temperature: 0.7,
+            maxTokens: 8192,
+            reasoningEffort: 'none',
+        };
+        actions.setSettings(defaultSettings);
+        // Сохраняем в БД
+        await supabase.from('profiles').update({ settings: defaultSettings }).eq('id', user.id);
+    }
+}, [user]);
 
     const updateSettings = useCallback(async (newSettings: Partial<UserSettings>) => {
         if (!user || !settings) return;

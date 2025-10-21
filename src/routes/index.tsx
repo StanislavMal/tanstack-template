@@ -2,7 +2,6 @@
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels';
 import { supabase } from '../utils/supabase';
 import { useAuth } from '../providers/AuthProvider';

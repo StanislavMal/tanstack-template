@@ -48,18 +48,30 @@ export class GeminiOpenAIProvider implements AIProvider {
       });
     }
 
+    // Подготавливаем параметры запроса
+    const requestOptions: any = {
+      model: config.model || 'gemini-2.5-flash',
+      messages: openAIMessages,
+      stream: true,
+      temperature: config.temperature || 0.7,
+      max_tokens: config.maxTokens || 8192,
+    };
+
+    // Добавляем reasoning_effort для моделей 2.5
+    if (config.model?.includes('2.5')) {
+      if (config.reasoningEffort && config.reasoningEffort !== 'none') {
+        requestOptions.reasoning_effort = config.reasoningEffort;
+      }
+      
+      // Для gemini-2.5-pro нельзя отключать reasoning, поэтому если none - не передаем
+      if (config.model === 'gemini-2.5-pro' && (!config.reasoningEffort || config.reasoningEffort === 'none')) {
+        requestOptions.reasoning_effort = 'low'; // Значение по умолчанию для Pro
+      }
+    }
+
     try {
-      const stream = await openai.chat.completions.create({
-        model: config.model || 'gemini-2.0-flash',
-        messages: openAIMessages,
-        stream: true,
-        temperature: config.temperature,
-        max_tokens: config.maxTokens,
-        // Gemini-специфичные параметры
-        ...(config.reasoningEffort && config.reasoningEffort !== 'none' && {
-          reasoning_effort: config.reasoningEffort,
-        }),
-      });
+      console.log(`Using Gemini model: ${requestOptions.model}`);
+      const response = await openai.chat.completions.create(requestOptions);
 
       // Создаем ReadableStream для совместимости с существующим кодом
       return new ReadableStream({
@@ -67,19 +79,32 @@ export class GeminiOpenAIProvider implements AIProvider {
           const encoder = new TextEncoder();
           
           try {
-            for await (const chunk of stream) {
-              const content = chunk.choices[0]?.delta?.content;
-              if (content) {
-                const streamChunk: StreamChunk = { text: content };
-                // Важное изменение: добавляем символ новой строки после каждого JSON
-                controller.enqueue(encoder.encode(JSON.stringify(streamChunk) + '\n'));
+            // Используем правильный способ итерации по стриму
+            if (Symbol.asyncIterator in response) {
+              for await (const chunk of response as AsyncIterable<any>) {
+                const content = chunk.choices[0]?.delta?.content;
+                if (content) {
+                  const streamChunk: StreamChunk = { text: content };
+                  // Отправляем каждый чанк в отдельной строке
+                  controller.enqueue(encoder.encode(JSON.stringify(streamChunk) + '\n'));
+                }
+              }
+            } else {
+              // Альтернативный способ для старых версий OpenAI
+              const stream = response as any;
+              for await (const chunk of stream) {
+                const content = chunk.choices[0]?.delta?.content;
+                if (content) {
+                  const streamChunk: StreamChunk = { text: content };
+                  controller.enqueue(encoder.encode(JSON.stringify(streamChunk) + '\n'));
+                }
               }
             }
             
             const finalChunk: StreamChunk = { finished: true };
-            // Также добавляем символ новой строки для финального чанка
             controller.enqueue(encoder.encode(JSON.stringify(finalChunk) + '\n'));
           } catch (error) {
+            console.error('Error in stream processing:', error);
             const errorChunk: StreamChunk = { 
               error: error instanceof Error ? error.message : 'Unknown error occurred' 
             };
@@ -91,26 +116,16 @@ export class GeminiOpenAIProvider implements AIProvider {
       });
     } catch (error) {
       console.error('Error in GeminiOpenAIProvider:', error);
+      // Добавляем более информативное сообщение об ошибке
+      if (error instanceof Error) {
+        throw new Error(`Gemini API Error: ${error.message}`);
+      }
       throw error;
     }
   }
 
   getAvailableModels(): AIModel[] {
     return [
-      {
-        id: 'gemini-2.0-flash',
-        name: 'Gemini 2.0 Flash',
-        provider: 'gemini',
-        description: 'Fast and cost-effective model for most tasks',
-        contextWindow: 1000000,
-        maxOutputTokens: 8192,
-        supportsFunctions: true,
-        supportsVision: true,
-        supportsAudio: true,
-        reasoning: {
-          supported: false,
-        },
-      },
       {
         id: 'gemini-2.5-flash',
         name: 'Gemini 2.5 Flash',
