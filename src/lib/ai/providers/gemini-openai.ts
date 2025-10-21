@@ -64,17 +64,13 @@ export class GeminiOpenAIProvider implements AIProvider {
       // Для Pro моделей reasoning всегда включен
       if (isProModel) {
         requestOptions.reasoning_effort = config.reasoningEffort || 'low';
-        // Включаем отображение мыслей через thinking_config
-        requestOptions.extra_body = {
-          google: {
-            thinking_config: {
-              include_thoughts: true
-            }
-          }
-        };
       } else if (config.reasoningEffort && config.reasoningEffort !== 'none') {
         // Для Flash моделей reasoning опционален
         requestOptions.reasoning_effort = config.reasoningEffort;
+      }
+      
+      // Включаем отображение мыслей через extra_body для всех моделей с reasoning
+      if (requestOptions.reasoning_effort && requestOptions.reasoning_effort !== 'none') {
         requestOptions.extra_body = {
           google: {
             thinking_config: {
@@ -87,6 +83,15 @@ export class GeminiOpenAIProvider implements AIProvider {
 
     try {
       console.log(`Using Gemini model: ${requestOptions.model}, reasoning: ${requestOptions.reasoning_effort || 'none'}`);
+      
+      // Добавляем отладочную информацию
+      console.log('Request options:', {
+        model: requestOptions.model,
+        reasoning_effort: requestOptions.reasoning_effort,
+        has_extra_body: !!requestOptions.extra_body,
+        message_count: requestOptions.messages.length
+      });
+
       const response = await openai.chat.completions.create(requestOptions);
 
       // Создаем ReadableStream для совместимости с существующим кодом
@@ -154,13 +159,27 @@ export class GeminiOpenAIProvider implements AIProvider {
           }
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in GeminiOpenAIProvider:', error);
+      
       // Добавляем более информативное сообщение об ошибке
-      if (error instanceof Error) {
-        throw new Error(`Gemini API Error: ${error.message}`);
+      let errorMessage = 'Unknown Gemini API error';
+      
+      if (error.status === 400) {
+        errorMessage = 'Bad request - check model name and parameters';
+      } else if (error.status === 401) {
+        errorMessage = 'Invalid API key';
+      } else if (error.status === 403) {
+        errorMessage = 'API key does not have access to this model';
+      } else if (error.status === 429) {
+        errorMessage = 'Rate limit exceeded';
+      } else if (error.status === 500) {
+        errorMessage = 'Internal server error';
+      } else if (error.message) {
+        errorMessage = error.message;
       }
-      throw error;
+      
+      throw new Error(`Gemini API Error: ${errorMessage} (status: ${error.status})`);
     }
   }
 
