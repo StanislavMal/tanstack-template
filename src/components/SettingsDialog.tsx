@@ -97,16 +97,21 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                 </div>
                 
                 <div className="p-3 rounded-lg bg-gray-700/50">
-                  <label htmlFor="model-select" className="block text-sm font-medium text-gray-300 mb-2">{t('aiModel')}</label>
-                  <select
-                      id="model-select"
-                      value={localSettings.model}
-                      onChange={(e) => setLocalSettings(prev => prev ? { ...prev, model: e.target.value as UserSettings['model'] } : null)}
-                      className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                  >
-                      <option value="gemini-2.5-flash">{t('modelFlash')}</option>
-                      <option value="gemini-2.5-pro">{t('modelPro')}</option>
-                  </select>
+                <label htmlFor="model-select" className="block text-sm font-medium text-gray-300 mb-2">{t('aiModel')}</label>
+                <select
+                    id="model-select"
+                    value={localSettings.model}
+                    onChange={(e) => setLocalSettings(prev => prev ? { ...prev, model: e.target.value as UserSettings['model'] } : null)}
+                    className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                >
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Stable)</option>
+                    <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash Experimental</option>
+                    <option value="gemini-2.5-flash-exp">Gemini 2.5 Flash Experimental</option>
+                    <option value="gemini-2.5-pro-exp">Gemini 2.5 Pro Experimental</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Experimental models may have limited availability or different behavior.
+                </p>
                 </div>
                 {/* Переключатель режима размышлений */}
                 <div className="p-3 rounded-lg bg-gray-700/50">

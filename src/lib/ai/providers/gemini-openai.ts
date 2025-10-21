@@ -48,48 +48,43 @@ export class GeminiOpenAIProvider implements AIProvider {
       });
     }
 
-    // Подготавливаем параметры запроса
+    // Подготавливаем параметры запроса согласно документации
     const requestOptions: any = {
-      model: config.model || 'gemini-2.5-flash',
+      model: config.model || 'gemini-2.0-flash-exp',
       messages: openAIMessages,
       stream: true,
-      temperature: config.temperature || 0.7,
-      max_tokens: config.maxTokens || 8192,
     };
 
-    // Настройки размышлений для моделей 2.5
+    // Добавляем опциональные параметры
+    if (config.temperature !== undefined) {
+      requestOptions.temperature = config.temperature;
+    }
+    
+    if (config.maxTokens !== undefined) {
+      requestOptions.max_tokens = config.maxTokens;
+    }
+
+    // Настройки reasoning согласно документации
     if (config.model?.includes('2.5')) {
-      const isProModel = config.model === 'gemini-2.5-pro';
+      const isProModel = config.model === 'gemini-2.5-pro-exp';
       
-      // Для Pro моделей reasoning всегда включен
       if (isProModel) {
+        // Для Pro моделей reasoning всегда включен
         requestOptions.reasoning_effort = config.reasoningEffort || 'low';
       } else if (config.reasoningEffort && config.reasoningEffort !== 'none') {
         // Для Flash моделей reasoning опционален
         requestOptions.reasoning_effort = config.reasoningEffort;
       }
-      
-      // Включаем отображение мыслей через extra_body для всех моделей с reasoning
-      if (requestOptions.reasoning_effort && requestOptions.reasoning_effort !== 'none') {
-        requestOptions.extra_body = {
-          google: {
-            thinking_config: {
-              include_thoughts: true
-            }
-          }
-        };
-      }
     }
 
     try {
-      console.log(`Using Gemini model: ${requestOptions.model}, reasoning: ${requestOptions.reasoning_effort || 'none'}`);
-      
-      // Добавляем отладочную информацию
-      console.log('Request options:', {
+      console.log(`Sending request to Gemini API:`, {
         model: requestOptions.model,
-        reasoning_effort: requestOptions.reasoning_effort,
-        has_extra_body: !!requestOptions.extra_body,
-        message_count: requestOptions.messages.length
+        messageCount: openAIMessages.length,
+        hasSystemInstruction: !!config.systemInstruction,
+        reasoningEffort: requestOptions.reasoning_effort,
+        temperature: requestOptions.temperature,
+        maxTokens: requestOptions.max_tokens
       });
 
       const response = await openai.chat.completions.create(requestOptions);
@@ -98,23 +93,12 @@ export class GeminiOpenAIProvider implements AIProvider {
       return new ReadableStream({
         async start(controller) {
           const encoder = new TextEncoder();
-          let reasoningBuffer = '';
           
           try {
             // Используем правильный способ итерации по стриму
             if (Symbol.asyncIterator in response) {
               for await (const chunk of response as AsyncIterable<any>) {
                 const content = chunk.choices[0]?.delta?.content;
-                
-                // Обрабатываем reasoning content если есть
-                if (chunk.choices[0]?.delta?.reasoning_content) {
-                  reasoningBuffer += chunk.choices[0]?.delta?.reasoning_content;
-                  const reasoningChunk: StreamChunk = { 
-                    reasoning: chunk.choices[0]?.delta?.reasoning_content 
-                  };
-                  controller.enqueue(encoder.encode(JSON.stringify(reasoningChunk) + '\n'));
-                }
-                
                 if (content) {
                   const streamChunk: StreamChunk = { text: content };
                   // Отправляем каждый чанк в отдельной строке
@@ -126,16 +110,6 @@ export class GeminiOpenAIProvider implements AIProvider {
               const stream = response as any;
               for await (const chunk of stream) {
                 const content = chunk.choices[0]?.delta?.content;
-                
-                // Обрабатываем reasoning content если есть
-                if (chunk.choices[0]?.delta?.reasoning_content) {
-                  reasoningBuffer += chunk.choices[0]?.delta?.reasoning_content;
-                  const reasoningChunk: StreamChunk = { 
-                    reasoning: chunk.choices[0]?.delta?.reasoning_content 
-                  };
-                  controller.enqueue(encoder.encode(JSON.stringify(reasoningChunk) + '\n'));
-                }
-                
                 if (content) {
                   const streamChunk: StreamChunk = { text: content };
                   controller.enqueue(encoder.encode(JSON.stringify(streamChunk) + '\n'));
@@ -143,10 +117,7 @@ export class GeminiOpenAIProvider implements AIProvider {
               }
             }
             
-            const finalChunk: StreamChunk = { 
-              finished: true,
-              reasoning: reasoningBuffer || undefined
-            };
+            const finalChunk: StreamChunk = { finished: true };
             controller.enqueue(encoder.encode(JSON.stringify(finalChunk) + '\n'));
           } catch (error) {
             console.error('Error in stream processing:', error);
@@ -160,34 +131,64 @@ export class GeminiOpenAIProvider implements AIProvider {
         },
       });
     } catch (error: any) {
-      console.error('Error in GeminiOpenAIProvider:', error);
+      console.error('Error in GeminiOpenAIProvider:', {
+        status: error.status,
+        message: error.message,
+        code: error.code,
+        type: error.type
+      });
       
-      // Добавляем более информативное сообщение об ошибке
-      let errorMessage = 'Unknown Gemini API error';
-      
+      // Более информативное сообщение об ошибке
+      let errorMessage = 'Gemini API Error';
       if (error.status === 400) {
-        errorMessage = 'Bad request - check model name and parameters';
+        errorMessage = 'Invalid request to Gemini API. Please check your model configuration and parameters.';
       } else if (error.status === 401) {
-        errorMessage = 'Invalid API key';
+        errorMessage = 'Invalid API key for Gemini. Please check your environment variables.';
       } else if (error.status === 403) {
-        errorMessage = 'API key does not have access to this model';
+        errorMessage = 'Access forbidden. Please check your API key permissions.';
       } else if (error.status === 429) {
-        errorMessage = 'Rate limit exceeded';
-      } else if (error.status === 500) {
-        errorMessage = 'Internal server error';
-      } else if (error.message) {
-        errorMessage = error.message;
+        errorMessage = 'Rate limit exceeded. Please try again later.';
+      } else if (error.status >= 500) {
+        errorMessage = 'Gemini API is currently unavailable. Please try again later.';
       }
       
-      throw new Error(`Gemini API Error: ${errorMessage} (status: ${error.status})`);
+      throw new Error(`${errorMessage} (Status: ${error.status})`);
     }
   }
 
   getAvailableModels(): AIModel[] {
     return [
       {
-        id: 'gemini-2.5-flash',
-        name: 'Gemini 2.5 Flash',
+        id: 'gemini-2.0-flash-exp',
+        name: 'Gemini 2.0 Flash Experimental',
+        provider: 'gemini',
+        description: 'Fast and cost-effective model for most tasks',
+        contextWindow: 1000000,
+        maxOutputTokens: 8192,
+        supportsFunctions: true,
+        supportsVision: true,
+        supportsAudio: true,
+        reasoning: {
+          supported: false,
+        },
+      },
+      {
+        id: 'gemini-2.0-flash',
+        name: 'Gemini 2.0 Flash',
+        provider: 'gemini',
+        description: 'Fast and cost-effective model for most tasks',
+        contextWindow: 1000000,
+        maxOutputTokens: 8192,
+        supportsFunctions: true,
+        supportsVision: true,
+        supportsAudio: true,
+        reasoning: {
+          supported: false,
+        },
+      },
+      {
+        id: 'gemini-2.5-flash-exp',
+        name: 'Gemini 2.5 Flash Experimental',
         provider: 'gemini',
         description: 'Latest Flash model with reasoning capabilities',
         contextWindow: 1000000,
@@ -201,8 +202,8 @@ export class GeminiOpenAIProvider implements AIProvider {
         },
       },
       {
-        id: 'gemini-2.5-pro',
-        name: 'Gemini 2.5 Pro',
+        id: 'gemini-2.5-pro-exp',
+        name: 'Gemini 2.5 Pro Experimental',
         provider: 'gemini',
         description: 'Most capable model with advanced reasoning',
         contextWindow: 2000000,

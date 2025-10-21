@@ -18,7 +18,6 @@
   "settings": "Настройки",
   "generalSettings": "Общие настройки",
   "aiModel": "Модель ИИ",
-  "modelFlash": "Gemini 2.5 Flash (Быстрая и экономичная)",
   "modelPro": "Gemini 2.5 Pro (Продвинутая и мощная)",
   "systemInstruction": "Системная инструкция",
   "systemInstructionPlaceholder": "например, Ты — полезный ассистент, который говорит как пират.",
@@ -49,5 +48,9 @@
   "generatingThoughts": "Генерирую мысли...",
   "evaluatingSolutions": "Оцениваю решения...",
   "thoughtsGenerated": "Мысли",
-  "characters": "Символов"
+  "characters": "Символов",
+  "modelFlash": "Gemini 2.0 Flash (Стабильная)",
+  "modelFlashExp": "Gemini 2.0 Flash Experimental",
+  "modelFlash25Exp": "Gemini 2.5 Flash Experimental", 
+  "modelPro25Exp": "Gemini 2.5 Pro Experimental"
 }
