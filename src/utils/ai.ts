@@ -9,6 +9,15 @@ export interface Message {
   content: string
 }
 
+// Функция для создания промиса с тайм-аутом
+const createTimeout = (ms: number, message: string) => {
+  return new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(message));
+    }, ms);
+  });
+};
+
 export const genAIResponse = createServerFn({
   method: 'POST',
   response: 'raw'
@@ -22,13 +31,27 @@ export const genAIResponse = createServerFn({
     }) => d,
   )
   .handler(async ({ data }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error('ERROR: GEMINI_API_KEY is not defined in the server environment.');
-      return new Response(JSON.stringify({ error: 'Missing API key on the server.' }), { status: 500 });
+    
+    // --- ИЗМЕНЕНИЕ: ЛОГИКА РОТАЦИИ API-КЛЮЧЕЙ ---
+    // 1. Собираем все определенные ключи Gemini из переменных окружения.
+    const apiKeys = Object.keys(process.env)
+      .filter(key => key.startsWith('GEMINI_API_KEY_') && process.env[key])
+      .map(key => process.env[key] as string);
+
+    // 2. Проверяем, найден ли хотя бы один ключ.
+    if (apiKeys.length === 0) {
+      console.error('CRITICAL ERROR: No GEMINI_API_KEY_... variables found in the server environment.');
+      return new Response(JSON.stringify({ error: 'Server is missing API key configuration.' }), { status: 500 });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
+    // 3. Выбираем случайный ключ из пула.
+    const selectedKeyIndex = Math.floor(Math.random() * apiKeys.length);
+    const selectedApiKey = apiKeys[selectedKeyIndex];
+    console.log(`Using Gemini API Key at index ${selectedKeyIndex}. Total keys found: ${apiKeys.length}`);
+    // --- КОНЕЦ ЛОГИКИ РОТАЦИИ ---
+
+
+    const genAI = new GoogleGenerativeAI(selectedApiKey); // Используем выбранный ключ
     const model = genAI.getGenerativeModel({ 
       model: data.model || "gemini-1.5-flash",
     });
@@ -42,7 +65,7 @@ export const genAIResponse = createServerFn({
     if (!lastMessage || lastMessage.role !== 'user') {
       return new Response(JSON.stringify({ error: 'The last message must be from the user.' }), { status: 400 });
     }
-    const prompt = lastMessage.parts[0].text;
+    const finalPrompt = lastMessage.parts[0].text;
 
     const finalSystemInstruction = [
       data.mainSystemInstruction,
@@ -69,21 +92,35 @@ export const genAIResponse = createServerFn({
         }
       });
       
-      const result = await chat.sendMessageStream(prompt);
+      const result = await chat.sendMessageStream(finalPrompt);
 
       const stream = new ReadableStream({
         async start(controller) {
           const encoder = new TextEncoder();
-          try { // ИЗМЕНЕНИЕ: Добавляем try/catch вокруг всего цикла
-            for await (const chunk of result.stream) {
-              // ИЗМЕНЕНИЕ: Проверка на блокировку ответа по соображениям безопасности
+          const iterator = result.stream[Symbol.asyncIterator]();
+          console.log('>>> GEMINI STREAM STARTED (with timeout) <<<');
+          
+          try {
+            while (true) {
+              // Ждем 20 секунд. Если за это время от Gemini ничего не пришло, считаем, что соединение "умерло".
+              const { value, done } = await Promise.race([
+                iterator.next(),
+                createTimeout(20000, 'Gemini API timed out. No data received for 20 seconds.'),
+              ]) as IteratorResult<any, any>;
+
+              if (done) {
+                console.log('>>> GEMINI STREAM FINISHED GRACEFULLY (iterator.done is true) <<<');
+                break;
+              }
+
+              const chunk = value;
+
               if (chunk.promptFeedback?.blockReason) {
                 console.error('--- GEMINI RESPONSE BLOCKED ---');
                 console.error('Block Reason:', chunk.promptFeedback.blockReason);
-                console.error('Safety Ratings:', chunk.promptFeedback.safetyRatings);
                 const errorJson = JSON.stringify({ error: `Response was blocked due to: ${chunk.promptFeedback.blockReason}` });
                 controller.enqueue(encoder.encode(errorJson));
-                break; // Прерываем стрим
+                break; 
               }
 
               const text = chunk.text();
@@ -92,14 +129,20 @@ export const genAIResponse = createServerFn({
                 controller.enqueue(encoder.encode(jsonChunk));
               }
             }
-          } catch (error) { // ИЗМЕНЕНИЕ: Отлавливаем ошибку прямо во время обработки потока
-            console.error('--- ERROR DURING STREAM PROCESSING ---');
-            console.error(error);
-            const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during stream processing';
-            const errorJson = JSON.stringify({ error: `Stream processing failed: ${errorMessage}` });
-            controller.enqueue(encoder.encode(errorJson));
+          } catch (error) {
+            console.error('--- ERROR DURING GEMINI STREAM PROCESSING (or TIMEOUT) ---');
+             if (error instanceof Error) {
+                console.error(`Error Type: ${error.name}`);
+                console.error(`Error Message: ${error.message}`);
+                // Отправляем ошибку тайм-аута на клиент
+                const errorJson = JSON.stringify({ error: `AI response failed: ${error.message}` });
+                controller.enqueue(encoder.encode(errorJson));
+            } else {
+                console.error('Caught a non-Error object:', error);
+            }
           } finally {
-            controller.close();
+            console.log('>>> GEMINI STREAM "finally" BLOCK REACHED <<<');
+            try { controller.close(); } catch (e) { /* ignore */ }
           }
         },
       });
