@@ -6,20 +6,10 @@ import {
   HeadContent,
   Scripts,
 } from '@tanstack/react-router'
-import { lazy, Suspense } from 'react'
 import { AuthProvider } from '../providers/AuthProvider' 
 import { useTranslation } from 'react-i18next'
 
 import appCss from '../styles.css?url'
-
-// Правильный lazy import DevTools только для dev режима
-const TanStackRouterDevtools = import.meta.env.PROD
-  ? () => null // В production не рендерим
-  : lazy(() =>
-      import('@tanstack/router-devtools').then((res) => ({
-        default: res.TanStackRouterDevtools,
-      })),
-    )
 
 export const Route = createRootRoute({
   head: () => ({
@@ -36,11 +26,6 @@ function RootComponent() {
   return (
     <RootDocument>
       <Outlet />
-      {!import.meta.env.PROD && (
-        <Suspense fallback={null}>
-          <TanStackRouterDevtools />
-        </Suspense>
-      )}
     </RootDocument>
   )
 }

@@ -26,14 +26,12 @@ if (process.env.SENTRY_AUTH_TOKEN) {
 export default defineConfig({
   plugins: basePlugins,
   build: {
-    // Only generate source maps if Sentry is enabled
     sourcemap: !!process.env.SENTRY_AUTH_TOKEN,
-    // Увеличим лимит предупреждения о размере чанков (временно)
-    chunkSizeWarningLimit: 600,
+    // Поднимаем лимит - TanStack Start сам управляет code-splitting
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
-      // Подавляем предупреждения от библиотеки openai о 'this' в ES модулях
       onwarn(warning, warn) {
-        // Игнорируем предупреждения о 'this' из node_modules/openai
+        // Игнорируем THIS_IS_UNDEFINED от openai
         if (
           warning.code === 'THIS_IS_UNDEFINED' && 
           warning.id?.includes('node_modules/openai')
@@ -41,56 +39,20 @@ export default defineConfig({
           return;
         }
         
-        // Игнорируем предупреждения о неиспользуемых импортах из @tanstack/start
+        // Игнорируем UNUSED_EXTERNAL_IMPORT от TanStack и React
         if (
           warning.code === 'UNUSED_EXTERNAL_IMPORT' &&
-          warning.exporter?.includes('@tanstack/start')
+          (warning.exporter?.includes('@tanstack') || warning.exporter?.includes('react'))
         ) {
           return;
         }
         
-        // Показываем все остальные предупреждения
+        // Игнорируем предупреждения о externalized модулях
+        if (warning.code === 'PLUGIN_WARNING' && warning.plugin === 'vite:resolve') {
+          return;
+        }
+        
         warn(warning);
-      },
-      output: {
-        // Улучшаем разделение кода для уменьшения размера чанков
-        manualChunks(id) {
-          // Выносим большие библиотеки в отдельные чанки
-          if (id.includes('node_modules')) {
-            // React и связанные библиотеки
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
-            }
-            
-            // TanStack библиотеки
-            if (id.includes('@tanstack')) {
-              return 'vendor-tanstack';
-            }
-            
-            // Markdown и подсветка кода
-            if (id.includes('react-markdown') || id.includes('rehype') || id.includes('highlight.js')) {
-              return 'vendor-markdown';
-            }
-            
-            // Supabase
-            if (id.includes('@supabase')) {
-              return 'vendor-supabase';
-            }
-            
-            // i18n
-            if (id.includes('i18next')) {
-              return 'vendor-i18n';
-            }
-            
-            // Sentry
-            if (id.includes('@sentry')) {
-              return 'vendor-sentry';
-            }
-            
-            // Остальные node_modules
-            return 'vendor-other';
-          }
-        },
       },
     },
   },
