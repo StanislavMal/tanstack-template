@@ -29,13 +29,14 @@ export function useChat(options: UseChatOptions = {}) {
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
   const finalContentRef = useRef<string>('');
-  const bufferRef = useRef<string>(''); // Буфер для неполных строк
+  const bufferRef = useRef<string>('');
 
-  // Анимация печатания текста
+  // Анимация печатания текста с увеличенной скоростью
   const startTextAnimation = useCallback(() => {
     const animatePrinting = () => {
       if (textQueueRef.current.length > 0) {
-        const speed = 2;
+        // ИЗМЕНЕНИЕ: Увеличена скорость с 2 до 10 символов за фрейм
+        const speed = 10;
         const charsToPrint = textQueueRef.current.substring(0, speed);
         textQueueRef.current = textQueueRef.current.substring(speed);
 
@@ -63,36 +64,25 @@ export function useChat(options: UseChatOptions = {}) {
     }
   }, []);
 
-  // Упрощённый парсинг NDJSON (newline-delimited JSON)
   const parseNDJSON = useCallback((data: string) => {
-    // Добавляем новые данные в буфер
     bufferRef.current += data;
-    
-    // Разбиваем по переносам строк
     const lines = bufferRef.current.split('\n');
-    
-    // Последняя строка может быть неполной - оставляем в буфере
     bufferRef.current = lines.pop() || '';
     
     const chunks = [];
     
     for (const line of lines) {
       const trimmedLine = line.trim();
-      
-      // Пропускаем пустые строки
       if (!trimmedLine) continue;
       
       try {
-        // Парсим JSON объект
         const chunk = JSON.parse(trimmedLine);
         chunks.push(chunk);
       } catch (parseError) {
-        // Логируем невалидный JSON для отладки
         console.warn('[useChat] Failed to parse NDJSON line:', {
           line: trimmedLine,
           error: parseError instanceof Error ? parseError.message : 'Unknown error'
         });
-        // Не прерываем обработку - пропускаем невалидную строку
       }
     }
     
@@ -113,21 +103,14 @@ export function useChat(options: UseChatOptions = {}) {
       finalContentRef.current = '';
       textQueueRef.current = '';
       
-      const initialAssistantMessage: Message = { 
-        id: crypto.randomUUID(), 
-        role: 'assistant', 
-        content: '' 
-      };
-
-      setPendingMessage(initialAssistantMessage);
-      startTextAnimation();
+      // ИЗМЕНЕНИЕ: Не создаем pendingMessage сразу, подождем первого чанка
+      const assistantMessageId = crypto.randomUUID();
 
       try {
         const history = messages.at(-1)?.id === userMessage.id 
           ? messages.slice(0, -1) 
           : messages;
 
-        // Определяем провайдер на основе модели
         const provider = settings.model.startsWith('gemini') ? 'gemini' : 'gemini';
 
         const response = await streamChat({
@@ -151,28 +134,26 @@ export function useChat(options: UseChatOptions = {}) {
           if (done) break;
 
           const rawText = decoder.decode(value, { stream: true });
-          
-          // Парсим NDJSON
           const chunks = parseNDJSON(rawText);
           
           for (const chunk of chunks) {
-            // Обработка ошибки от сервера
             if (chunk.error) {
               throw new Error(chunk.error);
             }
             
-            // Добавляем текст в очередь для анимации
             if (chunk.text) {
               if (isFirstChunk) {
+                // ИЗМЕНЕНИЕ: Создаем pendingMessage только при получении первого текста
+                setPendingMessage({ 
+                  id: assistantMessageId, 
+                  role: 'assistant', 
+                  content: '' 
+                });
+                startTextAnimation();
                 setIsLoading(false);
                 isFirstChunk = false;
               }
               textQueueRef.current += chunk.text;
-            }
-            
-            // Помечаем завершение стрима
-            if (chunk.finished) {
-              // Можно добавить логику финализации
             }
           }
         }
@@ -188,7 +169,8 @@ export function useChat(options: UseChatOptions = {}) {
         });
 
         const finalMessage = { 
-          ...initialAssistantMessage, 
+          id: assistantMessageId, 
+          role: 'assistant' as const, 
           content: finalContentRef.current 
         };
 
@@ -202,7 +184,6 @@ export function useChat(options: UseChatOptions = {}) {
         return null;
       } finally {
         stopTextAnimation();
-        // Очищаем буфер
         bufferRef.current = '';
       }
     },
@@ -226,18 +207,15 @@ export function useChat(options: UseChatOptions = {}) {
       try {
         let convId = currentConversationId;
         
-        // Создаем новую беседу если нужно
         if (!convId) {
           const title = conversationTitle || content.slice(0, 30) + '...';
           convId = await createNewConversation(title);
           if (!convId) throw new Error('Failed to create conversation');
         }
 
-        // Добавляем сообщение пользователя
         await addMessage(convId, userMessage);
         options.onMessageSent?.(userMessage);
 
-        // Получаем ответ AI
         const aiResponse = await processAIResponse(userMessage);
         
         if (aiResponse && aiResponse.content.trim()) {
