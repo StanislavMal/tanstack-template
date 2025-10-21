@@ -1,2 +1,22 @@
+# --- BEGIN netlify.toml ---
+# Конфигурация сборки для Netlify
+[build]
+  # Команда для сборки вашего проекта. Она берется из package.json
+  command = "npm run build"
+  
+  # Директория, которую Netlify будет публиковать. 
+  # Vinxi по умолчанию выводит результат в .output/public
+  publish = ".output/public"
+
+# Секция для настройки кэширования
+[build.cache]
+  # Список путей, которые нужно кэшировать между сборками
+  paths = [
+    ".vinxi",           # Кэш сборщика Vinxi
+    "node_modules",     # Основная папка с установленными зависимостями
+    "~/.npm"            # Глобальный кэш npm для еще большего ускорения
+  ]
+
 [template.environment]
-VITE_ANTHROPIC_API_KEY="Add your Anthropic API key here"
+  # Эта секция остается для переменных окружения шаблона Netlify
+# --- END netlify.toml ---
