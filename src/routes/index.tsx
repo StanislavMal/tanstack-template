@@ -178,6 +178,9 @@ function Home() {
       finalContentRef.current = ''; 
       const initialAssistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: '' };
       
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+      let streamDone = false;
+      
       try {
         const history = messages.at(-1)?.id === userMessage.id 
             ? messages.slice(0, -1) 
@@ -194,13 +197,17 @@ function Home() {
         
         if (!response.body) throw new Error('No response body');
         
-        const reader = response.body.getReader();
+        reader = response.body.getReader();
         const decoder = new TextDecoder();
         let isFirstChunk = true;
 
+        console.log(`[CLIENT] Stream reading started for message: ${userMessage.id}`);
+        
         while (true) {
           const { value, done } = await reader.read();
+          streamDone = done;
           if (done) break;
+
           const rawText = decoder.decode(value, { stream: true });
           rawText.replace(/}\{/g, '}\n{').split('\n').forEach((chunkStr) => {
             if (chunkStr) {
@@ -216,7 +223,7 @@ function Home() {
                 } else if (parsed.error) {
                     throw new Error(parsed.error);
                 }
-              } catch (e) { console.warn("Failed to parse stream chunk:", chunkStr, e) }
+              } catch (e) { console.warn("[CLIENT] Failed to parse stream chunk:", chunkStr, e) }
             }
           })
         }
@@ -235,10 +242,17 @@ function Home() {
         return { ...initialAssistantMessage, content: finalContentRef.current };
 
       } catch (error) {
-        console.error('Error in AI response:', error);
+        // --- ШАГ 1: РАСШИРЕННАЯ ДИАГНОСТИКА ОШИБКИ НА КЛИЕНТЕ ---
+        console.error('[CLIENT] Error in processAIResponse stream loop:', error);
         setError(error instanceof Error ? error.message : 'An error occurred while getting the AI response.');
         setLoading(false);
         return null;
+      } finally {
+        // --- ШАГ 1: РАСШИРЕННАЯ ДИАГНОСТИКА ЗАВЕРШЕНИЯ СТРИМА ---
+        console.log(`[CLIENT] Stream processing finished. Was it clean? (done = ${streamDone})`);
+        if (reader) {
+          reader.releaseLock();
+        }
       }
     },
     [settings, activePrompt, messages, setLoading],
@@ -289,7 +303,7 @@ function Home() {
 
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
-        console.error('Error in handleSubmit:', error)
+        console.error('[CLIENT] Error in handleSubmit:', error)
         setError(errorMessage);
       } finally {
         setLoading(false);
@@ -330,7 +344,7 @@ function Home() {
 
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during edit.';
-        console.error('Error in handleSaveEdit:', error)
+        console.error('[CLIENT] Error in handleSaveEdit:', error)
         setError(errorMessage);
     } finally {
         setLoading(false);
