@@ -34,7 +34,6 @@ export interface AIProviderConfig {
 
 export interface StreamChunk {
   text?: string;
-  reasoning?: string; // Добавляем поддержку reasoning
   error?: string;
   finished?: boolean;
 }

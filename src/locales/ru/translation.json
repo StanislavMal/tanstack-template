@@ -34,20 +34,5 @@
   "errorOccurred": "Произошла ошибка",
   "pageNotFound": "Страница не найдена",
   "goHome": "На главную",
-  "language": "Язык",
-  "reasoningMode": "Режим размышлений",
-  "reasoningEffortNone": "Без размышлений",
-  "reasoningEffortLow": "Низкий (быстро)",
-  "reasoningEffortMedium": "Средний (сбалансировано)",
-  "reasoningEffortHigh": "Высокий (тщательно)",
-  "reasoningModeNote": "Контролирует, насколько глубоко ИИ думает перед ответом. Высокие уровни могут улучшить точность, но займут больше времени.",
-  "proModelReasoningNote": "Размышления всегда включены на Pro моделях для оптимальной производительности",
-  "thinkingInProgress": "Думаю...",
-  "thinkingComplete": "Процесс мышления",
-  "proModel": "Pro Модель",
-  "analyzingProblem": "Анализирую проблему...",
-  "generatingThoughts": "Генерирую мысли...",
-  "evaluatingSolutions": "Оцениваю решения...",
-  "thoughtsGenerated": "Мысли",
-  "characters": "Символов"
+  "language": "Язык"
 }
