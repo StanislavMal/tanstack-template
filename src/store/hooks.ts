@@ -19,7 +19,7 @@ export function useSettings() {
         // Добавляем значения по умолчанию для новых полей
         const loadedSettings = data.settings as UserSettings;
         const settingsWithDefaults: UserSettings = {
-            model: loadedSettings.model || 'gemini-2.0-flash', // Используем стабильную модель по умолчанию
+            model: loadedSettings.model || 'gemini-2.5-flash', // Обновлено на 2.5-flash
             provider: loadedSettings.provider || 'gemini',
             system_instruction: loadedSettings.system_instruction || '',
             temperature: loadedSettings.temperature || 0.7,
@@ -28,9 +28,9 @@ export function useSettings() {
         };
         actions.setSettings(settingsWithDefaults);
     } else {
-        // Создаем настройки по умолчанию со стабильной моделью
+        // Создаем настройки по умолчанию с моделью 2.5
         const defaultSettings: UserSettings = {
-            model: 'gemini-2.0-flash', // Стабильная модель по умолчанию
+            model: 'gemini-2.5-flash', // Обновлено на 2.5-flash
             provider: 'gemini',
             system_instruction: '',
             temperature: 0.7,
