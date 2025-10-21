@@ -1,7 +1,8 @@
-// 📄 src/routes/index.tsx (Финальная версия с ResizeObserver)
+// 📄 src/routes/index.tsx (ИСПРАВЛЕНА ОШИБКА С useMemo)
 
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react'
+// ИЗМЕНЕНИЕ: Возвращаем useMemo в импорт
+import { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } from 'react'
 import { Settings, Menu, AlertTriangle } from 'lucide-react'
 import {
   SettingsDialog,
@@ -48,7 +49,6 @@ function Home() {
 
   const messagesContainerRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // -> ИЗМЕНЕНИЕ: Новый ref для внутреннего контейнера с контентом
   const contentRef = useRef<HTMLDivElement>(null);
   
   const isLockedToBottomRef = useRef(true);
@@ -116,15 +116,13 @@ function Home() {
     }
   }, []);
   
-  // -> ИЗМЕНЕНИЕ: Используем ResizeObserver для надежного отслеживания автопрокрутки.
-  // Этот хук заменил старый useLayoutEffect, который зависел от [displayMessages].
   useLayoutEffect(() => {
     const contentElement = contentRef.current;
     if (!contentElement) return;
 
     const observer = new ResizeObserver(() => {
       if (isLockedToBottomRef.current) {
-        forceScrollToBottom();
+        forceScrollToBottom(); 
       }
     });
 
@@ -133,7 +131,7 @@ function Home() {
     return () => {
       observer.disconnect();
     };
-  }, [forceScrollToBottom]); // forceScrollToBottom стабилен, так что эффект запустится один раз
+  }, [forceScrollToBottom]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -215,15 +213,15 @@ function Home() {
                     isFirstChunk = false;
                   }
                   textQueueRef.current += parsed.text;
+                } else if (parsed.error) {
+                    throw new Error(parsed.error);
                 }
-              } catch (e) { /* ignore */ }
+              } catch (e) { console.warn("Failed to parse stream chunk:", chunkStr, e) }
             }
           })
         }
         
-        if (isFirstChunk) {
-            setLoading(false);
-        }
+        if (isFirstChunk) setLoading(false);
 
         await new Promise(resolve => {
             const interval = setInterval(() => {
@@ -238,13 +236,13 @@ function Home() {
 
       } catch (error) {
         console.error('Error in AI response:', error);
-        setError('An error occurred while getting the AI response.');
+        setError(error instanceof Error ? error.message : 'An error occurred while getting the AI response.');
         setLoading(false);
         return null;
       }
     },
     [settings, activePrompt, messages, setLoading],
-);
+  );
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -293,23 +291,16 @@ function Home() {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
         console.error('Error in handleSubmit:', error)
         setError(errorMessage);
-        setLoading(false);
       } finally {
+        setLoading(false);
         setPendingMessage(null);
       }
     },
     [
-      input,
-      isLoading,
-      currentConversationId,
-      createNewConversation,
-      addMessage,
-      processAIResponse,
-      setLoading,
-      createTitleFromInput,
-      t
+      input, isLoading, currentConversationId, createNewConversation, addMessage,
+      processAIResponse, setLoading, createTitleFromInput, t
     ],
-  )
+  );
   
   const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
     if (!currentConversationId) return;
@@ -341,8 +332,8 @@ function Home() {
         const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during edit.';
         console.error('Error in handleSaveEdit:', error)
         setError(errorMessage);
-        setLoading(false);
     } finally {
+        setLoading(false);
         setPendingMessage(null);
     }
   }, [currentConversationId, editMessageAndUpdate, processAIResponse, addMessage, setLoading]);
@@ -352,11 +343,15 @@ function Home() {
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
-  const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId])
-  const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation])
-  const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle])
-  const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) }
-  const handleDuplicateChat = useCallback(async (id: string) => { await duplicateConversation(id) }, [duplicateConversation])
+  const handleNewChat = useCallback(() => { setCurrentConversationId(null) }, [setCurrentConversationId]);
+  const handleDeleteChat = useCallback(async (id: string) => { await deleteConversation(id) }, [deleteConversation]);
+  const handleUpdateChatTitle = useCallback(async (id: string, title: string) => { await updateConversationTitle(id, title); setEditingChatId(null); setEditingTitle(''); }, [updateConversationTitle]);
+  const handleLogout = async () => { await supabase.auth.signOut(); navigate({ to: '/login' }) };
+  const handleDuplicateChat = useCallback(async (id: string) => { await duplicateConversation(id) }, [duplicateConversation]);
+
+  const handleStartEdit = useCallback((id: string) => setEditingMessageId(id), []);
+  const handleCancelEdit = useCallback(() => setEditingMessageId(null), []);
+  const handleCopyMessage = useCallback((content: string) => navigator.clipboard.writeText(content), []);
 
   const MainContent = () => (
     <div className="w-full h-full p-4">
@@ -374,15 +369,16 @@ function Home() {
         <div className="space-y-4">
           {currentConversationId ? (
               <>
-                  {displayMessages.map((message) => (
+                  {/* ИЗМЕНЕНИЕ: Добавляем явный тип для message */}
+                  {displayMessages.map((message: Message) => (
                     <ChatMessage 
                       key={message.id} 
                       message={message} 
                       isEditing={editingMessageId === message.id}
-                      onStartEdit={() => setEditingMessageId(message.id)}
-                      onCancelEdit={() => setEditingMessageId(null)}
+                      onStartEdit={() => handleStartEdit(message.id)}
+                      onCancelEdit={handleCancelEdit}
                       onSaveEdit={(newContent) => handleSaveEdit(message.id, newContent)}
-                      onCopyMessage={() => navigator.clipboard.writeText(message.content)}
+                      onCopyMessage={() => handleCopyMessage(message.content)}
                     />
                   ))}
                   {isLoading && <LoadingIndicator />}
@@ -410,7 +406,6 @@ function Home() {
                 </header>
                 
                 <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
-                    {/* -> ИЗМЕНЕНИЕ: Обертка для ResizeObserver */}
                     <div ref={contentRef}>
                         <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
                           <MainContent />
@@ -449,11 +444,7 @@ function Home() {
                 </div>
             </header>
             
-            <main 
-                ref={messagesContainerRef} 
-                className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
-            >
-                {/* -> ИЗМЕНЕНИЕ: Обертка для ResizeObserver */}
+            <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
                 <div ref={contentRef}>
                     <MainContent />
                 </div>
