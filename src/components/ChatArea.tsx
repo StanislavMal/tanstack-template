@@ -34,13 +34,17 @@ export const ChatArea = memo(forwardRef<HTMLDivElement, ChatAreaProps>(
   }, ref) => {
     const { t } = useTranslation();
 
+    // ИЗМЕНЕНИЕ: Показываем pendingMessage только если есть контент
     const displayMessages = useMemo(() => {
       const combined = [...messages];
-      if (pendingMessage && !messages.some(m => m.id === pendingMessage.id)) {
+      if (pendingMessage && pendingMessage.content && !messages.some(m => m.id === pendingMessage.id)) {
         combined.push(pendingMessage);
       }
       return combined;
     }, [messages, pendingMessage]);
+
+    // ИЗМЕНЕНИЕ: Показываем LoadingIndicator если isLoading ИЛИ есть pendingMessage без контента
+    const showLoading = isLoading || (pendingMessage && !pendingMessage.content);
 
     return (
       <div ref={ref} className="w-full h-full p-4">
@@ -72,7 +76,7 @@ export const ChatArea = memo(forwardRef<HTMLDivElement, ChatAreaProps>(
                   onCopyMessage={() => onCopyMessage(message.content)}
                 />
               ))}
-              {isLoading && <LoadingIndicator />}
+              {showLoading && <LoadingIndicator />}
             </>
           ) : (
             <WelcomeScreen />

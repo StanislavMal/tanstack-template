@@ -16,10 +16,9 @@ export function useSettings() {
     const { data, error } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
     if (error) console.error("Error loading settings:", error);
     if (data && data.settings) {
-        // Добавляем значения по умолчанию для новых полей
         const loadedSettings = data.settings as UserSettings;
         const settingsWithDefaults: UserSettings = {
-            model: loadedSettings.model || 'gemini-2.5-flash', // Обновлено на 2.5-flash
+            model: loadedSettings.model || 'gemini-2.5-flash',
             provider: loadedSettings.provider || 'gemini',
             system_instruction: loadedSettings.system_instruction || '',
             temperature: loadedSettings.temperature || 0.7,
@@ -28,9 +27,8 @@ export function useSettings() {
         };
         actions.setSettings(settingsWithDefaults);
     } else {
-        // Создаем настройки по умолчанию с моделью 2.5
         const defaultSettings: UserSettings = {
-            model: 'gemini-2.5-flash', // Обновлено на 2.5-flash
+            model: 'gemini-2.5-flash',
             provider: 'gemini',
             system_instruction: '',
             temperature: 0.7,
@@ -38,7 +36,6 @@ export function useSettings() {
             reasoningEffort: 'none',
         };
         actions.setSettings(defaultSettings);
-        // Сохраняем в БД
         await supabase.from('profiles').update({ settings: defaultSettings }).eq('id', user.id);
     }
 }, [user]);
@@ -259,6 +256,17 @@ export function useConversations() {
       return;
     }
 
+    // ИЗМЕНЕНИЕ: Проверяем что первое сообщение от пользователя
+    if (!messagesToCopy || messagesToCopy.length === 0) {
+      console.warn('Cannot duplicate empty conversation');
+      return;
+    }
+
+    if (messagesToCopy[0].role !== 'user') {
+      console.error('First message must be from user. Skipping duplicate.');
+      return;
+    }
+
     const newTitle = `copy_${originalConversation.title}`;
     const { data: newConvData, error: newConvError } = await supabase
       .from('conversations')
@@ -273,18 +281,16 @@ export function useConversations() {
 
     const newConversation = newConvData as Conversation;
 
-    if (messagesToCopy && messagesToCopy.length > 0) {
-        const newMessages = messagesToCopy.map(msg => ({
-            ...msg,
-            conversation_id: newConversation.id,
-        }));
-        
-        const { error: insertError } = await supabase.from('messages').insert(newMessages);
-        if (insertError) {
-            console.error('Failed to insert duplicated messages:', insertError);
-            await supabase.from('conversations').delete().eq('id', newConversation.id);
-            return;
-        }
+    const newMessages = messagesToCopy.map(msg => ({
+      ...msg,
+      conversation_id: newConversation.id,
+    }));
+    
+    const { error: insertError } = await supabase.from('messages').insert(newMessages);
+    if (insertError) {
+      console.error('Failed to insert duplicated messages:', insertError);
+      await supabase.from('conversations').delete().eq('id', newConversation.id);
+      return;
     }
     
     await loadConversations();
