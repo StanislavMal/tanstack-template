@@ -9,12 +9,15 @@ interface UseChatOptions {
   onMessageSent?: (message: Message) => void;
   onResponseComplete?: (message: Message) => void;
   onError?: (error: string) => void;
+  onReasoningUpdate?: (reasoning: string) => void;
 }
 
 export function useChat(options: UseChatOptions = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null);
+  const [reasoningContent, setReasoningContent] = useState<string>('');
+  const [isThinking, setIsThinking] = useState(false);
   
   const { settings } = useSettings();
   const { activePrompt } = usePrompts();
@@ -27,9 +30,11 @@ export function useChat(options: UseChatOptions = {}) {
   } = useConversations();
 
   const textQueueRef = useRef<string>('');
+  const reasoningQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
+  const reasoningAnimationFrameRef = useRef<number | undefined>(undefined);
   const finalContentRef = useRef<string>('');
-  const bufferRef = useRef<string>(''); // Новый буфер для накопления данных
+  const bufferRef = useRef<string>('');
 
   // Анимация печатания текста
   const startTextAnimation = useCallback(() => {
@@ -57,19 +62,46 @@ export function useChat(options: UseChatOptions = {}) {
     animationFrameRef.current = requestAnimationFrame(animatePrinting);
   }, []);
 
+  // Анимация отображения reasoning
+  const startReasoningAnimation = useCallback(() => {
+    const animateReasoning = () => {
+      if (reasoningQueueRef.current.length > 0) {
+        const speed = 1; // Медленнее для reasoning
+        const charsToPrint = reasoningQueueRef.current.substring(0, speed);
+        reasoningQueueRef.current = reasoningQueueRef.current.substring(speed);
+
+        setReasoningContent(current => {
+          const newContent = current + charsToPrint;
+          options.onReasoningUpdate?.(newContent);
+          return newContent;
+        });
+      }
+      reasoningAnimationFrameRef.current = requestAnimationFrame(animateReasoning);
+    };
+
+    if (reasoningAnimationFrameRef.current) {
+      cancelAnimationFrame(reasoningAnimationFrameRef.current);
+    }
+    reasoningAnimationFrameRef.current = requestAnimationFrame(animateReasoning);
+  }, [options]);
+
   const stopTextAnimation = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
   }, []);
 
+  const stopReasoningAnimation = useCallback(() => {
+    if (reasoningAnimationFrameRef.current) {
+      cancelAnimationFrame(reasoningAnimationFrameRef.current);
+    }
+  }, []);
+
   // Функция для парсинга потоковых данных
   const parseStreamData = useCallback((data: string) => {
-    // Добавляем новые данные в буфер
     bufferRef.current += data;
     
     const lines = bufferRef.current.split('\n');
-    // Оставляем последнюю неполную строку в буфере
     bufferRef.current = lines.pop() || '';
     
     const chunks = [];
@@ -79,11 +111,9 @@ export function useChat(options: UseChatOptions = {}) {
       if (!trimmedLine) continue;
       
       try {
-        // Пытаемся распарсить каждую строку как JSON
         const chunk = JSON.parse(trimmedLine);
         chunks.push(chunk);
       } catch (e) {
-        // Если это невалидный JSON, пробуем извлечь JSON объекты из строки
         const jsonMatches = trimmedLine.match(/\{.*?\}(?=\{|$)/g);
         if (jsonMatches) {
           for (const match of jsonMatches) {
@@ -112,10 +142,13 @@ export function useChat(options: UseChatOptions = {}) {
         return null;
       }
 
-      // Сбрасываем буфер при новом запросе
+      // Сбрасываем состояние
       bufferRef.current = '';
       finalContentRef.current = '';
       textQueueRef.current = '';
+      reasoningQueueRef.current = '';
+      setReasoningContent('');
+      setIsThinking(false);
       
       const initialAssistantMessage: Message = { 
         id: crypto.randomUUID(), 
@@ -126,12 +159,20 @@ export function useChat(options: UseChatOptions = {}) {
       setPendingMessage(initialAssistantMessage);
       startTextAnimation();
 
+      // Запускаем reasoning анимацию если включено
+      const shouldShowReasoning = settings.model.includes('2.5') && 
+        (settings.model === 'gemini-2.5-pro' || settings.reasoningEffort !== 'none');
+      
+      if (shouldShowReasoning) {
+        setIsThinking(true);
+        startReasoningAnimation();
+      }
+
       try {
         const history = messages.at(-1)?.id === userMessage.id 
           ? messages.slice(0, -1) 
           : messages;
 
-        // Определяем провайдер на основе модели
         const provider = settings.model.startsWith('gemini') ? 'gemini' : 'gemini';
 
         const response = await streamChat({
@@ -141,6 +182,9 @@ export function useChat(options: UseChatOptions = {}) {
             model: settings.model,
             systemInstruction: settings.system_instruction,
             activePromptContent: activePrompt?.content,
+            temperature: settings.temperature,
+            maxTokens: settings.maxTokens,
+            reasoningEffort: settings.reasoningEffort,
           },
         });
 
@@ -155,13 +199,16 @@ export function useChat(options: UseChatOptions = {}) {
           if (done) break;
 
           const rawText = decoder.decode(value, { stream: true });
-          
-          // Используем улучшенный парсер
           const chunks = parseStreamData(rawText);
           
           for (const chunk of chunks) {
             if (chunk.error) {
               throw new Error(chunk.error);
+            }
+            
+            // Обрабатываем reasoning
+            if (chunk.reasoning) {
+              reasoningQueueRef.current += chunk.reasoning;
             }
             
             if (chunk.text) {
@@ -173,15 +220,15 @@ export function useChat(options: UseChatOptions = {}) {
             }
             
             if (chunk.finished) {
-              // Поток завершен
+              setIsThinking(false);
             }
           }
         }
 
-        // Ждем завершения анимации
+        // Ждем завершения анимаций
         await new Promise(resolve => {
           const checkInterval = setInterval(() => {
-            if (textQueueRef.current.length === 0) {
+            if (textQueueRef.current.length === 0 && reasoningQueueRef.current.length === 0) {
               clearInterval(checkInterval);
               resolve(null);
             }
@@ -203,11 +250,12 @@ export function useChat(options: UseChatOptions = {}) {
         return null;
       } finally {
         stopTextAnimation();
-        // Очищаем буфер при завершении
+        stopReasoningAnimation();
+        setIsThinking(false);
         bufferRef.current = '';
       }
     },
-    [settings, activePrompt, messages, startTextAnimation, stopTextAnimation, options, parseStreamData]
+    [settings, activePrompt, messages, startTextAnimation, stopTextAnimation, startReasoningAnimation, stopReasoningAnimation, options, parseStreamData]
   );
 
   const sendMessage = useCallback(
@@ -217,6 +265,7 @@ export function useChat(options: UseChatOptions = {}) {
       setIsLoading(true);
       setError(null);
       setPendingMessage(null);
+      setReasoningContent('');
       
       const userMessage: Message = { 
         id: crypto.randomUUID(), 
@@ -227,18 +276,15 @@ export function useChat(options: UseChatOptions = {}) {
       try {
         let convId = currentConversationId;
         
-        // Создаем новую беседу если нужно
         if (!convId) {
           const title = conversationTitle || content.slice(0, 30) + '...';
           convId = await createNewConversation(title);
           if (!convId) throw new Error('Failed to create conversation');
         }
 
-        // Добавляем сообщение пользователя
         await addMessage(convId, userMessage);
         options.onMessageSent?.(userMessage);
 
-        // Получаем ответ AI
         const aiResponse = await processAIResponse(userMessage);
         
         if (aiResponse && aiResponse.content.trim()) {
@@ -273,6 +319,7 @@ export function useChat(options: UseChatOptions = {}) {
       setIsLoading(true);
       setError(null);
       setPendingMessage(null);
+      setReasoningContent('');
 
       try {
         const updatedMessage = await editMessageAndUpdate(messageId, newContent);
@@ -317,5 +364,7 @@ export function useChat(options: UseChatOptions = {}) {
     error,
     clearError,
     pendingMessage,
+    reasoningContent,
+    isThinking,
   };
 }

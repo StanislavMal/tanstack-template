@@ -108,6 +108,38 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       <option value="gemini-2.5-pro">{t('modelPro')}</option>
                   </select>
                 </div>
+                {/* Переключатель режима размышлений */}
+                <div className="p-3 rounded-lg bg-gray-700/50">
+                  <label htmlFor="reasoning-effort" className="block text-sm font-medium text-gray-300 mb-2">
+                    {t('reasoningMode')}
+                  </label>
+                  <select
+                    id="reasoning-effort"
+                    value={localSettings.reasoningEffort}
+                    onChange={(e) => setLocalSettings(prev => prev ? { 
+                      ...prev, 
+                      reasoningEffort: e.target.value as 'none' | 'low' | 'medium' | 'high' 
+                    } : null)}
+                    disabled={localSettings.model === 'gemini-2.5-pro'}
+                    className={`w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500 ${
+                      localSettings.model === 'gemini-2.5-pro' ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    <option value="none">{t('reasoningEffortNone')}</option>
+                    <option value="low">{t('reasoningEffortLow')}</option>
+                    <option value="medium">{t('reasoningEffortMedium')}</option>
+                    <option value="high">{t('reasoningEffortHigh')}</option>
+                  </select>
+                  {localSettings.model === 'gemini-2.5-pro' && (
+                    <p className="text-xs text-orange-400 mt-1">
+                      {t('proModelReasoningNote')}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">
+                    {t('reasoningModeNote')}
+                  </p>
+                </div>
+
                 <div className="p-3 rounded-lg bg-gray-700/50">
                   <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300 mb-2">{t('systemInstruction')}</label>
                   <textarea

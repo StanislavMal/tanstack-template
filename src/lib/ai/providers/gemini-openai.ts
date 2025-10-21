@@ -57,32 +57,59 @@ export class GeminiOpenAIProvider implements AIProvider {
       max_tokens: config.maxTokens || 8192,
     };
 
-    // Добавляем reasoning_effort для моделей 2.5
+    // Настройки размышлений для моделей 2.5
     if (config.model?.includes('2.5')) {
-      if (config.reasoningEffort && config.reasoningEffort !== 'none') {
-        requestOptions.reasoning_effort = config.reasoningEffort;
-      }
+      const isProModel = config.model === 'gemini-2.5-pro';
       
-      // Для gemini-2.5-pro нельзя отключать reasoning, поэтому если none - не передаем
-      if (config.model === 'gemini-2.5-pro' && (!config.reasoningEffort || config.reasoningEffort === 'none')) {
-        requestOptions.reasoning_effort = 'low'; // Значение по умолчанию для Pro
+      // Для Pro моделей reasoning всегда включен
+      if (isProModel) {
+        requestOptions.reasoning_effort = config.reasoningEffort || 'low';
+        // Включаем отображение мыслей через thinking_config
+        requestOptions.extra_body = {
+          google: {
+            thinking_config: {
+              include_thoughts: true
+            }
+          }
+        };
+      } else if (config.reasoningEffort && config.reasoningEffort !== 'none') {
+        // Для Flash моделей reasoning опционален
+        requestOptions.reasoning_effort = config.reasoningEffort;
+        requestOptions.extra_body = {
+          google: {
+            thinking_config: {
+              include_thoughts: true
+            }
+          }
+        };
       }
     }
 
     try {
-      console.log(`Using Gemini model: ${requestOptions.model}`);
+      console.log(`Using Gemini model: ${requestOptions.model}, reasoning: ${requestOptions.reasoning_effort || 'none'}`);
       const response = await openai.chat.completions.create(requestOptions);
 
       // Создаем ReadableStream для совместимости с существующим кодом
       return new ReadableStream({
         async start(controller) {
           const encoder = new TextEncoder();
+          let reasoningBuffer = '';
           
           try {
             // Используем правильный способ итерации по стриму
             if (Symbol.asyncIterator in response) {
               for await (const chunk of response as AsyncIterable<any>) {
                 const content = chunk.choices[0]?.delta?.content;
+                
+                // Обрабатываем reasoning content если есть
+                if (chunk.choices[0]?.delta?.reasoning_content) {
+                  reasoningBuffer += chunk.choices[0]?.delta?.reasoning_content;
+                  const reasoningChunk: StreamChunk = { 
+                    reasoning: chunk.choices[0]?.delta?.reasoning_content 
+                  };
+                  controller.enqueue(encoder.encode(JSON.stringify(reasoningChunk) + '\n'));
+                }
+                
                 if (content) {
                   const streamChunk: StreamChunk = { text: content };
                   // Отправляем каждый чанк в отдельной строке
@@ -94,6 +121,16 @@ export class GeminiOpenAIProvider implements AIProvider {
               const stream = response as any;
               for await (const chunk of stream) {
                 const content = chunk.choices[0]?.delta?.content;
+                
+                // Обрабатываем reasoning content если есть
+                if (chunk.choices[0]?.delta?.reasoning_content) {
+                  reasoningBuffer += chunk.choices[0]?.delta?.reasoning_content;
+                  const reasoningChunk: StreamChunk = { 
+                    reasoning: chunk.choices[0]?.delta?.reasoning_content 
+                  };
+                  controller.enqueue(encoder.encode(JSON.stringify(reasoningChunk) + '\n'));
+                }
+                
                 if (content) {
                   const streamChunk: StreamChunk = { text: content };
                   controller.enqueue(encoder.encode(JSON.stringify(streamChunk) + '\n'));
@@ -101,7 +138,10 @@ export class GeminiOpenAIProvider implements AIProvider {
               }
             }
             
-            const finalChunk: StreamChunk = { finished: true };
+            const finalChunk: StreamChunk = { 
+              finished: true,
+              reasoning: reasoningBuffer || undefined
+            };
             controller.enqueue(encoder.encode(JSON.stringify(finalChunk) + '\n'));
           } catch (error) {
             console.error('Error in stream processing:', error);

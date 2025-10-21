@@ -17,6 +17,10 @@ interface ChatAreaProps {
   onCancelEdit: () => void;
   onSaveEdit: (id: string, content: string) => void;
   onCopyMessage: (content: string) => void;
+  reasoningContent?: string;
+  isThinking?: boolean;
+  model?: string;
+  reasoningEffort?: string;
 }
 
 export const ChatArea = memo(forwardRef<HTMLDivElement, ChatAreaProps>(
@@ -31,6 +35,10 @@ export const ChatArea = memo(forwardRef<HTMLDivElement, ChatAreaProps>(
     onCancelEdit,
     onSaveEdit,
     onCopyMessage,
+    reasoningContent,
+    isThinking = false,
+    model = 'gemini-2.5-flash',
+    reasoningEffort = 'none',
   }, ref) => {
     const { t } = useTranslation();
 
@@ -61,7 +69,7 @@ export const ChatArea = memo(forwardRef<HTMLDivElement, ChatAreaProps>(
         <div className="space-y-4">
           {currentConversationId ? (
             <>
-              {displayMessages.map((message) => (
+              {displayMessages.map((message, index) => (
                 <ChatMessage 
                   key={message.id} 
                   message={message} 
@@ -70,6 +78,21 @@ export const ChatArea = memo(forwardRef<HTMLDivElement, ChatAreaProps>(
                   onCancelEdit={onCancelEdit}
                   onSaveEdit={(newContent) => onSaveEdit(message.id, newContent)}
                   onCopyMessage={() => onCopyMessage(message.content)}
+                  // Передаем reasoning только для последнего сообщения ассистента
+                  reasoningContent={
+                    message.role === 'assistant' && 
+                    index === displayMessages.length - 1 && 
+                    !pendingMessage
+                      ? reasoningContent
+                      : undefined
+                  }
+                  isThinking={
+                    message.role === 'assistant' && 
+                    index === displayMessages.length - 1 && 
+                    isThinking
+                  }
+                  model={model}
+                  reasoningEffort={reasoningEffort}
                 />
               ))}
               {isLoading && <LoadingIndicator />}

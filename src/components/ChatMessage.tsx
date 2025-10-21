@@ -1,13 +1,14 @@
-// 📄 src/components/ChatMessage.tsx (Откат к memo)
+// 📄 src/components/ChatMessage.tsx
 
-import { useState, memo } from 'react'; // ИЗМЕНЕНИЕ: Убран forwardRef
+import { useState, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
-import { Pencil, Copy, Check, X } from 'lucide-react';
-import type { Message } from '../utils/ai';
+import { Pencil, Copy, Check, X } from 'lucide-react'; // Убрали Brain отсюда
+import type { Message } from '../lib/ai/types';
 import { CodeBlock } from './CodeBlock';
+import { ReasoningDisplay } from './ReasoningDisplay';
 
 interface ChatMessageProps {
   message: Message;
@@ -16,16 +17,23 @@ interface ChatMessageProps {
   onCancelEdit: () => void;
   onSaveEdit: (newContent: string) => void;
   onCopyMessage: () => void;
+  reasoningContent?: string;
+  isThinking?: boolean;
+  model?: string;
+  reasoningEffort?: string;
 }
 
-// ИЗМЕНЕНИЕ: Оборачиваем только в memo
 export const ChatMessage = memo(({ 
   message,
   isEditing,
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
-  onCopyMessage
+  onCopyMessage,
+  reasoningContent,
+  isThinking = false,
+  model = 'gemini-2.5-flash',
+  reasoningEffort = 'none'
 }: ChatMessageProps) => {
   const isAssistant = message.role === 'assistant';
   const [editedContent, setEditedContent] = useState(message.content);
@@ -46,7 +54,6 @@ export const ChatMessage = memo(({
   };
 
   return (
-    // ИЗМЕНЕНИЕ: ref убран
     <div className={`group relative flex flex-col w-full ${isAssistant ? 'items-start' : 'items-end'}`}>
       <div
         className={`isolate rounded-lg px-4 py-2 transition-colors duration-200 ${
@@ -69,15 +76,28 @@ export const ChatMessage = memo(({
             />
           </div>
         ) : (
-          <ReactMarkdown
-            className="prose dark:prose-invert max-w-none"
-            rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
-            components={{
-              pre: CodeBlock,
-            }}
-          >
-            {message.content}
-          </ReactMarkdown>
+          <>
+            {/* Отображение размышлений для ассистента */}
+            {isAssistant && (reasoningContent || isThinking) && (
+              <ReasoningDisplay 
+                reasoningContent={reasoningContent}
+                isThinking={isThinking}
+                model={model}
+                reasoningEffort={reasoningEffort}
+              />
+            )}
+            
+            {/* Основной контент сообщения */}
+            <ReactMarkdown
+              className="prose dark:prose-invert max-w-none"
+              rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
+              components={{
+                pre: CodeBlock,
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </>
         )}
       </div>
 

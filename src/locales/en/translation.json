@@ -34,5 +34,20 @@
   "errorOccurred": "An error occurred",
   "pageNotFound": "Page Not Found",
   "goHome": "Go Home",
-  "language": "Language"
+  "language": "Language",
+  "reasoningMode": "Reasoning Mode",
+  "reasoningEffortNone": "No reasoning",
+  "reasoningEffortLow": "Low (fast)",
+  "reasoningEffortMedium": "Medium (balanced)", 
+  "reasoningEffortHigh": "High (thorough)",
+  "reasoningModeNote": "Controls how much the AI thinks before responding. Higher levels may improve accuracy but take longer.",
+  "proModelReasoningNote": "Reasoning is always enabled on Pro models for optimal performance",
+  "thinkingInProgress": "Thinking...",
+  "thinkingComplete": "Thought Process",
+  "proModel": "Pro Model",
+  "analyzingProblem": "Analyzing the problem...",
+  "generatingThoughts": "Generating thoughts...",
+  "evaluatingSolutions": "Evaluating solutions...",
+  "thoughtsGenerated": "Thoughts",
+  "characters": "Chars"
 }

@@ -48,7 +48,7 @@ function Home() {
   // Store хуки
   const { messages, currentConversationId } = useConversations();
   const { loadConversations } = useConversations();
-  const { loadSettings } = useSettings();
+  const { settings, loadSettings } = useSettings(); // Получаем settings из хука
   const { loadPrompts } = usePrompts();
 
   // Загрузка данных при монтировании
@@ -79,6 +79,8 @@ function Home() {
     isLoading,
     error,
     pendingMessage,
+    reasoningContent,
+    isThinking,
   } = useChat({
     onMessageSent: () => {
       lockToBottom();
@@ -203,6 +205,10 @@ function Home() {
                     onCancelEdit={handleCancelEdit}
                     onSaveEdit={handleSaveEdit}
                     onCopyMessage={handleCopyMessage}
+                    reasoningContent={reasoningContent}
+                    isThinking={isThinking}
+                    model={settings?.model || 'gemini-2.5-flash'}
+                    reasoningEffort={settings?.reasoningEffort || 'none'}
                   />
                 </div>
               </div>
@@ -290,6 +296,10 @@ function Home() {
             onCancelEdit={handleCancelEdit}
             onSaveEdit={handleSaveEdit}
             onCopyMessage={handleCopyMessage}
+            reasoningContent={reasoningContent}
+            isThinking={isThinking}
+            model={settings?.model || 'gemini-2.5-flash'}
+            reasoningEffort={settings?.reasoningEffort || 'none'}
           />
         </div>
       </main>
