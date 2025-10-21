@@ -29,6 +29,7 @@ export function useChat(options: UseChatOptions = {}) {
   const textQueueRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
   const finalContentRef = useRef<string>('');
+  const bufferRef = useRef<string>(''); // Новый буфер для накопления данных
 
   // Анимация печатания текста
   const startTextAnimation = useCallback(() => {
@@ -62,8 +63,48 @@ export function useChat(options: UseChatOptions = {}) {
     }
   }, []);
 
+  // Функция для парсинга потоковых данных
+  const parseStreamData = useCallback((data: string) => {
+    // Добавляем новые данные в буфер
+    bufferRef.current += data;
+    
+    const lines = bufferRef.current.split('\n');
+    // Оставляем последнюю неполную строку в буфере
+    bufferRef.current = lines.pop() || '';
+    
+    const chunks = [];
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) continue;
+      
+      try {
+        // Пытаемся распарсить каждую строку как JSON
+        const chunk = JSON.parse(trimmedLine);
+        chunks.push(chunk);
+      } catch (e) {
+        // Если это невалидный JSON, пробуем извлечь JSON объекты из строки
+        const jsonMatches = trimmedLine.match(/\{.*?\}(?=\{|$)/g);
+        if (jsonMatches) {
+          for (const match of jsonMatches) {
+            try {
+              const chunk = JSON.parse(match);
+              chunks.push(chunk);
+            } catch (parseError) {
+              console.warn('Failed to parse JSON chunk:', match, parseError);
+            }
+          }
+        } else {
+          console.warn('Failed to parse line as JSON:', trimmedLine);
+        }
+      }
+    }
+    
+    return chunks;
+  }, []);
+
   const processAIResponse = useCallback(
-    async (userMessage: Message) => {  // Удалили неиспользуемый параметр conversationId
+    async (userMessage: Message) => {
       if (!settings) {
         const errorMsg = "User settings not loaded.";
         setError(errorMsg);
@@ -71,6 +112,8 @@ export function useChat(options: UseChatOptions = {}) {
         return null;
       }
 
+      // Сбрасываем буфер при новом запросе
+      bufferRef.current = '';
       finalContentRef.current = '';
       textQueueRef.current = '';
       
@@ -89,7 +132,7 @@ export function useChat(options: UseChatOptions = {}) {
           : messages;
 
         // Определяем провайдер на основе модели
-        const provider = settings.model.startsWith('gemini') ? 'gemini' : 'gemini'; // Пока только Gemini
+        const provider = settings.model.startsWith('gemini') ? 'gemini' : 'gemini';
 
         const response = await streamChat({
           data: {
@@ -113,36 +156,26 @@ export function useChat(options: UseChatOptions = {}) {
 
           const rawText = decoder.decode(value, { stream: true });
           
-          // Обрабатываем каждый JSON объект в потоке
-          rawText.split('\n').forEach((line) => {
-            if (line.trim()) {
-              try {
-                const chunk = JSON.parse(line);
-                
-                if (chunk.error) {
-                  throw new Error(chunk.error);
-                }
-                
-                if (chunk.text) {
-                  if (isFirstChunk) {
-                    setIsLoading(false);
-                    isFirstChunk = false;
-                  }
-                  textQueueRef.current += chunk.text;
-                }
-                
-                if (chunk.finished) {
-                  // Поток завершен
-                }
-              } catch (e) {
-                if (e instanceof SyntaxError) {
-                  console.warn("Failed to parse chunk:", line);
-                } else {
-                  throw e;
-                }
-              }
+          // Используем улучшенный парсер
+          const chunks = parseStreamData(rawText);
+          
+          for (const chunk of chunks) {
+            if (chunk.error) {
+              throw new Error(chunk.error);
             }
-          });
+            
+            if (chunk.text) {
+              if (isFirstChunk) {
+                setIsLoading(false);
+                isFirstChunk = false;
+              }
+              textQueueRef.current += chunk.text;
+            }
+            
+            if (chunk.finished) {
+              // Поток завершен
+            }
+          }
         }
 
         // Ждем завершения анимации
@@ -170,9 +203,11 @@ export function useChat(options: UseChatOptions = {}) {
         return null;
       } finally {
         stopTextAnimation();
+        // Очищаем буфер при завершении
+        bufferRef.current = '';
       }
     },
-    [settings, activePrompt, messages, startTextAnimation, stopTextAnimation, options]
+    [settings, activePrompt, messages, startTextAnimation, stopTextAnimation, options, parseStreamData]
   );
 
   const sendMessage = useCallback(

@@ -71,17 +71,19 @@ export class GeminiOpenAIProvider implements AIProvider {
               const content = chunk.choices[0]?.delta?.content;
               if (content) {
                 const streamChunk: StreamChunk = { text: content };
-                controller.enqueue(encoder.encode(JSON.stringify(streamChunk)));
+                // Важное изменение: добавляем символ новой строки после каждого JSON
+                controller.enqueue(encoder.encode(JSON.stringify(streamChunk) + '\n'));
               }
             }
             
             const finalChunk: StreamChunk = { finished: true };
-            controller.enqueue(encoder.encode(JSON.stringify(finalChunk)));
+            // Также добавляем символ новой строки для финального чанка
+            controller.enqueue(encoder.encode(JSON.stringify(finalChunk) + '\n'));
           } catch (error) {
             const errorChunk: StreamChunk = { 
               error: error instanceof Error ? error.message : 'Unknown error occurred' 
             };
-            controller.enqueue(encoder.encode(JSON.stringify(errorChunk)));
+            controller.enqueue(encoder.encode(JSON.stringify(errorChunk) + '\n'));
           } finally {
             controller.close();
           }
