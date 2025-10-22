@@ -182,22 +182,28 @@ export function useConversations() {
   }, []);
   
   const addMessage = useCallback(async (conversationId: string, message: Message) => {
-    if (!user) return;
+  if (!user) return;
 
-    actions.addMessage(message);
+  // ИЗМЕНЕНИЕ: Проверяем что сообщение не пустое перед сохранением
+  if (!message.content || message.content.trim() === '') {
+    console.error('[addMessage] Attempted to save empty message:', message);
+    return;
+  }
 
-    const { error } = await supabase.from('messages').insert({
-      id: message.id,
-      conversation_id: conversationId,
-      user_id: user.id,
-      role: message.role,
-      content: message.content
-    });
+  actions.addMessage(message);
 
-    if (error) {
-      console.error('Failed to add message to Supabase:', error);
-    }
-  }, [user]);
+  const { error } = await supabase.from('messages').insert({
+    id: message.id,
+    conversation_id: conversationId,
+    user_id: user.id,
+    role: message.role,
+    content: message.content
+  });
+
+  if (error) {
+    console.error('Failed to add message to Supabase:', error);
+  }
+}, [user]);
 
   // ИЗМЕНЕНИЕ: Теперь возвращает обрезанный массив сообщений для отправки в AI
   const editMessageAndUpdate = useCallback(async (messageId: string, newContent: string): Promise<Message[] | null> => {

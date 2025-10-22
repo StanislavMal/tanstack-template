@@ -8,10 +8,9 @@ export class GeminiOpenAIProvider implements AIProvider {
   
   private apiKeys: string[];
   private currentKeyIndex = 0;
-  private failedKeys = new Set<number>(); // Отслеживаем проблемные ключи
+  private failedKeys = new Set<number>();
 
   constructor() {
-    // Собираем все доступные ключи
     this.apiKeys = Object.keys(process.env)
       .filter(key => key.startsWith('GEMINI_API_KEY_') && process.env[key])
       .map(key => process.env[key] as string);
@@ -24,13 +23,11 @@ export class GeminiOpenAIProvider implements AIProvider {
   }
 
   private getNextApiKey(): { key: string; index: number } {
-    // Сбрасываем failedKeys если все ключи провалились
     if (this.failedKeys.size >= this.apiKeys.length) {
       console.warn('[GeminiProvider] All keys failed, resetting failed keys set');
       this.failedKeys.clear();
     }
 
-    // Находим следующий незаблокированный ключ
     let attempts = 0;
     while (attempts < this.apiKeys.length) {
       const index = this.currentKeyIndex;
@@ -42,7 +39,6 @@ export class GeminiOpenAIProvider implements AIProvider {
       attempts++;
     }
 
-    // Если все ключи заблокированы, берем текущий
     const index = this.currentKeyIndex;
     this.currentKeyIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
     return { key: this.apiKeys[index], index };
@@ -54,8 +50,24 @@ export class GeminiOpenAIProvider implements AIProvider {
   }
 
   async streamChat(messages: Message[], config: Partial<AIProviderConfig>): Promise<ReadableStream<Uint8Array>> {
-    const maxRetries = Math.min(this.apiKeys.length, 3); // Максимум 3 попытки или количество ключей
+    const maxRetries = Math.min(this.apiKeys.length, 3);
     let lastError: Error | null = null;
+
+    // ИЗМЕНЕНИЕ: Валидация - фильтруем пустые сообщения
+    const validMessages = messages.filter(msg => {
+      const isValid = msg.content && msg.content.trim() !== '';
+      if (!isValid) {
+        console.warn('[GeminiProvider] Filtered out invalid message:', msg);
+      }
+      return isValid;
+    });
+
+    if (validMessages.length === 0) {
+      console.error('[GeminiProvider] No valid messages after filtering. Original messages:', messages);
+      throw new Error('No valid messages to send to AI');
+    }
+
+    console.log(`[GeminiProvider] Sending ${validMessages.length} messages (filtered from ${messages.length})`);
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const { key: apiKey, index: keyIndex } = this.getNextApiKey();
@@ -67,13 +79,11 @@ export class GeminiOpenAIProvider implements AIProvider {
         baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
       });
 
-      // Преобразуем сообщения в формат OpenAI
-      const openAIMessages = messages.map(msg => ({
+      const openAIMessages = validMessages.map(msg => ({
         role: msg.role as 'user' | 'assistant' | 'system',
         content: msg.content,
       }));
 
-      // Добавляем системную инструкцию если есть
       if (config.systemInstruction) {
         openAIMessages.unshift({
           role: 'system',
@@ -81,7 +91,7 @@ export class GeminiOpenAIProvider implements AIProvider {
         });
       }
 
-      // Подготавливаем параметры запроса
+      // ИЗМЕНЕНИЕ: Вернули reasoning_effort
       const requestOptions: any = {
         model: config.model || 'gemini-2.5-flash',
         messages: openAIMessages,
@@ -102,10 +112,15 @@ export class GeminiOpenAIProvider implements AIProvider {
       }
 
       try {
-        console.log(`[GeminiProvider] Using model: ${requestOptions.model}`);
+        console.log(`[GeminiProvider] Request:`, {
+          model: requestOptions.model,
+          messagesCount: openAIMessages.length,
+          temperature: requestOptions.temperature,
+          reasoning_effort: requestOptions.reasoning_effort,
+        });
+        
         const response = await openai.chat.completions.create(requestOptions);
 
-        // Если успешно, создаем ReadableStream
         return new ReadableStream({
           async start(controller) {
             const encoder = new TextEncoder();
@@ -147,7 +162,6 @@ export class GeminiOpenAIProvider implements AIProvider {
       } catch (error) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
         
-        // Проверяем тип ошибки
         const is503Error = error instanceof Error && 
           (error.message.includes('503') || error.message.includes('Service Unavailable'));
         
@@ -155,18 +169,22 @@ export class GeminiOpenAIProvider implements AIProvider {
           (error.message.includes('429') || error.message.includes('Rate limit'));
 
         if (is503Error || is429Error) {
-          console.warn(`[GeminiProvider] Key #${keyIndex + 1} failed with ${is503Error ? '503' : '429'} error, trying next key...`);
+          console.warn(`[GeminiProvider] Key #${keyIndex + 1} failed with ${is503Error ? '503' : '429'}, trying next key...`);
           this.markKeyAsFailed(keyIndex);
-          continue; // Пробуем следующий ключ
+          continue;
         }
 
-        // Если другая ошибка, прерываем
         console.error('[GeminiProvider] Non-retryable error:', error);
+        console.error('[GeminiProvider] Request that failed:', {
+          model: requestOptions.model,
+          messagesCount: openAIMessages.length,
+          messages: openAIMessages,
+        });
+        
         throw new Error(`Gemini API Error: ${lastError.message}`);
       }
     }
 
-    // Если все попытки провалились
     throw new Error(
       `Gemini API failed after ${maxRetries} attempts. Last error: ${lastError?.message || 'Unknown error'}`
     );
