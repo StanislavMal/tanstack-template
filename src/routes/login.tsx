@@ -1,9 +1,10 @@
 // 📄 src/routes/login.tsx
 
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../providers/AuthProvider';
 
 export const Route = createFileRoute('/login')({
   component: LoginComponent,
@@ -12,13 +13,19 @@ export const Route = createFileRoute('/login')({
 function LoginComponent() {
   const { t } = useTranslation();
   const navigate = useNavigate()
+  const { user, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // -> ИЗМЕНЕНИЕ: Читаем переменную окружения.
-  // Значение 'false' отключит регистрацию, любое другое значение (включая undefined) разрешит её.
+  // Если пользователь уже авторизован, перенаправляем на главную
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate({ to: '/' })
+    }
+  }, [user, authLoading, navigate])
+
   const allowRegistration = import.meta.env.VITE_ALLOW_REGISTRATION !== 'false';
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -28,10 +35,27 @@ function LoginComponent() {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       setError(error.message)
+      setLoading(false)
     } else {
-      navigate({ to: '/' })
+      // Навигация произойдет через useEffect выше
     }
-    setLoading(false)
+  }
+
+  // Показываем загрузку, пока проверяется авторизация
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-400">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Если авторизован, ничего не показываем (useEffect перенаправит)
+  if (user) {
+    return null;
   }
 
   return (
@@ -60,7 +84,6 @@ function LoginComponent() {
           </button>
           {error && <p className="text-red-500 text-center">{error}</p>}
         </form>
-        {/* -> ИЗМЕНЕНИЕ: Условный рендеринг ссылки на регистрацию */}
         {allowRegistration && (
           <p className="text-center">
             {t('loginPrompt')}{' '}
