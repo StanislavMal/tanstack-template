@@ -140,16 +140,32 @@ function Home() {
   }, [input, isLoading, sendMessage]);
 
   const handleLogout = useCallback(async () => {
-    try {
-      await supabase.auth.signOut();
-      navigate({ to: '/login' });
-    } catch (error) {
+  try {
+    // -> ИСПРАВЛЕНИЕ: Сначала пытаемся корректный logout
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
       console.error('Logout error:', error);
-      // Даже если logout фейлится, очищаем локальное состояние
-      localStorage.removeItem('supabase.auth.token');
-      navigate({ to: '/login' });
+      // -> Если ошибка 403 - значит токен невалидный, просто очищаем localStorage
+      if (error.message.includes('403') || error.status === 403) {
+        console.warn('Invalid token detected, clearing local storage...');
+        localStorage.removeItem('supabase.auth.token');
+      }
     }
-  }, [navigate]);
+    
+    // -> В любом случае редиректим на login
+    navigate({ to: '/login' });
+  } catch (error) {
+    console.error('Unexpected logout error:', error);
+    // -> На всякий случай очищаем localStorage
+    try {
+      localStorage.removeItem('supabase.auth.token');
+    } catch (e) {
+      console.error('Failed to clear localStorage:', e);
+    }
+    navigate({ to: '/login' });
+  }
+}, [navigate]);
 
   const handleStartEdit = useCallback((id: string) => {
     setEditingMessageId(id);

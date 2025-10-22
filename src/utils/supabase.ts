@@ -7,16 +7,44 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Supabase URL and Anon Key are required.')
 }
 
-// -> ИСПРАВЛЕНИЕ: Убираем getStorage() и используем прямую проверку
-// Supabase сам определит что использовать на сервере/клиенте
+// -> ИСПРАВЛЕНИЕ: Правильная проверка SSR/CSR
+const isServer = typeof window === 'undefined';
+
+// -> ИСПРАВЛЕНИЕ: Создаем storage adapter который безопасен для SSR
+const customStorageAdapter = {
+  getItem: (key: string) => {
+    if (isServer) return null;
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string) => {
+    if (isServer) return;
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error) {
+      console.error('Failed to set item in localStorage:', error);
+    }
+  },
+  removeItem: (key: string) => {
+    if (isServer) return;
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      console.error('Failed to remove item from localStorage:', error);
+    }
+  },
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     storageKey: 'supabase.auth.token',
-    // -> ИЗМЕНЕНИЕ: Удалили storage - пусть Supabase сам определяет
+    storage: customStorageAdapter, // -> ИСПРАВЛЕНИЕ: Явно указываем adapter
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    // -> ДОБАВЛЕНО: Указываем что хранилище на клиенте
-    flowType: 'pkce',
+    // -> ИСПРАВЛЕНИЕ: Убрали flowType: 'pkce' - он вызывает конфликты
   }
 })
