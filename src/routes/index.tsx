@@ -1,6 +1,6 @@
 // 📄 src/routes/index.tsx
 
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels';
 import { supabase } from '../utils/supabase';
@@ -23,18 +23,19 @@ import { useConversations, useSettings, usePrompts } from '../store';
 import type { Conversation } from '../store/store';
 
 export const Route = createFileRoute('/')({
-  beforeLoad: async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      throw redirect({ to: '/login' });
-    }
-  },
   component: Home,
 });
 
 function Home() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
+  
+  // Перенаправляем на страницу входа, если пользователь не авторизован
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate({ to: '/login' });
+    }
+  }, [user, authLoading, navigate]);
   
   // State управления
   const [input, setInput] = useState('');
@@ -139,6 +140,23 @@ function Home() {
   const handleCopyMessage = useCallback((content: string) => {
     navigator.clipboard.writeText(content);
   }, []);
+
+  // Показываем загрузку, пока проверяется авторизация
+  if (authLoading) {
+    return (
+      <div className="h-[100dvh] bg-gray-900 text-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-400">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Если не авторизован, ничего не показываем (useEffect выше перенаправит)
+  if (!user) {
+    return null;
+  }
 
   // Рендер для десктопа с панелями
   if (isDesktop) {
