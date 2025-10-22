@@ -3,19 +3,23 @@
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
-import { useTranslation } from 'react-i18next'; // -> ИЗМЕНЕНИЕ
+import { useTranslation } from 'react-i18next';
 
 export const Route = createFileRoute('/login')({
   component: LoginComponent,
 })
 
 function LoginComponent() {
-  const { t } = useTranslation(); // -> ИЗМЕНЕНИЕ
+  const { t } = useTranslation();
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // -> ИЗМЕНЕНИЕ: Читаем переменную окружения.
+  // Значение 'false' отключит регистрацию, любое другое значение (включая undefined) разрешит её.
+  const allowRegistration = import.meta.env.VITE_ALLOW_REGISTRATION !== 'false';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,12 +60,15 @@ function LoginComponent() {
           </button>
           {error && <p className="text-red-500 text-center">{error}</p>}
         </form>
-        <p className="text-center">
-          {t('loginPrompt')}{' '}
-          <Link to="/signup" className="text-orange-400 hover:underline">
-            {t('signup')}
-          </Link>
-        </p>
+        {/* -> ИЗМЕНЕНИЕ: Условный рендеринг ссылки на регистрацию */}
+        {allowRegistration && (
+          <p className="text-center">
+            {t('loginPrompt')}{' '}
+            <Link to="/signup" className="text-orange-400 hover:underline">
+              {t('signup')}
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   )
