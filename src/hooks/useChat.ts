@@ -87,7 +87,6 @@ export function useChat(options: UseChatOptions = {}) {
     return chunks;
   }, []);
 
-  // ИЗМЕНЕНИЕ: Теперь принимает явную историю сообщений
   const processAIResponse = useCallback(
     async (messageHistory: Message[]) => {
       if (!settings) {
@@ -102,12 +101,17 @@ export function useChat(options: UseChatOptions = {}) {
       finalContentRef.current = '';
       textQueueRef.current = '';
       
+      // ИЗМЕНЕНИЕ: Создаем pendingMessage СРАЗУ, чтобы вызвать ре-рендер и скролл
       const assistantMessageId = crypto.randomUUID();
+      setPendingMessage({ 
+        id: assistantMessageId, 
+        role: 'assistant', 
+        content: '' 
+      });
 
       try {
         const provider = settings.model.startsWith('gemini') ? 'gemini' : 'gemini';
 
-        // ИЗМЕНЕНИЕ: Используем явно переданную историю
         const response = await streamChat({
           data: {
             messages: messageHistory,
@@ -122,7 +126,10 @@ export function useChat(options: UseChatOptions = {}) {
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let isFirstChunk = true;
+        
+        // ИЗМЕНЕНИЕ: Запускаем анимацию сразу
+        startTextAnimation();
+        setIsLoading(false);
 
         while (true) {
           const { value, done } = await reader.read();
@@ -137,16 +144,6 @@ export function useChat(options: UseChatOptions = {}) {
             }
             
             if (chunk.text) {
-              if (isFirstChunk) {
-                setPendingMessage({ 
-                  id: assistantMessageId, 
-                  role: 'assistant', 
-                  content: '' 
-                });
-                startTextAnimation();
-                setIsLoading(false);
-                isFirstChunk = false;
-              }
               textQueueRef.current += chunk.text;
             }
           }
@@ -210,8 +207,6 @@ export function useChat(options: UseChatOptions = {}) {
         await addMessage(convId, userMessage);
         options.onMessageSent?.(userMessage);
 
-        // ИЗМЕНЕНИЕ: Получаем актуальные сообщения из store
-        // Так как addMessage уже вызван, новое сообщение уже в store
         const { selectors, store } = await import('../store/store');
         const currentMessages = selectors.getCurrentMessages(store.state);
 
@@ -242,7 +237,6 @@ export function useChat(options: UseChatOptions = {}) {
     ]
   );
 
-  // ИЗМЕНЕНИЕ: Теперь использует обновленную историю из editMessageAndUpdate
   const editAndRegenerate = useCallback(
     async (messageId: string, newContent: string) => {
       if (!currentConversationId) return;
@@ -252,18 +246,15 @@ export function useChat(options: UseChatOptions = {}) {
       setPendingMessage(null);
 
       try {
-        // ИЗМЕНЕНИЕ: Получаем обрезанный массив сообщений
         const updatedHistory = await editMessageAndUpdate(messageId, newContent);
         
         if (!updatedHistory || updatedHistory.length === 0) {
           throw new Error("Failed to update message");
         }
 
-        // Последнее сообщение в истории - это отредактированное пользовательское сообщение
         const lastMessage = updatedHistory[updatedHistory.length - 1];
         options.onMessageSent?.(lastMessage);
 
-        // ИЗМЕНЕНИЕ: Передаем актуальную обрезанную историю в processAIResponse
         const aiResponse = await processAIResponse(updatedHistory);
         
         if (aiResponse && aiResponse.content.trim()) {
