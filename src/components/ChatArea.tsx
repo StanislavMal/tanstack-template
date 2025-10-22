@@ -34,17 +34,17 @@ export const ChatArea = memo(forwardRef<HTMLDivElement, ChatAreaProps>(
   }, ref) => {
     const { t } = useTranslation();
 
-    // ИЗМЕНЕНИЕ: Всегда добавляем pendingMessage если он есть (даже с пустым контентом)
+    // ИЗМЕНЕНИЕ: Показываем pendingMessage только если есть контент
     const displayMessages = useMemo(() => {
       const combined = [...messages];
-      if (pendingMessage && !messages.some(m => m.id === pendingMessage.id)) {
+      if (pendingMessage && pendingMessage.content && !messages.some(m => m.id === pendingMessage.id)) {
         combined.push(pendingMessage);
       }
       return combined;
     }, [messages, pendingMessage]);
 
-    // ИЗМЕНЕНИЕ: LoadingIndicator только если isLoading И нет pendingMessage
-    const showLoading = isLoading && !pendingMessage;
+    // ИЗМЕНЕНИЕ: Показываем LoadingIndicator если isLoading ИЛИ есть pendingMessage без контента
+    const showLoading = isLoading || (pendingMessage && !pendingMessage.content);
 
     return (
       <div ref={ref} className="w-full h-full p-4">

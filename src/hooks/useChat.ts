@@ -20,6 +20,7 @@ export function useChat(options: UseChatOptions = {}) {
   const { activePrompt } = usePrompts();
   const { 
     currentConversationId, 
+    messages, 
     addMessage, 
     createNewConversation,
     editMessageAndUpdate 
@@ -34,6 +35,7 @@ export function useChat(options: UseChatOptions = {}) {
   const startTextAnimation = useCallback(() => {
     const animatePrinting = () => {
       if (textQueueRef.current.length > 0) {
+        // ИЗМЕНЕНИЕ: Увеличена скорость с 2 до 10 символов за фрейм
         const speed = 10;
         const charsToPrint = textQueueRef.current.substring(0, speed);
         textQueueRef.current = textQueueRef.current.substring(speed);
@@ -88,7 +90,7 @@ export function useChat(options: UseChatOptions = {}) {
   }, []);
 
   const processAIResponse = useCallback(
-    async (messageHistory: Message[]) => {
+    async (userMessage: Message) => {
       if (!settings) {
         const errorMsg = "User settings not loaded.";
         setError(errorMsg);
@@ -101,20 +103,19 @@ export function useChat(options: UseChatOptions = {}) {
       finalContentRef.current = '';
       textQueueRef.current = '';
       
-      // ИЗМЕНЕНИЕ: Создаем pendingMessage СРАЗУ, чтобы вызвать ре-рендер и скролл
+      // ИЗМЕНЕНИЕ: Не создаем pendingMessage сразу, подождем первого чанка
       const assistantMessageId = crypto.randomUUID();
-      setPendingMessage({ 
-        id: assistantMessageId, 
-        role: 'assistant', 
-        content: '' 
-      });
 
       try {
+        const history = messages.at(-1)?.id === userMessage.id 
+          ? messages.slice(0, -1) 
+          : messages;
+
         const provider = settings.model.startsWith('gemini') ? 'gemini' : 'gemini';
 
         const response = await streamChat({
           data: {
-            messages: messageHistory,
+            messages: [...history, userMessage],
             provider,
             model: settings.model,
             systemInstruction: settings.system_instruction,
@@ -126,10 +127,7 @@ export function useChat(options: UseChatOptions = {}) {
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        
-        // ИЗМЕНЕНИЕ: Запускаем анимацию сразу
-        startTextAnimation();
-        setIsLoading(false);
+        let isFirstChunk = true;
 
         while (true) {
           const { value, done } = await reader.read();
@@ -144,6 +142,17 @@ export function useChat(options: UseChatOptions = {}) {
             }
             
             if (chunk.text) {
+              if (isFirstChunk) {
+                // ИЗМЕНЕНИЕ: Создаем pendingMessage только при получении первого текста
+                setPendingMessage({ 
+                  id: assistantMessageId, 
+                  role: 'assistant', 
+                  content: '' 
+                });
+                startTextAnimation();
+                setIsLoading(false);
+                isFirstChunk = false;
+              }
               textQueueRef.current += chunk.text;
             }
           }
@@ -178,7 +187,7 @@ export function useChat(options: UseChatOptions = {}) {
         bufferRef.current = '';
       }
     },
-    [settings, activePrompt, startTextAnimation, stopTextAnimation, options, parseNDJSON]
+    [settings, activePrompt, messages, startTextAnimation, stopTextAnimation, options, parseNDJSON]
   );
 
   const sendMessage = useCallback(
@@ -207,10 +216,7 @@ export function useChat(options: UseChatOptions = {}) {
         await addMessage(convId, userMessage);
         options.onMessageSent?.(userMessage);
 
-        const { selectors, store } = await import('../store/store');
-        const currentMessages = selectors.getCurrentMessages(store.state);
-
-        const aiResponse = await processAIResponse(currentMessages);
+        const aiResponse = await processAIResponse(userMessage);
         
         if (aiResponse && aiResponse.content.trim()) {
           await addMessage(convId, aiResponse);
@@ -246,16 +252,14 @@ export function useChat(options: UseChatOptions = {}) {
       setPendingMessage(null);
 
       try {
-        const updatedHistory = await editMessageAndUpdate(messageId, newContent);
-        
-        if (!updatedHistory || updatedHistory.length === 0) {
+        const updatedMessage = await editMessageAndUpdate(messageId, newContent);
+        if (!updatedMessage) {
           throw new Error("Failed to update message");
         }
 
-        const lastMessage = updatedHistory[updatedHistory.length - 1];
-        options.onMessageSent?.(lastMessage);
+        options.onMessageSent?.(updatedMessage);
 
-        const aiResponse = await processAIResponse(updatedHistory);
+        const aiResponse = await processAIResponse(updatedMessage);
         
         if (aiResponse && aiResponse.content.trim()) {
           await addMessage(currentConversationId, aiResponse);
