@@ -43,9 +43,6 @@ function Home() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  // -> ИЗМЕНЕНИЕ: Добавляем ref для отслеживания первой загрузки сообщений
-  const isFirstMessageLoadRef = useRef(true);
-  
   // Хуки для функциональности
   const isDesktop = useMediaQuery('(min-width: 768px)');
   
@@ -71,25 +68,20 @@ function Home() {
     showScrollDownButton,
     scrollToBottom,
     lockToBottom,
-    forceScrollToBottom,
+    triggerScroll, // -> НОВОЕ: Получаем новый метод
   } = useScrollManagement();
 
-  // -> ИЗМЕНЕНИЕ: Принудительный скролл вниз при первой загрузке сообщений
+  // -> НОВОЕ: Простой и надежный автоскролл после загрузки сообщений
   useEffect(() => {
-    if (currentConversationId && messages.length > 0 && isFirstMessageLoadRef.current) {
-      // Используем requestAnimationFrame чтобы дать React время отрендерить DOM
-      requestAnimationFrame(() => {
-        forceScrollToBottom('auto');
-        lockToBottom();
-        isFirstMessageLoadRef.current = false;
-      });
+    if (currentConversationId && messages.length > 0) {
+      // Даем React время отрендерить DOM, затем скроллим
+      const timer = setTimeout(() => {
+        triggerScroll('auto');
+      }, 50); // Небольшая задержка для надежности
+      
+      return () => clearTimeout(timer);
     }
-  }, [currentConversationId, messages.length, forceScrollToBottom, lockToBottom]);
-
-  // -> ИЗМЕНЕНИЕ: Сбрасываем флаг первой загрузки при смене разговора
-  useEffect(() => {
-    isFirstMessageLoadRef.current = true;
-  }, [currentConversationId]);
+  }, [currentConversationId, messages.length, triggerScroll]);
 
   // Управление сайдбаром
   const sidebar = useSidebar();
@@ -104,6 +96,8 @@ function Home() {
   } = useChat({
     onMessageSent: () => {
       lockToBottom();
+      // -> ДОБАВЛЕНО: Принудительный скролл при отправке
+      triggerScroll('auto');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -141,8 +135,15 @@ function Home() {
   }, [input, isLoading, sendMessage]);
 
   const handleLogout = useCallback(async () => {
-    await supabase.auth.signOut();
-    navigate({ to: '/login' });
+    try {
+      await supabase.auth.signOut();
+      navigate({ to: '/login' });
+    } catch (error) {
+      console.error('Logout error:', error);
+      // -> ДОБАВЛЕНО: Даже если logout фейлится, очищаем локальное состояние
+      localStorage.removeItem('supabase.auth.token');
+      navigate({ to: '/login' });
+    }
   }, [navigate]);
 
   const handleStartEdit = useCallback((id: string) => {

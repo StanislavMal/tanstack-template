@@ -8,6 +8,9 @@ export function useScrollManagement() {
   const isLockedToBottomRef = useRef(true);
   const lastScrollTopRef = useRef(0);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
+  
+  // -> НОВОЕ: Состояние для принудительного триггера скролла
+  const [shouldScroll, setShouldScroll] = useState(0);
 
   const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
     const container = messagesContainerRef.current;
@@ -21,16 +24,24 @@ export function useScrollManagement() {
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
-  // -> ИЗМЕНЕНИЕ: Добавлен немедленный скролл после монтирования контента
-  useLayoutEffect(() => {
-    const container = messagesContainerRef.current;
-    const content = contentRef.current;
-    
-    if (container && content && isLockedToBottomRef.current) {
-      // Немедленно прокручиваем вниз при первом рендере или обновлении контента
+  // -> НОВОЕ: Публичный метод для принудительного скролла извне
+  const triggerScroll = useCallback((behavior: 'smooth' | 'auto' = 'auto') => {
+    isLockedToBottomRef.current = true;
+    setShouldScroll(prev => prev + 1); // Триггерим useEffect ниже
+    // Также сразу скроллим на случай если эффект не сработает
+    requestAnimationFrame(() => {
+      forceScrollToBottom(behavior);
+    });
+  }, [forceScrollToBottom]);
+
+  // -> ИЗМЕНЕНИЕ: Убрали первый useLayoutEffect, он был бесполезен
+
+  // -> НОВОЕ: Реагируем на shouldScroll триггер
+  useEffect(() => {
+    if (shouldScroll > 0) {
       forceScrollToBottom('auto');
     }
-  }, [forceScrollToBottom]);
+  }, [shouldScroll, forceScrollToBottom]);
 
   // Автоматическая прокрутка при изменении контента
   useLayoutEffect(() => {
@@ -89,5 +100,6 @@ export function useScrollManagement() {
     scrollToBottom,
     forceScrollToBottom,
     lockToBottom,
+    triggerScroll, // -> НОВОЕ: Экспортируем новый метод
   };
 }
