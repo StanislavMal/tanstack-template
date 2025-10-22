@@ -68,20 +68,25 @@ function Home() {
     showScrollDownButton,
     scrollToBottom,
     lockToBottom,
-    triggerScroll, // -> НОВОЕ: Получаем новый метод
+    forceScrollToBottom,
   } = useScrollManagement();
 
-  // -> НОВОЕ: Простой и надежный автоскролл после загрузки сообщений
+  // -> ИЗМЕНЕНИЕ: Автоскролл после загрузки сообщений (только при монтировании разговора)
+  const prevConversationIdRef = useRef<string | null>(null);
+  
   useEffect(() => {
-    if (currentConversationId && messages.length > 0) {
-      // Даем React время отрендерить DOM, затем скроллим
-      const timer = setTimeout(() => {
-        triggerScroll('auto');
-      }, 50); // Небольшая задержка для надежности
-      
-      return () => clearTimeout(timer);
+    // Проверяем что разговор сменился или только что загрузился
+    const conversationChanged = currentConversationId !== prevConversationIdRef.current;
+    prevConversationIdRef.current = currentConversationId;
+    
+    if (currentConversationId && messages.length > 0 && conversationChanged) {
+      // -> Убрали setTimeout - используем только RAF для синхронизации с DOM
+      requestAnimationFrame(() => {
+        lockToBottom(); // Устанавливаем флаг
+        forceScrollToBottom('auto'); // Скроллим
+      });
     }
-  }, [currentConversationId, messages.length, triggerScroll]);
+  }, [currentConversationId, messages.length, lockToBottom, forceScrollToBottom]);
 
   // Управление сайдбаром
   const sidebar = useSidebar();
@@ -95,9 +100,9 @@ function Home() {
     pendingMessage,
   } = useChat({
     onMessageSent: () => {
+      // -> ИЗМЕНЕНИЕ: Только lockToBottom, без принудительного скролла
+      // ResizeObserver сам скроллит когда контент растет
       lockToBottom();
-      // -> ДОБАВЛЕНО: Принудительный скролл при отправке
-      triggerScroll('auto');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -140,7 +145,7 @@ function Home() {
       navigate({ to: '/login' });
     } catch (error) {
       console.error('Logout error:', error);
-      // -> ДОБАВЛЕНО: Даже если logout фейлится, очищаем локальное состояние
+      // Даже если logout фейлится, очищаем локальное состояние
       localStorage.removeItem('supabase.auth.token');
       navigate({ to: '/login' });
     }

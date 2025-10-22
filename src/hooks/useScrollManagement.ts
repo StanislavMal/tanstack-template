@@ -9,13 +9,29 @@ export function useScrollManagement() {
   const lastScrollTopRef = useRef(0);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
   
-  // -> НОВОЕ: Состояние для принудительного триггера скролла
-  const [shouldScroll, setShouldScroll] = useState(0);
+  // -> КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Флаг для отличия программного скролла от пользовательского
+  const isProgrammaticScrollRef = useRef(false);
 
   const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
     const container = messagesContainerRef.current;
     if (container) {
+      // -> Помечаем что это программный скролл
+      isProgrammaticScrollRef.current = true;
       container.scrollTo({ top: container.scrollHeight, behavior });
+      
+      // -> Сбрасываем флаг после завершения скролла
+      // Для 'auto' - сразу, для 'smooth' - через время анимации
+      if (behavior === 'auto') {
+        // requestAnimationFrame гарантирует что DOM обновился
+        requestAnimationFrame(() => {
+          isProgrammaticScrollRef.current = false;
+        });
+      } else {
+        // Smooth scroll занимает ~300-500ms
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 500);
+      }
     }
   }, []);
 
@@ -23,25 +39,6 @@ export function useScrollManagement() {
     isLockedToBottomRef.current = true;
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
-
-  // -> НОВОЕ: Публичный метод для принудительного скролла извне
-  const triggerScroll = useCallback((behavior: 'smooth' | 'auto' = 'auto') => {
-    isLockedToBottomRef.current = true;
-    setShouldScroll(prev => prev + 1); // Триггерим useEffect ниже
-    // Также сразу скроллим на случай если эффект не сработает
-    requestAnimationFrame(() => {
-      forceScrollToBottom(behavior);
-    });
-  }, [forceScrollToBottom]);
-
-  // -> ИЗМЕНЕНИЕ: Убрали первый useLayoutEffect, он был бесполезен
-
-  // -> НОВОЕ: Реагируем на shouldScroll триггер
-  useEffect(() => {
-    if (shouldScroll > 0) {
-      forceScrollToBottom('auto');
-    }
-  }, [shouldScroll, forceScrollToBottom]);
 
   // Автоматическая прокрутка при изменении контента
   useLayoutEffect(() => {
@@ -64,6 +61,11 @@ export function useScrollManagement() {
     if (!container) return;
 
     const handleScroll = () => {
+      // -> КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Игнорируем программный скролл
+      if (isProgrammaticScrollRef.current) {
+        return;
+      }
+
       const { scrollTop, scrollHeight, clientHeight } = container;
       
       // Пользователь скроллит вверх
@@ -100,6 +102,5 @@ export function useScrollManagement() {
     scrollToBottom,
     forceScrollToBottom,
     lockToBottom,
-    triggerScroll, // -> НОВОЕ: Экспортируем новый метод
   };
 }
