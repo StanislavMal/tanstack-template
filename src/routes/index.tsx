@@ -43,6 +43,9 @@ function Home() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
+  // -> ИЗМЕНЕНИЕ: Добавляем ref для отслеживания первой загрузки сообщений
+  const isFirstMessageLoadRef = useRef(true);
+  
   // Хуки для функциональности
   const isDesktop = useMediaQuery('(min-width: 768px)');
   
@@ -68,7 +71,25 @@ function Home() {
     showScrollDownButton,
     scrollToBottom,
     lockToBottom,
+    forceScrollToBottom,
   } = useScrollManagement();
+
+  // -> ИЗМЕНЕНИЕ: Принудительный скролл вниз при первой загрузке сообщений
+  useEffect(() => {
+    if (currentConversationId && messages.length > 0 && isFirstMessageLoadRef.current) {
+      // Используем requestAnimationFrame чтобы дать React время отрендерить DOM
+      requestAnimationFrame(() => {
+        forceScrollToBottom('auto');
+        lockToBottom();
+        isFirstMessageLoadRef.current = false;
+      });
+    }
+  }, [currentConversationId, messages.length, forceScrollToBottom, lockToBottom]);
+
+  // -> ИЗМЕНЕНИЕ: Сбрасываем флаг первой загрузки при смене разговора
+  useEffect(() => {
+    isFirstMessageLoadRef.current = true;
+  }, [currentConversationId]);
 
   // Управление сайдбаром
   const sidebar = useSidebar();

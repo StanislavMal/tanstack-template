@@ -21,6 +21,17 @@ export function useScrollManagement() {
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
+  // -> ИЗМЕНЕНИЕ: Добавлен немедленный скролл после монтирования контента
+  useLayoutEffect(() => {
+    const container = messagesContainerRef.current;
+    const content = contentRef.current;
+    
+    if (container && content && isLockedToBottomRef.current) {
+      // Немедленно прокручиваем вниз при первом рендере или обновлении контента
+      forceScrollToBottom('auto');
+    }
+  }, [forceScrollToBottom]);
+
   // Автоматическая прокрутка при изменении контента
   useLayoutEffect(() => {
     const contentElement = contentRef.current;
