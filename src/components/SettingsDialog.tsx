@@ -1,4 +1,4 @@
-// 📄 src/components/SettingsDialog.tsx
+// 📄 components/SettingsDialog.tsx
 import { useState, useEffect } from 'react'
 import { PlusCircle, Trash2 } from 'lucide-react'
 import { usePrompts, useSettings } from '../store/hooks'
@@ -11,6 +11,7 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
+  // -> ИЗМЕНЕНИЕ: Добавляем i18n из хука useTranslation
   const { t, i18n } = useTranslation(); 
   const [promptForm, setPromptForm] = useState({ name: '', content: '' })
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
@@ -28,7 +29,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   }, [isOpen, loadPrompts, loadSettings]);
 
   useEffect(() => {
-    // ИЗМЕНЕНИЕ: Убеждаемся, что localSettings не сбрасывается в null, если settings временно null
     if (settings) {
       setLocalSettings(settings);
     }
@@ -51,28 +51,19 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   };
 
   const handleClose = () => {
-    // ИЗМЕНЕНИЕ: Восстанавливаем исходные настройки при отмене
-    if (settings) {
-      setLocalSettings(settings);
-    }
+    setLocalSettings(settings);
     onClose()
     setIsAddingPrompt(false)
     setPromptForm({ name: '', content: '' })
   }
   
+  // -> ИЗМЕНЕНИЕ: Функция для смены языка
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const lang = e.target.value;
     i18n.changeLanguage(lang);
   };
 
-  // ИЗМЕНЕНИЕ: Более надежная проверка. Диалог не должен рендериться без настроек.
   if (!isOpen || !localSettings) return null;
-
-  const typingSpeedLabel = (speed: number) => {
-    if (speed === 1) return t('typingSpeedSlow');
-    if (speed === 3) return t('typingSpeedFast');
-    return t('typingSpeedMedium');
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={(e) => {
@@ -91,6 +82,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             <div className="space-y-4">
                 <h3 className="text-lg font-medium text-white">{t('generalSettings')}</h3>
 
+                {/* -> ИЗМЕНЕНИЕ: Новый блок для выбора языка */}
                 <div className="p-3 rounded-lg bg-gray-700/50">
                   <label htmlFor="language-select" className="block text-sm font-medium text-gray-300 mb-2">{t('language')}</label>
                   <select
@@ -116,37 +108,12 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       <option value="gemini-2.5-pro">{t('modelPro')}</option>
                   </select>
                 </div>
-
-                {/* -> НОВЫЙ БЛОК: Настройка скорости печати */}
-                <div className="p-3 rounded-lg bg-gray-700/50">
-                  <label htmlFor="typing-speed" className="block text-sm font-medium text-gray-300 mb-2">
-                    {t('typingSpeed')}: <span className="font-semibold text-orange-400">{typingSpeedLabel(localSettings.typingSpeed)}</span>
-                  </label>
-                  <input
-                    id="typing-speed"
-                    type="range"
-                    min="1"
-                    max="3"
-                    step="1"
-                    value={localSettings.typingSpeed}
-                    onChange={(e) => setLocalSettings(prev => prev ? { ...prev, typingSpeed: parseInt(e.target.value, 10) } : null)}
-                    className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-orange-500"
-                  />
-                  <div className="flex justify-between text-xs text-gray-400 mt-1">
-                    <span>{t('typingSpeedSlow')}</span>
-                    <span>{t('typingSpeedMedium')}</span>
-                    <span>{t('typingSpeedFast')}</span>
-                  </div>
-                </div>
-
                 <div className="p-3 rounded-lg bg-gray-700/50">
                   <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300 mb-2">{t('systemInstruction')}</label>
                   <textarea
                       id="system-instruction"
                       value={localSettings.system_instruction}
-                      onChange={(e) => setLocalSettings(prev => 
-                          prev ? { ...prev, system_instruction: e.target.value } : null
-                      )}
+                      onChange={(e) => setLocalSettings(prev => prev ? { ...prev, system_instruction: e.target.value } : null)}
                       placeholder={t('systemInstructionPlaceholder')}
                       className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                   />

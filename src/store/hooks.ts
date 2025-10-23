@@ -12,32 +12,33 @@ export function useSettings() {
     const settings = useStore(store, s => selectors.getSettings(s));
 
     const loadSettings = useCallback(async () => {
-        if (!user) return;
-        const { data, error } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
-        if (error) console.error("Error loading settings:", error);
-        
+    if (!user) return;
+    const { data, error } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
+    if (error) console.error("Error loading settings:", error);
+    if (data && data.settings) {
+        const loadedSettings = data.settings as UserSettings;
+        const settingsWithDefaults: UserSettings = {
+            model: loadedSettings.model || 'gemini-2.5-flash',
+            provider: loadedSettings.provider || 'gemini',
+            system_instruction: loadedSettings.system_instruction || '',
+            temperature: loadedSettings.temperature || 0.7,
+            maxTokens: loadedSettings.maxTokens || 8192,
+            reasoningEffort: loadedSettings.reasoningEffort || 'none',
+        };
+        actions.setSettings(settingsWithDefaults);
+    } else {
         const defaultSettings: UserSettings = {
             model: 'gemini-2.5-flash',
             provider: 'gemini',
             system_instruction: '',
-            typingSpeed: 2, // <- ЗНАЧЕНИЕ ПО УМОЛЧАНИЮ
             temperature: 0.7,
             maxTokens: 8192,
             reasoningEffort: 'none',
         };
-
-        if (data && data.settings) {
-            const loadedSettings = data.settings as Partial<UserSettings>;
-            const settingsWithDefaults: UserSettings = {
-                ...defaultSettings,
-                ...loadedSettings,
-            };
-            actions.setSettings(settingsWithDefaults);
-        } else {
-            actions.setSettings(defaultSettings);
-            await supabase.from('profiles').update({ settings: defaultSettings }).eq('id', user.id);
-        }
-    }, [user]);
+        actions.setSettings(defaultSettings);
+        await supabase.from('profiles').update({ settings: defaultSettings }).eq('id', user.id);
+    }
+}, [user]);
 
     const updateSettings = useCallback(async (newSettings: Partial<UserSettings>) => {
         if (!user || !settings) return;
@@ -198,6 +199,7 @@ export function useConversations() {
     }
   }, [user]);
 
+  // ИЗМЕНЕНИЕ: Теперь возвращает обрезанный массив сообщений для отправки в AI
   const editMessageAndUpdate = useCallback(async (messageId: string, newContent: string): Promise<Message[] | null> => {
     const originalMessages = selectors.getCurrentMessages(store.state);
     const originalMessageIndex = originalMessages.findIndex(m => m.id === messageId);
@@ -207,21 +209,26 @@ export function useConversations() {
       return null;
     }
 
+    // Получаем ID сообщений, которые нужно удалить (все после редактируемого)
     const idsToDelete = originalMessages
       .slice(originalMessageIndex + 1)
       .map(m => m.id);
 
+    // Обновляем локальный state (это обрежет массив)
     actions.editMessage(messageId, newContent);
     
     try {
+      // Параллельно выполняем операции с БД
       const promises = [];
 
+      // Удаляем последующие сообщения из БД
       if (idsToDelete.length > 0) {
         promises.push(
           supabase.from('messages').delete().in('id', idsToDelete)
         );
       }
 
+      // Обновляем содержимое редактируемого сообщения в БД
       promises.push(
         supabase
           .from('messages')
@@ -231,18 +238,22 @@ export function useConversations() {
       
       const results = await Promise.all(promises);
       
+      // Проверяем на ошибки
       for (const res of results) {
         if (res.error) throw res.error;
       }
 
     } catch (error) {
       console.error('Failed to update messages in Supabase after edit:', error);
+      // Откатываем изменения в state
       actions.setMessages(originalMessages);
       return null;
     }
 
+    // Получаем актуальное состояние после обновления
     const updatedMessages = selectors.getCurrentMessages(store.state);
     
+    // ИЗМЕНЕНИЕ: Возвращаем весь массив обрезанных сообщений
     return updatedMessages;
   }, []);
   

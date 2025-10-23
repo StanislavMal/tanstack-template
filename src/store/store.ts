@@ -11,10 +11,9 @@ export interface Prompt {
 }
 
 export interface UserSettings {
-  model: string
-  provider: string
+  model: string // Теперь это может быть любая модель
+  provider: string // Новое поле для провайдера
   system_instruction: string
-  typingSpeed: number // <- НОВОЕ ПОЛЕ
   temperature?: number
   maxTokens?: number
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high'
