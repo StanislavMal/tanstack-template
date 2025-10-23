@@ -13,7 +13,7 @@
   "passwordPlaceholder": "Пароль",
   "loginPrompt": "Нет аккаунта?",
   "signupPrompt": "Уже есть аккаунт?",
-  "signupSuccess": "Регистрация прошла успешно! Пожалуйста, войдите.",
+  "signupSuccess": "Регистрация прошла успешно! Перенаправляем на страницу входа...",
   "thinking": "Думаю",
   "settings": "Настройки",
   "generalSettings": "Общие настройки",
@@ -34,5 +34,9 @@
   "errorOccurred": "Произошла ошибка",
   "pageNotFound": "Страница не найдена",
   "goHome": "На главную",
-  "language": "Язык"
+  "language": "Язык",
+  "typingSpeed": "Скорость печати",
+  "typingSpeedSlow": "Медленно",
+  "typingSpeedMedium": "Средне",
+  "typingSpeedFast": "Быстро"
 }

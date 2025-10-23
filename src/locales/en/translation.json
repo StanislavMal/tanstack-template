@@ -13,7 +13,7 @@
   "passwordPlaceholder": "Password",
   "loginPrompt": "Don't have an account?",
   "signupPrompt": "Already have an account?",
-  "signupSuccess": "Registration successful! Please login.",
+  "signupSuccess": "Registration successful! Redirecting to login...",
   "thinking": "Thinking",
   "settings": "Settings",
   "generalSettings": "General Settings",
@@ -34,5 +34,9 @@
   "errorOccurred": "An error occurred",
   "pageNotFound": "Page Not Found",
   "goHome": "Go Home",
-  "language": "Language"
+  "language": "Language",
+  "typingSpeed": "Typing Speed",
+  "typingSpeedSlow": "Slow",
+  "typingSpeedMedium": "Medium",
+  "typingSpeedFast": "Fast"
 }

@@ -30,29 +30,24 @@ function Home() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading } = useAuth();
   
-  // Перенаправляем на страницу входа, если пользователь не авторизован
   useEffect(() => {
     if (!authLoading && !user) {
       navigate({ to: '/login' });
     }
   }, [user, authLoading, navigate]);
   
-  // State управления
   const [input, setInput] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  // Хуки для функциональности
   const isDesktop = useMediaQuery('(min-width: 768px)');
   
-  // Store хуки
   const { messages, currentConversationId } = useConversations();
   const { loadConversations } = useConversations();
   const { loadSettings } = useSettings();
   const { loadPrompts } = usePrompts();
 
-  // Загрузка данных при монтировании
   useEffect(() => {
     if (user) {
       loadConversations();
@@ -61,7 +56,6 @@ function Home() {
     }
   }, [user, loadConversations, loadPrompts, loadSettings]);
 
-  // Управление скроллом
   const {
     messagesContainerRef,
     contentRef,
@@ -70,10 +64,8 @@ function Home() {
     lockToBottom,
   } = useScrollManagement();
 
-  // Управление сайдбаром
   const sidebar = useSidebar();
 
-  // Управление чатом
   const {
     sendMessage,
     editAndRegenerate,
@@ -87,15 +79,12 @@ function Home() {
         textareaRef.current.style.height = 'auto';
       }
     },
-    onResponseComplete: () => {
-      // Можно добавить звуковое уведомление или другую логику
-    },
+    onResponseComplete: () => {},
     onError: (error) => {
       console.error('Chat error:', error);
     },
   });
 
-  // Комбинируем сообщения для отображения
   const displayMessages = useMemo(() => {
     const combined = [...messages];
     if (pendingMessage && !messages.some(m => m.id === pendingMessage.id)) {
@@ -104,7 +93,6 @@ function Home() {
     return combined;
   }, [messages, pendingMessage]);
 
-  // Обработчики событий
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -112,7 +100,6 @@ function Home() {
     const currentInput = input;
     setInput('');
     
-    // Создаем заголовок из первых слов
     const words = currentInput.trim().split(/\s+/);
     const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
     
@@ -141,7 +128,6 @@ function Home() {
     navigator.clipboard.writeText(content);
   }, []);
 
-  // Показываем загрузку, пока проверяется авторизация
   if (authLoading) {
     return (
       <div className="h-[100dvh] bg-gray-900 text-white flex items-center justify-center">
@@ -153,12 +139,10 @@ function Home() {
     );
   }
 
-  // Если не авторизован, ничего не показываем (useEffect выше перенаправит)
   if (!user) {
     return null;
   }
 
-  // Рендер для десктопа с панелями
   if (isDesktop) {
     return (
       <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
@@ -190,7 +174,8 @@ function Home() {
               }}
               editingTitle={sidebar.editingTitle}
               setEditingTitle={sidebar.setEditingTitle}
-              handleUpdateChatTitle={(_id, _title) => sidebar.handleSaveEdit()}
+              // ИЗМЕНЕНИЕ: Передаем напрямую метод сохранения из хука
+              handleUpdateChatTitle={sidebar.handleSaveEdit}
               isOpen={true}
               setIsOpen={() => {}}
               isCollapsed={sidebar.isCollapsed}
@@ -251,7 +236,6 @@ function Home() {
     );
   }
 
-  // Рендер для мобильных устройств
   return (
     <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
       {sidebar.isOpen && (
@@ -279,7 +263,8 @@ function Home() {
         }}
         editingTitle={sidebar.editingTitle}
         setEditingTitle={sidebar.setEditingTitle}
-        handleUpdateChatTitle={(_id, _title) => sidebar.handleSaveEdit()}
+        // ИЗМЕНЕНИЕ: Передаем напрямую метод сохранения из хука
+        handleUpdateChatTitle={sidebar.handleSaveEdit}
         isOpen={sidebar.isOpen}
         setIsOpen={sidebar.setIsOpen}
         isCollapsed={false}

@@ -1,12 +1,12 @@
-// 📄 src/components/ChatMessage.tsx (Откат к memo)
+// 📄 src/components/ChatMessage.tsx
 
-import { useState, memo } from 'react'; // ИЗМЕНЕНИЕ: Убран forwardRef
+import { useState, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
 import { Pencil, Copy, Check, X } from 'lucide-react';
-import type { Message } from '../utils/ai';
+import type { Message } from '../lib/ai/types'; // <- ИСПРАВЛЕННЫЙ ПУТЬ
 import { CodeBlock } from './CodeBlock';
 
 interface ChatMessageProps {
@@ -18,7 +18,6 @@ interface ChatMessageProps {
   onCopyMessage: () => void;
 }
 
-// ИЗМЕНЕНИЕ: Оборачиваем только в memo
 export const ChatMessage = memo(({ 
   message,
   isEditing,
@@ -46,7 +45,6 @@ export const ChatMessage = memo(({
   };
 
   return (
-    // ИЗМЕНЕНИЕ: ref убран
     <div className={`group relative flex flex-col w-full ${isAssistant ? 'items-start' : 'items-end'}`}>
       <div
         className={`isolate rounded-lg px-4 py-2 transition-colors duration-200 ${

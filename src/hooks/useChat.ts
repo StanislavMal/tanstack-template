@@ -30,11 +30,20 @@ export function useChat(options: UseChatOptions = {}) {
   const finalContentRef = useRef<string>('');
   const bufferRef = useRef<string>('');
 
-  // Анимация печатания текста с увеличенной скоростью
+  const getTypingSpeed = useCallback(() => {
+    // ИЗМЕНЕНИЕ: Получаем скорость из настроек, с дефолтом
+    const speedSetting = settings?.typingSpeed || 2;
+    switch (speedSetting) {
+      case 1: return 2;  // Медленно
+      case 3: return 15; // Быстро
+      default: return 5; // Средне (по умолчанию)
+    }
+  }, [settings]);
+
   const startTextAnimation = useCallback(() => {
     const animatePrinting = () => {
       if (textQueueRef.current.length > 0) {
-        const speed = 10;
+        const speed = getTypingSpeed(); // ИЗМЕНЕНИЕ: Используем динамическую скорость
         const charsToPrint = textQueueRef.current.substring(0, speed);
         textQueueRef.current = textQueueRef.current.substring(speed);
 
@@ -54,7 +63,7 @@ export function useChat(options: UseChatOptions = {}) {
       cancelAnimationFrame(animationFrameRef.current);
     }
     animationFrameRef.current = requestAnimationFrame(animatePrinting);
-  }, []);
+  }, [getTypingSpeed]);
 
   const stopTextAnimation = useCallback(() => {
     if (animationFrameRef.current) {
@@ -87,7 +96,6 @@ export function useChat(options: UseChatOptions = {}) {
     return chunks;
   }, []);
 
-  // ИЗМЕНЕНИЕ: Теперь принимает явную историю сообщений
   const processAIResponse = useCallback(
     async (messageHistory: Message[]) => {
       if (!settings) {
@@ -97,7 +105,6 @@ export function useChat(options: UseChatOptions = {}) {
         return null;
       }
 
-      // Сбрасываем состояние
       bufferRef.current = '';
       finalContentRef.current = '';
       textQueueRef.current = '';
@@ -105,9 +112,9 @@ export function useChat(options: UseChatOptions = {}) {
       const assistantMessageId = crypto.randomUUID();
 
       try {
-        const provider = settings.model.startsWith('gemini') ? 'gemini' : 'gemini';
+        // ИЗМЕНЕНИЕ: Используем провайдер из настроек, это делает код гибким
+        const provider = settings.provider;
 
-        // ИЗМЕНЕНИЕ: Используем явно переданную историю
         const response = await streamChat({
           data: {
             messages: messageHistory,
@@ -152,23 +159,25 @@ export function useChat(options: UseChatOptions = {}) {
           }
         }
 
-        // Ждём завершения анимации печати
-        await new Promise<void>(resolve => {
-          const checkInterval = setInterval(() => {
+        // ИЗМЕНЕНИЕ: Убираем блокирующий `await new Promise`.
+        // Анимация завершится сама. Мы просто ждем, пока в очереди не останется текста, 
+        // чтобы гарантировать, что `finalContentRef` содержит полный ответ.
+        // Это не блокирует основной поток.
+        return new Promise<Message | null>(resolve => {
+          const checkCompletion = () => {
             if (textQueueRef.current.length === 0) {
-              clearInterval(checkInterval);
-              resolve();
+              const finalMessage = { 
+                id: assistantMessageId, 
+                role: 'assistant' as const, 
+                content: finalContentRef.current 
+              };
+              resolve(finalMessage);
+            } else {
+              setTimeout(checkCompletion, 50);
             }
-          }, 50);
+          };
+          checkCompletion();
         });
-
-        const finalMessage = { 
-          id: assistantMessageId, 
-          role: 'assistant' as const, 
-          content: finalContentRef.current 
-        };
-
-        return finalMessage;
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'An error occurred';
@@ -210,8 +219,6 @@ export function useChat(options: UseChatOptions = {}) {
         await addMessage(convId, userMessage);
         options.onMessageSent?.(userMessage);
 
-        // ИЗМЕНЕНИЕ: Получаем актуальные сообщения из store
-        // Так как addMessage уже вызван, новое сообщение уже в store
         const { selectors, store } = await import('../store/store');
         const currentMessages = selectors.getCurrentMessages(store.state);
 
@@ -242,7 +249,6 @@ export function useChat(options: UseChatOptions = {}) {
     ]
   );
 
-  // ИЗМЕНЕНИЕ: Теперь использует обновленную историю из editMessageAndUpdate
   const editAndRegenerate = useCallback(
     async (messageId: string, newContent: string) => {
       if (!currentConversationId) return;
@@ -252,18 +258,15 @@ export function useChat(options: UseChatOptions = {}) {
       setPendingMessage(null);
 
       try {
-        // ИЗМЕНЕНИЕ: Получаем обрезанный массив сообщений
         const updatedHistory = await editMessageAndUpdate(messageId, newContent);
         
         if (!updatedHistory || updatedHistory.length === 0) {
           throw new Error("Failed to update message");
         }
 
-        // Последнее сообщение в истории - это отредактированное пользовательское сообщение
         const lastMessage = updatedHistory[updatedHistory.length - 1];
         options.onMessageSent?.(lastMessage);
 
-        // ИЗМЕНЕНИЕ: Передаем актуальную обрезанную историю в processAIResponse
         const aiResponse = await processAIResponse(updatedHistory);
         
         if (aiResponse && aiResponse.content.trim()) {

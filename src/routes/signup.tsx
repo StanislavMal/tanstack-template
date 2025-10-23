@@ -1,6 +1,6 @@
 // 📄 src/routes/signup.tsx
 
-import { createFileRoute, Link } from '@tanstack/react-router' // -> ИЗМЕНЕНИЕ: Убрали useNavigate
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router' // <- ИЗМЕНЕНИЕ: Вернули useNavigate
 import { useState } from 'react'
 import { supabase } from '../utils/supabase'
 import { useTranslation } from 'react-i18next';
@@ -11,14 +11,13 @@ export const Route = createFileRoute('/signup')({
 
 function SignupComponent() {
   const { t } = useTranslation();
-  // const navigate = useNavigate() // -> ИЗМЕНЕНИЕ: Удалили эту строку
+  const navigate = useNavigate() // <- ИЗМЕНЕНИЕ: Добавили хук
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // -> ИЗМЕНЕНИЕ: Читаем переменную окружения.
   const allowRegistration = import.meta.env.VITE_ALLOW_REGISTRATION !== 'false';
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -31,6 +30,10 @@ function SignupComponent() {
       setError(error.message)
     } else {
       setMessage(t('signupSuccess'))
+      // ИЗМЕНЕНИЕ: Добавляем перенаправление через 2 секунды
+      setTimeout(() => {
+        navigate({ to: '/login' });
+      }, 2000);
     }
     setLoading(false)
   }
@@ -38,7 +41,6 @@ function SignupComponent() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
       <div className="w-full max-w-md p-8 space-y-6 bg-gray-800 rounded-lg shadow-lg">
-        {/* -> ИЗМЕНЕНИЕ: Показываем либо форму, либо сообщение о блокировке */}
         {allowRegistration ? (
           <>
             <h2 className="text-2xl font-bold text-center">{t('signup')}</h2>
@@ -50,6 +52,7 @@ function SignupComponent() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
                 required
+                disabled={!!message} // ИЗМЕНЕНИЕ: Блокируем поля после успеха
               />
               <input
                 type="password"
@@ -58,8 +61,9 @@ function SignupComponent() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
                 required
+                disabled={!!message} // ИЗМЕНЕНИЕ: Блокируем поля после успеха
               />
-              <button type="submit" disabled={loading} className="w-full px-4 py-2 font-bold text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:bg-gray-500">
+              <button type="submit" disabled={loading || !!message} className="w-full px-4 py-2 font-bold text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:bg-gray-500">
                 {loading ? t('signingUp') : t('signup')}
               </button>
               {error && <p className="text-red-500 text-center">{error}</p>}
