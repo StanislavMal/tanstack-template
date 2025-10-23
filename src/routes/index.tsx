@@ -49,8 +49,8 @@ function Home() {
     messagesContainerRef,
     contentRef,
     showScrollDownButton,
-    scrollToBottom, // -> Нам нужна именно эта функция!
-    lockToBottom,
+    scrollToBottom,
+    lockToBottom, // -> Нам нужна именно эта функция!
     forceScrollToBottom,
   } = useScrollManagement();
   
@@ -89,12 +89,10 @@ function Home() {
           setMessages(formattedMessages);
         }
         
-        // При смене/загрузке диалога всегда прилипаем к низу
         lockToBottom();
         setTimeout(() => forceScrollToBottom('auto'), 0);
       }
     };
-
     loadAndScroll();
   }, [currentConversationId, user, setMessages, lockToBottom, forceScrollToBottom]);
 
@@ -106,8 +104,6 @@ function Home() {
     pendingMessage,
   } = useChat({
     onMessageSent: () => {
-      // Этот колбек из useChat больше не нужен для управления скроллом,
-      // так как мы делаем это явно в handleSubmit.
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -128,16 +124,15 @@ function Home() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    // -> ИЗМЕНЕНИЕ: Применяем ваше правило!
-    // Принудительно скроллим вниз в момент отправки.
-    scrollToBottom(); 
+    // -> ИЗМЕНЕНИЕ: Просто устанавливаем намерение быть внизу.
+    lockToBottom(); 
 
     const currentInput = input;
     setInput('');
     const words = currentInput.trim().split(/\s+/);
     const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
     await sendMessage(currentInput, title);
-  }, [input, isLoading, sendMessage, scrollToBottom]);
+  }, [input, isLoading, sendMessage, lockToBottom]);
 
   const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -149,15 +144,17 @@ function Home() {
 
   const handleSaveEdit = useCallback(async (id: string, newContent: string) => {
     setEditingMessageId(null);
-    // -> ИЗМЕНЕНИЕ: Применяем ваше правило и здесь!
-    // Принудительно скроллим вниз при регенерации.
-    scrollToBottom();
+
+    // -> ИЗМЕНЕНИЕ: И здесь тоже просто устанавливаем намерение.
+    lockToBottom();
     await editAndRegenerate(id, newContent);
-  }, [editAndRegenerate, scrollToBottom]);
+  }, [editAndRegenerate, lockToBottom]);
 
   const handleCopyMessage = useCallback((content: string) => {
     navigator.clipboard.writeText(content);
   }, []);
+
+  // ... остальная часть компонента без изменений ...
 
   if (authLoading) {
     return (
