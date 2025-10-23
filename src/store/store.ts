@@ -1,11 +1,7 @@
 // 📄 src/store/store.ts
 
 import { Store } from '@tanstack/store'
-// -> ИЗМЕНЕНИЕ: Сначала импортируем тип для использования ВНУТРИ этого файла.
 import type { Message } from '../lib/ai/types'
-
-// -> ИЗМЕНЕНИЕ: Затем отдельно экспортируем этот импортированный тип для других файлов.
-export type { Message }
 
 export interface Prompt {
   id: string
@@ -15,8 +11,8 @@ export interface Prompt {
 }
 
 export interface UserSettings {
-  model: string
-  provider: string
+  model: string // Теперь это может быть любая модель
+  provider: string // Новое поле для провайдера
   system_instruction: string
   temperature?: number
   maxTokens?: number
@@ -34,7 +30,6 @@ export interface State {
   prompts: Prompt[]
   settings: UserSettings | null
   conversations: Conversation[]
-  // Теперь 'Message' здесь будет корректно распознан
   currentMessages: Message[] 
   currentConversationId: string | null
   isLoading: boolean
@@ -52,7 +47,6 @@ const initialState: State = {
 export const store = new Store<State>(initialState)
 
 export const actions = {
-  // 'Message' здесь также будет корректно распознан
   setMessages: (messages: Message[]) => {
     store.setState(state => ({ ...state, currentMessages: messages }));
   },

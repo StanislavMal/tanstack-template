@@ -1,9 +1,9 @@
 // 📄 src/store/hooks.ts
 
-// -> ИЗМЕНЕНИЕ: Убираем неиспользуемый 'useEffect'
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useStore } from '@tanstack/react-store';
-import { actions, selectors, store, type Conversation, type Prompt, type UserSettings, type Message } from './store';
+import { actions, selectors, store, type Conversation, type Prompt, type UserSettings } from './store';
+import type { Message } from '../lib/ai/types';
 import { supabase } from '../utils/supabase';
 import { useAuth } from '../providers/AuthProvider';
 
@@ -107,6 +107,31 @@ export function useConversations() {
   const currentConversation = useStore(store, s => selectors.getCurrentConversation(s));
   const currentMessages = useStore(store, s => selectors.getCurrentMessages(s));
 
+  useEffect(() => {
+    if (currentConversationId && user) {
+      const loadMessages = async () => {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', currentConversationId)
+          .order('created_at', { ascending: true });
+        
+        if (error) {
+          console.error('Error loading messages:', error);
+          actions.setMessages([]);
+        } else {
+          const formattedMessages = data.map(m => ({
+            id: m.id,
+            role: m.role as 'user' | 'assistant' | 'system',
+            content: m.content
+          })) as Message[];
+          actions.setMessages(formattedMessages);
+        }
+      };
+      loadMessages();
+    }
+  }, [currentConversationId, user]);
+
   const setCurrentConversationId = useCallback((id: string | null) => {
       actions.setCurrentConversationId(id);
   }, []);
@@ -174,14 +199,10 @@ export function useConversations() {
     }
   }, [user]);
 
-  const editMessageAndUpdate = useCallback(async (messageId: string, newContent: string): Promise<Message[] | null> => {
+  const editMessageAndUpdate = useCallback(async (messageId: string, newContent: string) => {
     const originalMessages = selectors.getCurrentMessages(store.state);
     const originalMessageIndex = originalMessages.findIndex(m => m.id === messageId);
-    
-    if (originalMessageIndex === -1) {
-      console.error('Message not found:', messageId);
-      return null;
-    }
+    if (originalMessageIndex === -1) return null;
 
     const idsToDelete = originalMessages
       .slice(originalMessageIndex + 1)
@@ -191,21 +212,23 @@ export function useConversations() {
     
     try {
       const promises = [];
+
       if (idsToDelete.length > 0) {
-        promises.push(
-          supabase.from('messages').delete().in('id', idsToDelete)
-        );
+        promises.push(supabase.from('messages').delete().in('id', idsToDelete));
       }
+
       promises.push(
         supabase
           .from('messages')
           .update({ content: newContent })
           .eq('id', messageId)
       );
+      
       const results = await Promise.all(promises);
-      for (const res of results) {
+      results.forEach(res => {
         if (res.error) throw res.error;
-      }
+      });
+
     } catch (error) {
       console.error('Failed to update messages in Supabase after edit:', error);
       actions.setMessages(originalMessages);
@@ -213,7 +236,7 @@ export function useConversations() {
     }
 
     const updatedMessages = selectors.getCurrentMessages(store.state);
-    return updatedMessages;
+    return updatedMessages.at(-1) || null;
   }, []);
   
   const duplicateConversation = useCallback(async (id: string) => {
@@ -233,6 +256,7 @@ export function useConversations() {
       return;
     }
 
+    // ИЗМЕНЕНИЕ: Проверяем что первое сообщение от пользователя
     if (!messagesToCopy || messagesToCopy.length === 0) {
       console.warn('Cannot duplicate empty conversation');
       return;
@@ -256,10 +280,12 @@ export function useConversations() {
     }
 
     const newConversation = newConvData as Conversation;
+
     const newMessages = messagesToCopy.map(msg => ({
       ...msg,
       conversation_id: newConversation.id,
     }));
+    
     const { error: insertError } = await supabase.from('messages').insert(newMessages);
     if (insertError) {
       console.error('Failed to insert duplicated messages:', insertError);
@@ -269,6 +295,7 @@ export function useConversations() {
     
     await loadConversations();
     setCurrentConversationId(newConversation.id);
+
   }, [user, conversations, loadConversations, setCurrentConversationId]);
 
   return {
@@ -284,6 +311,5 @@ export function useConversations() {
     addMessage,
     editMessageAndUpdate,
     duplicateConversation,
-    setMessages: actions.setMessages,
   };
 }
