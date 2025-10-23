@@ -31,19 +31,18 @@ export function useChat(options: UseChatOptions = {}) {
   const bufferRef = useRef<string>('');
 
   const getTypingSpeed = useCallback(() => {
-    // ИЗМЕНЕНИЕ: Получаем скорость из настроек, с дефолтом
     const speedSetting = settings?.typingSpeed || 2;
     switch (speedSetting) {
-      case 1: return 2;  // Медленно
-      case 3: return 15; // Быстро
-      default: return 5; // Средне (по умолчанию)
+      case 1: return 2;
+      case 3: return 15;
+      default: return 5;
     }
   }, [settings]);
 
   const startTextAnimation = useCallback(() => {
     const animatePrinting = () => {
       if (textQueueRef.current.length > 0) {
-        const speed = getTypingSpeed(); // ИЗМЕНЕНИЕ: Используем динамическую скорость
+        const speed = getTypingSpeed();
         const charsToPrint = textQueueRef.current.substring(0, speed);
         textQueueRef.current = textQueueRef.current.substring(speed);
 
@@ -97,7 +96,7 @@ export function useChat(options: UseChatOptions = {}) {
   }, []);
 
   const processAIResponse = useCallback(
-    async (messageHistory: Message[]) => {
+    async (messageHistory: Message[]): Promise<Message | null> => { // <- Явно указываем возвращаемый тип
       if (!settings) {
         const errorMsg = "User settings not loaded.";
         setError(errorMsg);
@@ -112,7 +111,6 @@ export function useChat(options: UseChatOptions = {}) {
       const assistantMessageId = crypto.randomUUID();
 
       try {
-        // ИЗМЕНЕНИЕ: Используем провайдер из настроек, это делает код гибким
         const provider = settings.provider;
 
         const response = await streamChat({
@@ -130,48 +128,55 @@ export function useChat(options: UseChatOptions = {}) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let isFirstChunk = true;
+        let streamDone = false;
 
-        while (true) {
+        // Читаем стрим в цикле
+        while (!streamDone) {
           const { value, done } = await reader.read();
-          if (done) break;
+          streamDone = done;
 
-          const rawText = decoder.decode(value, { stream: true });
-          const chunks = parseNDJSON(rawText);
+          if (value) {
+            const rawText = decoder.decode(value, { stream: true });
+            const chunks = parseNDJSON(rawText);
           
-          for (const chunk of chunks) {
-            if (chunk.error) {
-              throw new Error(chunk.error);
-            }
-            
-            if (chunk.text) {
-              if (isFirstChunk) {
-                setPendingMessage({ 
-                  id: assistantMessageId, 
-                  role: 'assistant', 
-                  content: '' 
-                });
-                startTextAnimation();
-                setIsLoading(false);
-                isFirstChunk = false;
+            for (const chunk of chunks) {
+              if (chunk.error) {
+                throw new Error(chunk.error);
               }
-              textQueueRef.current += chunk.text;
+            
+              if (chunk.text) {
+                if (isFirstChunk) {
+                  setPendingMessage({ 
+                    id: assistantMessageId, 
+                    role: 'assistant', 
+                    content: '' 
+                  });
+                  startTextAnimation();
+                  setIsLoading(false);
+                  isFirstChunk = false;
+                }
+                textQueueRef.current += chunk.text;
+              }
             }
           }
         }
 
-        // ИЗМЕНЕНИЕ: Убираем блокирующий `await new Promise`.
-        // Анимация завершится сама. Мы просто ждем, пока в очереди не останется текста, 
-        // чтобы гарантировать, что `finalContentRef` содержит полный ответ.
-        // Это не блокирует основной поток.
+        // Ждем завершения анимации и возвращаем результат
         return new Promise<Message | null>(resolve => {
           const checkCompletion = () => {
             if (textQueueRef.current.length === 0) {
-              const finalMessage = { 
-                id: assistantMessageId, 
-                role: 'assistant' as const, 
-                content: finalContentRef.current 
-              };
-              resolve(finalMessage);
+              stopTextAnimation();
+              // ИЗМЕНЕНИЕ: Проверяем, что контент не пустой
+              if (finalContentRef.current.trim()) {
+                const finalMessage = { 
+                  id: assistantMessageId, 
+                  role: 'assistant' as const, 
+                  content: finalContentRef.current 
+                };
+                resolve(finalMessage);
+              } else {
+                resolve(null); // Возвращаем null, если ответ пустой
+              }
             } else {
               setTimeout(checkCompletion, 50);
             }
@@ -224,7 +229,7 @@ export function useChat(options: UseChatOptions = {}) {
 
         const aiResponse = await processAIResponse(currentMessages);
         
-        if (aiResponse && aiResponse.content.trim()) {
+        if (aiResponse) { // Проверка на пустой контент уже внутри processAIResponse
           await addMessage(convId, aiResponse);
           options.onResponseComplete?.(aiResponse);
         }
@@ -267,9 +272,10 @@ export function useChat(options: UseChatOptions = {}) {
         const lastMessage = updatedHistory[updatedHistory.length - 1];
         options.onMessageSent?.(lastMessage);
 
+        // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Добавили `await`
         const aiResponse = await processAIResponse(updatedHistory);
         
-        if (aiResponse && aiResponse.content.trim()) {
+        if (aiResponse) { // Проверка на пустой контент уже внутри processAIResponse
           await addMessage(currentConversationId, aiResponse);
           options.onResponseComplete?.(aiResponse);
         }
