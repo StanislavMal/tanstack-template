@@ -30,13 +30,11 @@ function Home() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading } = useAuth();
   
-  // State управления
   const [input, setInput] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  // Хуки
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const { loadSettings } = useSettings();
   const { loadPrompts } = usePrompts();
@@ -44,26 +42,24 @@ function Home() {
     messages,
     currentConversationId,
     loadConversations,
-    setMessages, // -> ИЗМЕНЕНИЕ: Получаем setMessages из хука
+    setMessages,
   } = useConversations();
   const sidebar = useSidebar();
   const {
     messagesContainerRef,
     contentRef,
     showScrollDownButton,
-    scrollToBottom,
+    scrollToBottom, // -> Нам нужна именно эта функция!
     lockToBottom,
     forceScrollToBottom,
   } = useScrollManagement();
   
-  // Перенаправление неавторизованных пользователей
   useEffect(() => {
     if (!authLoading && !user) {
       navigate({ to: '/login' });
     }
   }, [user, authLoading, navigate]);
 
-  // Загрузка основных данных (настройки, промпты, список диалогов)
   useEffect(() => {
     if (user) {
       loadConversations();
@@ -72,12 +68,9 @@ function Home() {
     }
   }, [user, loadConversations, loadPrompts, loadSettings]);
 
-  // -> ИЗМЕНЕНИЕ: Основной useEffect для управления диалогом
   useEffect(() => {
-    // Эта функция будет загружать сообщения для текущего диалога
     const loadAndScroll = async () => {
       if (currentConversationId && user) {
-        // 1. Загружаем сообщения
         const { data, error } = await supabase
           .from('messages')
           .select('*')
@@ -96,9 +89,8 @@ function Home() {
           setMessages(formattedMessages);
         }
         
-        // 2. После загрузки и установки сообщений, принудительно скроллим
+        // При смене/загрузке диалога всегда прилипаем к низу
         lockToBottom();
-        // Даем React микро-задачу на отрисовку, затем скроллим
         setTimeout(() => forceScrollToBottom('auto'), 0);
       }
     };
@@ -106,8 +98,6 @@ function Home() {
     loadAndScroll();
   }, [currentConversationId, user, setMessages, lockToBottom, forceScrollToBottom]);
 
-
-  // Управление чатом
   const {
     sendMessage,
     editAndRegenerate,
@@ -116,7 +106,8 @@ function Home() {
     pendingMessage,
   } = useChat({
     onMessageSent: () => {
-      lockToBottom();
+      // Этот колбек из useChat больше не нужен для управления скроллом,
+      // так как мы делаем это явно в handleSubmit.
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -125,7 +116,6 @@ function Home() {
     onError: (error) => console.error('Chat error:', error),
   });
 
-  // Комбинируем сообщения для отображения
   const displayMessages = useMemo(() => {
     const combined = [...messages];
     if (pendingMessage && !messages.some(m => m.id === pendingMessage.id)) {
@@ -134,17 +124,20 @@ function Home() {
     return combined;
   }, [messages, pendingMessage]);
 
-  // Обработчики событий
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
+
+    // -> ИЗМЕНЕНИЕ: Применяем ваше правило!
+    // Принудительно скроллим вниз в момент отправки.
+    scrollToBottom(); 
 
     const currentInput = input;
     setInput('');
     const words = currentInput.trim().split(/\s+/);
     const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
     await sendMessage(currentInput, title);
-  }, [input, isLoading, sendMessage]);
+  }, [input, isLoading, sendMessage, scrollToBottom]);
 
   const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -153,15 +146,19 @@ function Home() {
 
   const handleStartEdit = useCallback((id: string) => setEditingMessageId(id), []);
   const handleCancelEdit = useCallback(() => setEditingMessageId(null), []);
+
   const handleSaveEdit = useCallback(async (id: string, newContent: string) => {
     setEditingMessageId(null);
+    // -> ИЗМЕНЕНИЕ: Применяем ваше правило и здесь!
+    // Принудительно скроллим вниз при регенерации.
+    scrollToBottom();
     await editAndRegenerate(id, newContent);
-  }, [editAndRegenerate]);
+  }, [editAndRegenerate, scrollToBottom]);
+
   const handleCopyMessage = useCallback((content: string) => {
     navigator.clipboard.writeText(content);
   }, []);
 
-  // Рендер до окончания проверки авторизации
   if (authLoading) {
     return (
       <div className="h-[100dvh] bg-gray-900 text-white flex items-center justify-center">
@@ -174,7 +171,6 @@ function Home() {
   }
   if (!user) return null;
 
-  // Рендер для десктопа
   if (isDesktop) {
     return (
       <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
@@ -185,31 +181,22 @@ function Home() {
             className="flex flex-col"
           >
             <Sidebar 
-              conversations={sidebar.conversations}
-              currentConversationId={sidebar.currentConversationId}
-              handleNewChat={sidebar.handleNewChat}
-              setCurrentConversationId={sidebar.handleSelectChat}
-              handleDeleteChat={sidebar.handleDeleteChat}
-              handleDuplicateChat={sidebar.handleDuplicateChat}
+              conversations={sidebar.conversations} currentConversationId={sidebar.currentConversationId}
+              handleNewChat={sidebar.handleNewChat} setCurrentConversationId={sidebar.handleSelectChat}
+              handleDeleteChat={sidebar.handleDeleteChat} handleDuplicateChat={sidebar.handleDuplicateChat}
               editingChatId={sidebar.editingChatId}
               setEditingChatId={(id) => {
                 const conversation = sidebar.conversations.find((c: Conversation) => c.id === id);
                 id && conversation ? sidebar.handleStartEdit(id, conversation.title) : sidebar.handleCancelEdit();
               }}
-              editingTitle={sidebar.editingTitle}
-              setEditingTitle={sidebar.setEditingTitle}
+              editingTitle={sidebar.editingTitle} setEditingTitle={sidebar.setEditingTitle}
               handleUpdateChatTitle={(_id, _title) => sidebar.handleSaveEdit()}
-              isOpen={true}
-              setIsOpen={() => {}}
-              isCollapsed={sidebar.isCollapsed}
+              isOpen={true} setIsOpen={() => {}} isCollapsed={sidebar.isCollapsed}
             />
           </Panel>
           <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
           <Panel className="flex-1 flex flex-col relative min-h-0">
-            <Header 
-              onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)}
-              onLogout={handleLogout} isMobile={false}
-            />
+            <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} />
             <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
               <div ref={contentRef}>
                 <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
@@ -231,7 +218,6 @@ function Home() {
     );
   }
 
-  // Рендер для мобильных
   return (
     <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
       {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />}
