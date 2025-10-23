@@ -1,9 +1,9 @@
 // 📄 src/components/ChatArea.tsx
 
-import { memo as ReactMemo, useMemo, forwardRef } from 'react'; // Используем алиас для memo
+import { memo as ReactMemo, useMemo, forwardRef, useCallback } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { ChatMessage, LoadingIndicator, WelcomeScreen } from '../components'; // Используем абсолютные пути
+import { ChatMessage, LoadingIndicator, WelcomeScreen } from '../components';
 import type { Message } from '../lib/ai/types';
 
 interface ChatAreaProps {
@@ -13,10 +13,12 @@ interface ChatAreaProps {
   error: string | null;
   currentConversationId: string | null;
   editingMessageId: string | null;
+  
   onStartEdit: (id: string) => void;
   onCancelEdit: () => void;
   onSaveEdit: (id: string, content: string) => void;
-  onCopyMessage: (content: string) => void;
+  // ИЗМЕНЕНИЕ: Убираем onCopyMessage, так как он больше не нужен
+  // onCopyMessage: (content: string) => void;
 }
 
 const ChatAreaComponent = ReactMemo(
@@ -32,13 +34,13 @@ const ChatAreaComponent = ReactMemo(
         onStartEdit,
         onCancelEdit,
         onSaveEdit,
-        onCopyMessage,
+        // ИЗМЕНЕНИЕ: Убираем из деструктуризации
+        // onCopyMessage,
       },
       ref
     ) => {
       const { t } = useTranslation();
 
-      // ИЗМЕНЕНИЕ: Показываем pendingMessage только если есть контент
       const displayMessages = useMemo(() => {
         const combined = [...messages];
         if (pendingMessage && pendingMessage.content && !messages.some((m) => m.id === pendingMessage.id)) {
@@ -47,11 +49,29 @@ const ChatAreaComponent = ReactMemo(
         return combined;
       }, [messages, pendingMessage]);
 
-      // ИЗМЕНЕНИЕ: Показываем LoadingIndicator если isLoading ИЛИ есть pendingMessage без контента
       const showLoading = isLoading || (pendingMessage && !pendingMessage.content);
 
+      const handleMessageActions = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+        const target = e.target as HTMLElement;
+        const button = target.closest('button[data-action]');
+        
+        if (!button) return;
+
+        const messageDiv = target.closest('[data-message-id]');
+        const messageId = messageDiv?.getAttribute('data-message-id');
+        
+        if (!messageId) return;
+
+        const action = button.getAttribute('data-action');
+
+        if (action === 'start-edit') {
+          onStartEdit(messageId);
+        }
+        
+      }, [onStartEdit]);
+
       return (
-        <div ref={ref} className="w-full h-full p-4">
+        <div ref={ref} className="w-full h-full p-4" onClick={handleMessageActions}>
           {error && (
             <div className="bg-red-500/10 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg" role="alert">
               <div className="flex">
@@ -74,10 +94,8 @@ const ChatAreaComponent = ReactMemo(
                     key={message.id}
                     message={message}
                     isEditing={editingMessageId === message.id}
-                    onStartEdit={() => onStartEdit(message.id)}
+                    onSaveEdit={onSaveEdit}
                     onCancelEdit={onCancelEdit}
-                    onSaveEdit={(newContent) => onSaveEdit(message.id, newContent)}
-                    onCopyMessage={() => onCopyMessage(message.content)}
                   />
                 ))}
                 {showLoading && <LoadingIndicator />}
@@ -92,6 +110,6 @@ const ChatAreaComponent = ReactMemo(
   )
 );
 
-ChatAreaComponent.displayName = 'ChatArea'; // Добавляем displayName
+ChatAreaComponent.displayName = 'ChatArea';
 
-export const ChatArea = ChatAreaComponent; // Экспортируем компонент
+export const ChatArea = ChatAreaComponent;

@@ -11,6 +11,7 @@ import {
   ChatArea,
   Footer,
 } from '../components';
+import type { FooterRef } from '../components/Footer';
 import {
   useChat,
   useSidebar,
@@ -18,8 +19,6 @@ import {
   useMediaQuery,
 } from '../hooks';
 import { useConversations, useSettings, usePrompts, actions } from '../store';
-// ИЗМЕНЕНИЕ: Убран неиспользуемый импорт `Conversation`
-// import type { Conversation } from '../store';
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
@@ -35,11 +34,10 @@ function Home() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, isInitialized } = useAuth();
 
-  const [input, setInput] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const footerRef = useRef<FooterRef>(null);
 
   const isDesktop = useMediaQuery('(min-width: 768px)');
   
@@ -88,9 +86,6 @@ function Home() {
   } = useChat({
     onMessageSent: () => {
       lockToBottom();
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
     },
     onResponseComplete: () => {},
     onError: (error) => {
@@ -106,17 +101,16 @@ function Home() {
     return combined;
   }, [messages, pendingMessage]);
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!input.trim() || isLoading) return;
-      const currentInput = input;
-      setInput('');
-      const words = currentInput.trim().split(/\s+/);
+  const handleSend = useCallback(
+    async (message: string) => {
+      if (!message.trim() || isLoading) return;
+
+      const words = message.trim().split(/\s+/);
       const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
-      await sendMessage(currentInput, title);
+
+      await sendMessage(message, title);
     },
-    [input, isLoading, sendMessage]
+    [isLoading, sendMessage]
   );
 
   const handleLogout = useCallback(async () => {
@@ -140,12 +134,7 @@ function Home() {
     },
     [editAndRegenerate]
   );
-
-  const handleCopyMessage = useCallback((content: string) => {
-    navigator.clipboard.writeText(content);
-  }, []);
   
-  // ИЗМЕНЕНИЕ: Создаем объект с пропсами для Sidebar для чистоты кода
   const sidebarProps = {
     conversations: sidebar.conversations,
     currentConversationId: sidebar.currentConversationId,
@@ -170,29 +159,43 @@ function Home() {
     isCollapsed: sidebar.isCollapsed,
   };
 
+  // ИЗМЕНЕНИЕ: Убрал невалидные комментарии из JSX
   if (!isInitialized || authLoading || !dataLoaded) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          <p className="mt-4 text-gray-400">
-            {!isInitialized || authLoading ? 'Authenticating...' : 'Loading your data...'}
-          </p>
+        <div className="flex items-center justify-center min-h-screen bg-gray-900">
+            <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+                <p className="mt-4 text-gray-400">
+                    {!isInitialized || authLoading ? 'Authenticating...' : 'Loading your data...'}
+                </p>
+            </div>
         </div>
-      </div>
     );
   }
 
+  // ИЗМЕНЕНИЕ: Убрал невалидные комментарии из JSX
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          <p className="mt-4 text-gray-400">Redirecting to login...</p>
+        <div className="flex items-center justify-center min-h-screen bg-gray-900">
+            <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+                <p className="mt-4 text-gray-400">Redirecting to login...</p>
+            </div>
         </div>
-      </div>
     );
   }
+
+  const chatAreaProps = {
+    messages: displayMessages,
+    pendingMessage,
+    isLoading,
+    error,
+    currentConversationId,
+    editingMessageId,
+    onStartEdit: handleStartEdit,
+    onCancelEdit: handleCancelEdit,
+    onSaveEdit: handleSaveEdit,
+  };
 
   if (isDesktop) {
     return (
@@ -207,7 +210,6 @@ function Home() {
             onCollapse={sidebar.toggleCollapse as PanelOnCollapse}
             className="flex flex-col"
           >
-            {/* ИЗМЕНЕНИЕ: Используем объект sidebarProps */}
             <Sidebar {...sidebarProps} isOpen={true} setIsOpen={() => {}} />
           </Panel>
           <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
@@ -216,12 +218,12 @@ function Home() {
             <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
               <div ref={contentRef}>
                 <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                  <ChatArea messages={displayMessages} pendingMessage={pendingMessage} isLoading={isLoading} error={error} currentConversationId={currentConversationId} editingMessageId={editingMessageId} onStartEdit={handleStartEdit} onCancelEdit={handleCancelEdit} onSaveEdit={handleSaveEdit} onCopyMessage={handleCopyMessage} />
+                  <ChatArea {...chatAreaProps} />
                 </div>
               </div>
             </main>
             {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-10" />}
-            <Footer ref={textareaRef} input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
+            <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
           </Panel>
         </PanelGroup>
         <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
@@ -232,16 +234,15 @@ function Home() {
   return (
     <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
       {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />}
-      {/* ИЗМЕНЕНИЕ: Используем объект sidebarProps */}
       <Sidebar {...sidebarProps} />
       <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
       <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
         <div ref={contentRef}>
-          <ChatArea messages={displayMessages} pendingMessage={pendingMessage} isLoading={isLoading} error={error} currentConversationId={currentConversationId} editingMessageId={editingMessageId} onStartEdit={handleStartEdit} onCancelEdit={handleCancelEdit} onSaveEdit={handleSaveEdit} onCopyMessage={handleCopyMessage} />
+          <ChatArea {...chatAreaProps} />
         </div>
       </main>
       {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
-      <Footer ref={textareaRef} input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
+      <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
       <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
