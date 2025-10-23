@@ -50,7 +50,7 @@ function Home() {
     contentRef,
     showScrollDownButton,
     scrollToBottom,
-    lockToBottom, // -> Нам нужна именно эта функция!
+    lockToBottom,
     forceScrollToBottom,
   } = useScrollManagement();
   
@@ -124,7 +124,6 @@ function Home() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    // -> ИЗМЕНЕНИЕ: Просто устанавливаем намерение быть внизу.
     lockToBottom(); 
 
     const currentInput = input;
@@ -144,8 +143,6 @@ function Home() {
 
   const handleSaveEdit = useCallback(async (id: string, newContent: string) => {
     setEditingMessageId(null);
-
-    // -> ИЗМЕНЕНИЕ: И здесь тоже просто устанавливаем намерение.
     lockToBottom();
     await editAndRegenerate(id, newContent);
   }, [editAndRegenerate, lockToBottom]);
@@ -153,8 +150,6 @@ function Home() {
   const handleCopyMessage = useCallback((content: string) => {
     navigator.clipboard.writeText(content);
   }, []);
-
-  // ... остальная часть компонента без изменений ...
 
   if (authLoading) {
     return (
@@ -192,9 +187,13 @@ function Home() {
             />
           </Panel>
           <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
+          
+          {/* -> ИЗМЕНЕНИЕ: Этот Panel теперь является relative-контейнером */}
           <Panel className="flex-1 flex flex-col relative min-h-0">
             <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} />
-            <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
+            
+            {/* -> ИЗМЕНЕНИЕ: `main` теперь занимает все место и имеет внутренний отступ снизу */}
+            <main ref={messagesContainerRef} className="absolute inset-0 overflow-y-auto pb-28">
               <div ref={contentRef}>
                 <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
                   <ChatArea
@@ -206,8 +205,23 @@ function Home() {
                 </div>
               </div>
             </main>
-            {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-10" />}
-            <Footer ref={textareaRef} input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
+            
+            {showScrollDownButton && (
+              // -> ИЗМЕНЕНИЕ: Позиционирование кнопки немного изменилось, чтобы быть над футером
+              <ScrollDownButton
+                onClick={scrollToBottom}
+                className="bottom-32 right-10"
+              />
+            )}
+
+            {/* -> ИЗМЕНЕНИЕ: Футер теперь абсолютно позиционирован внизу */}
+            <Footer
+              ref={textareaRef}
+              input={input}
+              setInput={setInput}
+              handleSubmit={handleSubmit}
+              isLoading={isLoading}
+            />
           </Panel>
         </PanelGroup>
         <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
@@ -215,8 +229,10 @@ function Home() {
     );
   }
 
+  // Рендер для мобильных устройств
   return (
-    <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
+    // -> ИЗМЕНЕНИЕ: Убираем flex-col, добавляем relative
+    <div className="h-[100dvh] bg-gray-900 text-white relative">
       {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />}
       <Sidebar 
         conversations={sidebar.conversations} currentConversationId={sidebar.currentConversationId}
@@ -231,19 +247,45 @@ function Home() {
         handleUpdateChatTitle={(_id, _title) => sidebar.handleSaveEdit()}
         isOpen={sidebar.isOpen} setIsOpen={sidebar.setIsOpen} isCollapsed={false}
       />
-      <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
-      <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
-        <div ref={contentRef}>
-          <ChatArea
-            messages={displayMessages} pendingMessage={pendingMessage} isLoading={isLoading}
-            error={error} currentConversationId={currentConversationId} editingMessageId={editingMessageId}
-            onStartEdit={handleStartEdit} onCancelEdit={handleCancelEdit}
-            onSaveEdit={handleSaveEdit} onCopyMessage={handleCopyMessage}
+      
+      {/* -> ИЗМЕНЕНИЕ: Создаем обертку для основного контента, чтобы Header был в потоке, а остальное - нет */}
+      <div className="flex flex-col h-full">
+        <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
+        <div className="flex-1 relative min-h-0">
+          {/* -> ИЗМЕНЕНИЕ: main теперь занимает все место и имеет отступ */}
+          <main 
+            ref={messagesContainerRef} 
+            className={`absolute inset-0 overflow-y-auto pb-24 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
+          >
+            <div ref={contentRef}>
+              <ChatArea
+                messages={displayMessages} pendingMessage={pendingMessage} isLoading={isLoading}
+                error={error} currentConversationId={currentConversationId} editingMessageId={editingMessageId}
+                onStartEdit={handleStartEdit} onCancelEdit={handleCancelEdit}
+                onSaveEdit={handleSaveEdit} onCopyMessage={handleCopyMessage}
+              />
+            </div>
+          </main>
+          
+          {showScrollDownButton && (
+            // -> ИЗМЕНЕНИЕ: Отступ снизу для кнопки
+            <ScrollDownButton
+              onClick={scrollToBottom}
+              className="bottom-28 right-4"
+            />
+          )}
+          
+          {/* -> ИЗМЕНЕНИЕ: Футер абсолютно позиционирован */}
+          <Footer
+            ref={textareaRef}
+            input={input}
+            setInput={setInput}
+            handleSubmit={handleSubmit}
+            isLoading={isLoading}
           />
         </div>
-      </main>
-      {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
-      <Footer ref={textareaRef} input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
+      </div>
+      
       <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
