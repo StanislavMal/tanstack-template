@@ -18,11 +18,11 @@ import {
   useMediaQuery,
 } from '../hooks';
 import { useConversations, useSettings, usePrompts } from '../store';
+import { actions } from '../store/store'; 
 import type { Conversation } from '../store/store';
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
-    // Проверяем сессию на сервере для SSR
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       throw redirect({ to: '/login' });
@@ -35,79 +35,71 @@ function Home() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, isInitialized } = useAuth();
 
-  // State управления
   const [input, setInput] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Хуки для функциональности
   const isDesktop = useMediaQuery('(min-width: 768px)');
-
-  // Store хуки
+  
   const { messages, currentConversationId } = useConversations();
   const { loadConversations } = useConversations();
   const { loadSettings } = useSettings();
   const { loadPrompts } = usePrompts();
-
-  // Хук управления скроллом
+  
   const {
     messagesContainerRef,
     contentRef,
     showScrollDownButton,
-    scrollToBottom,
+    forceScrollToBottom,
     lockToBottom,
-    checkAndRestoreScroll, // Убедитесь, что эта переменная объявлена здесь
+    checkAndRestoreScroll,
   } = useScrollManagement();
 
-  // Загрузка данных при монтировании и аутентификации
+  // Загрузка первоначальных данных (список чатов, настройки)
   useEffect(() => {
-    if (user && isInitialized && !authLoading) {
-      // Загружаем данные только один раз
-      if (!dataLoaded) {
-        const loadUserData = async () => {
-          try {
-            await Promise.all([
-              loadConversations(),
-              loadPrompts(),
-              loadSettings(),
-            ]);
-            setDataLoaded(true);
-            // Восстанавливаем скролл после загрузки данных
-            setTimeout(() => {
-              checkAndRestoreScroll(); // Теперь переменная доступна
-            }, 100);
-          } catch (error) {
-            console.error('Error loading user data:', error);
-            setDataLoaded(true);
-          }
-        };
-        loadUserData();
-      }
+    if (user && isInitialized && !authLoading && !dataLoaded) {
+      const loadUserData = async () => {
+        try {
+          await Promise.all([
+            loadConversations(),
+            loadPrompts(),
+            loadSettings(),
+          ]);
+          setDataLoaded(true);
+        } catch (error) {
+          console.error('Error loading user data:', error);
+          setDataLoaded(true); // Все равно ставим true, чтобы не было вечной загрузки
+        }
+      };
+      loadUserData();
     }
-  }, [
-    user,
-    isInitialized,
-    authLoading,
-    dataLoaded,
-    loadConversations,
-    loadPrompts,
-    loadSettings,
-    checkAndRestoreScroll, // Добавляем в зависимости
-  ]);
+  }, [user, isInitialized, authLoading, dataLoaded, loadConversations, loadPrompts, loadSettings]);
 
-  // Дополнительная проверка аутентификации на клиенте
+  // НОВЫЙ ЭФФЕКТ: Восстановление скролла при загрузке сообщений для чата
+  useEffect(() => {
+    // Этот эффект сработает каждый раз, когда массив `messages` изменится,
+    // например, после выбора другого чата и загрузки его истории.
+    // `setTimeout` с 0 задержкой — это трюк, чтобы выполнить код после того,
+    // как React закончит рендеринг и DOM обновится.
+    const timer = setTimeout(() => {
+      checkAndRestoreScroll();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [messages, checkAndRestoreScroll]);
+
+
+  // Редирект, если пользователь разлогинился
   useEffect(() => {
     if (isInitialized && !authLoading && !user) {
       navigate({ to: '/login' });
     }
   }, [user, authLoading, isInitialized, navigate]);
 
-  // Управление сайдбаром
   const sidebar = useSidebar();
-
-  // Управление чатом
+  
   const {
     sendMessage,
     editAndRegenerate,
@@ -121,15 +113,12 @@ function Home() {
         textareaRef.current.style.height = 'auto';
       }
     },
-    onResponseComplete: () => {
-      // Можно добавить звуковое уведомление или другую логику
-    },
+    onResponseComplete: () => {},
     onError: (error) => {
       console.error('Chat error:', error);
     },
   });
 
-  // Комбинируем сообщения для отображения
   const displayMessages = useMemo(() => {
     const combined = [...messages];
     if (pendingMessage && !messages.some((m) => m.id === pendingMessage.id)) {
@@ -138,27 +127,21 @@ function Home() {
     return combined;
   }, [messages, pendingMessage]);
 
-  // Обработчики событий
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       if (!input.trim() || isLoading) return;
-
       const currentInput = input;
       setInput('');
-
-      // Создаем заголовок из первых слов
       const words = currentInput.trim().split(/\s+/);
       const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
-
       await sendMessage(currentInput, title);
     },
     [input, isLoading, sendMessage]
   );
 
   const handleLogout = useCallback(async () => {
-    // Сбрасываем локальное состояние перед выходом
-    setDataLoaded(false);
+    actions.resetStore();
     await supabase.auth.signOut();
     navigate({ to: '/login' });
   }, [navigate]);
@@ -183,7 +166,6 @@ function Home() {
     navigator.clipboard.writeText(content);
   }, []);
 
-  // Показываем загрузчик пока идёт проверка аутентификации или загрузка данных
   if (!isInitialized || authLoading || !dataLoaded) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
@@ -197,7 +179,6 @@ function Home() {
     );
   }
 
-  // Последняя проверка на случай если пользователь не авторизован
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
@@ -209,7 +190,6 @@ function Home() {
     );
   }
 
-  // Рендер для десктопа с панелями
   if (isDesktop) {
     return (
       <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
@@ -249,9 +229,7 @@ function Home() {
               isCollapsed={sidebar.isCollapsed}
             />
           </Panel>
-
           <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
-
           <Panel className="flex-1 flex flex-col relative min-h-0">
             <Header
               onMenuClick={() => {}}
@@ -259,14 +237,9 @@ function Home() {
               onLogout={handleLogout}
               isMobile={false}
             />
-
             <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
               <div ref={contentRef}>
-                <div
-                  className={`w-full max-w-5xl mx-auto ${
-                    !currentConversationId ? 'h-full flex items-center justify-center' : ''
-                  }`}
-                >
+                <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
                   <ChatArea
                     messages={displayMessages}
                     pendingMessage={pendingMessage}
@@ -282,42 +255,18 @@ function Home() {
                 </div>
               </div>
             </main>
-
-            {showScrollDownButton && (
-              <ScrollDownButton
-                onClick={scrollToBottom}
-                className="bottom-28 right-10"
-              />
-            )}
-
-            <Footer
-              ref={textareaRef}
-              input={input}
-              setInput={setInput}
-              handleSubmit={handleSubmit}
-              isLoading={isLoading}
-            />
+            {showScrollDownButton && <ScrollDownButton onClick={forceScrollToBottom} className="bottom-28 right-10" />}
+            <Footer ref={textareaRef} input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
           </Panel>
         </PanelGroup>
-
-        <SettingsDialog
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-        />
+        <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       </div>
     );
   }
 
-  // Рендер для мобильных устройств
   return (
     <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
-      {sidebar.isOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black/50"
-          onClick={() => sidebar.setIsOpen(false)}
-        />
-      )}
-
+      {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />}
       <Sidebar
         conversations={sidebar.conversations}
         currentConversationId={sidebar.currentConversationId}
@@ -327,9 +276,7 @@ function Home() {
         handleDuplicateChat={sidebar.handleDuplicateChat}
         editingChatId={sidebar.editingChatId}
         setEditingChatId={(id) => {
-          const conversation = sidebar.conversations.find(
-            (c: Conversation) => c.id === id
-          );
+          const conversation = sidebar.conversations.find((c: Conversation) => c.id === id);
           if (id && conversation) {
             sidebar.handleStartEdit(id, conversation.title);
           } else {
@@ -343,20 +290,8 @@ function Home() {
         setIsOpen={sidebar.setIsOpen}
         isCollapsed={false}
       />
-
-      <Header
-        onMenuClick={sidebar.toggleSidebar}
-        onSettingsClick={() => setIsSettingsOpen(true)}
-        onLogout={handleLogout}
-        isMobile={true}
-      />
-
-      <main
-        ref={messagesContainerRef}
-        className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${
-          !currentConversationId ? 'flex items-center justify-center' : ''
-        }`}
-      >
+      <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
+      <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
         <div ref={contentRef}>
           <ChatArea
             messages={displayMessages}
@@ -372,26 +307,9 @@ function Home() {
           />
         </div>
       </main>
-
-      {showScrollDownButton && (
-        <ScrollDownButton
-          onClick={scrollToBottom}
-          className="bottom-24 right-4"
-        />
-      )}
-
-      <Footer
-        ref={textareaRef}
-        input={input}
-        setInput={setInput}
-        handleSubmit={handleSubmit}
-        isLoading={isLoading}
-      />
-
-      <SettingsDialog
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
+      {showScrollDownButton && <ScrollDownButton onClick={forceScrollToBottom} className="bottom-24 right-4" />}
+      <Footer ref={textareaRef} input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
+      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }
