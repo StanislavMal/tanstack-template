@@ -1,25 +1,31 @@
-// 📄 src/routes/signup.tsx
-
-import { createFileRoute, Link } from '@tanstack/react-router' // -> ИЗМЕНЕНИЕ: Убрали useNavigate
-import { useState } from 'react'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from 'react-i18next'
+import { useAuth } from '../providers/AuthProvider'
 
 export const Route = createFileRoute('/signup')({
   component: SignupComponent,
 })
 
 function SignupComponent() {
-  const { t } = useTranslation();
-  // const navigate = useNavigate() // -> ИЗМЕНЕНИЕ: Удалили эту строку
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { user, isLoading, isInitialized } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // -> ИЗМЕНЕНИЕ: Читаем переменную окружения.
-  const allowRegistration = import.meta.env.VITE_ALLOW_REGISTRATION !== 'false';
+  const allowRegistration = import.meta.env.VITE_ALLOW_REGISTRATION !== 'false'
+
+  // Автоматический редирект если пользователь уже авторизован
+  useEffect(() => {
+    if (isInitialized && !isLoading && user) {
+      navigate({ to: '/' })
+    }
+  }, [user, isLoading, isInitialized, navigate])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,10 +41,33 @@ function SignupComponent() {
     setLoading(false)
   }
 
+  // Показываем загрузчик пока проверяем аутентификацию
+  if (!isInitialized || isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+          <p className="mt-4 text-gray-400">Checking authentication...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Если пользователь авторизован, показываем загрузчик пока идёт редирект
+  if (user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+          <p className="mt-4 text-gray-400">Redirecting to chat...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
       <div className="w-full max-w-md p-8 space-y-6 bg-gray-800 rounded-lg shadow-lg">
-        {/* -> ИЗМЕНЕНИЕ: Показываем либо форму, либо сообщение о блокировке */}
         {allowRegistration ? (
           <>
             <h2 className="text-2xl font-bold text-center">{t('signup')}</h2>
