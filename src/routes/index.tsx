@@ -68,25 +68,7 @@ function Home() {
     showScrollDownButton,
     scrollToBottom,
     lockToBottom,
-    forceScrollToBottom,
   } = useScrollManagement();
-
-  // -> ИЗМЕНЕНИЕ: Автоскролл после загрузки сообщений (только при монтировании разговора)
-  const prevConversationIdRef = useRef<string | null>(null);
-  
-  useEffect(() => {
-    // Проверяем что разговор сменился или только что загрузился
-    const conversationChanged = currentConversationId !== prevConversationIdRef.current;
-    prevConversationIdRef.current = currentConversationId;
-    
-    if (currentConversationId && messages.length > 0 && conversationChanged) {
-      // -> Убрали setTimeout - используем только RAF для синхронизации с DOM
-      requestAnimationFrame(() => {
-        lockToBottom(); // Устанавливаем флаг
-        forceScrollToBottom('auto'); // Скроллим
-      });
-    }
-  }, [currentConversationId, messages.length, lockToBottom, forceScrollToBottom]);
 
   // Управление сайдбаром
   const sidebar = useSidebar();
@@ -100,8 +82,6 @@ function Home() {
     pendingMessage,
   } = useChat({
     onMessageSent: () => {
-      // -> ИЗМЕНЕНИЕ: Только lockToBottom, без принудительного скролла
-      // ResizeObserver сам скроллит когда контент растет
       lockToBottom();
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
@@ -140,32 +120,9 @@ function Home() {
   }, [input, isLoading, sendMessage]);
 
   const handleLogout = useCallback(async () => {
-  try {
-    // -> ИСПРАВЛЕНИЕ: Сначала пытаемся корректный logout
-    const { error } = await supabase.auth.signOut();
-    
-    if (error) {
-      console.error('Logout error:', error);
-      // -> Если ошибка 403 - значит токен невалидный, просто очищаем localStorage
-      if (error.message.includes('403') || error.status === 403) {
-        console.warn('Invalid token detected, clearing local storage...');
-        localStorage.removeItem('supabase.auth.token');
-      }
-    }
-    
-    // -> В любом случае редиректим на login
+    await supabase.auth.signOut();
     navigate({ to: '/login' });
-  } catch (error) {
-    console.error('Unexpected logout error:', error);
-    // -> На всякий случай очищаем localStorage
-    try {
-      localStorage.removeItem('supabase.auth.token');
-    } catch (e) {
-      console.error('Failed to clear localStorage:', e);
-    }
-    navigate({ to: '/login' });
-  }
-}, [navigate]);
+  }, [navigate]);
 
   const handleStartEdit = useCallback((id: string) => {
     setEditingMessageId(id);

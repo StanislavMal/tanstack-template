@@ -7,44 +7,26 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Supabase URL and Anon Key are required.')
 }
 
-// -> ИСПРАВЛЕНИЕ: Правильная проверка SSR/CSR
-const isServer = typeof window === 'undefined';
+// Определяем storage в зависимости от окружения (SSR или клиент)
+const getStorage = () => {
+  if (typeof window !== 'undefined') {
+    return window.localStorage
+  }
+  // Для SSR возвращаем заглушку, которая ничего не делает
+  return {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+  }
+}
 
-// -> ИСПРАВЛЕНИЕ: Создаем storage adapter который безопасен для SSR
-const customStorageAdapter = {
-  getItem: (key: string) => {
-    if (isServer) return null;
-    try {
-      return window.localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  setItem: (key: string, value: string) => {
-    if (isServer) return;
-    try {
-      window.localStorage.setItem(key, value);
-    } catch (error) {
-      console.error('Failed to set item in localStorage:', error);
-    }
-  },
-  removeItem: (key: string) => {
-    if (isServer) return;
-    try {
-      window.localStorage.removeItem(key);
-    } catch (error) {
-      console.error('Failed to remove item from localStorage:', error);
-    }
-  },
-};
-
+// Создаем и экспортируем клиент Supabase с настройками сохранения сессии
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
-    storageKey: 'supabase.auth.token',
-    storage: customStorageAdapter, // -> ИСПРАВЛЕНИЕ: Явно указываем adapter
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    // -> ИСПРАВЛЕНИЕ: Убрали flowType: 'pkce' - он вызывает конфликты
+    persistSession: true, // Сохранять сессию между перезагрузками
+    storageKey: 'supabase.auth.token', // Ключ для хранения в localStorage
+    storage: getStorage(), // Используем localStorage на клиенте, заглушку на сервере
+    autoRefreshToken: true, // Автоматически обновлять токен
+    detectSessionInUrl: true, // Определять сессию из URL (для magic links и т.д.)
   }
 })
