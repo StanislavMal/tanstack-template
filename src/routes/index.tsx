@@ -17,9 +17,9 @@ import {
   useScrollManagement,
   useMediaQuery,
 } from '../hooks';
-import { useConversations, useSettings, usePrompts } from '../store';
-import { actions } from '../store/store'; 
-import type { Conversation } from '../store/store';
+import { useConversations, useSettings, usePrompts, actions } from '../store';
+// ИЗМЕНЕНИЕ: Убран неиспользуемый импорт `Conversation`
+// import type { Conversation } from '../store';
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
@@ -52,46 +52,25 @@ function Home() {
     messagesContainerRef,
     contentRef,
     showScrollDownButton,
-    forceScrollToBottom,
+    scrollToBottom,
     lockToBottom,
-    checkAndRestoreScroll,
-  } = useScrollManagement();
+  } = useScrollManagement(messages);
 
-  // Загрузка первоначальных данных (список чатов, настройки)
   useEffect(() => {
     if (user && isInitialized && !authLoading && !dataLoaded) {
       const loadUserData = async () => {
         try {
-          await Promise.all([
-            loadConversations(),
-            loadPrompts(),
-            loadSettings(),
-          ]);
+          await Promise.all([ loadConversations(), loadPrompts(), loadSettings() ]);
           setDataLoaded(true);
         } catch (error) {
           console.error('Error loading user data:', error);
-          setDataLoaded(true); // Все равно ставим true, чтобы не было вечной загрузки
+          setDataLoaded(true);
         }
       };
       loadUserData();
     }
   }, [user, isInitialized, authLoading, dataLoaded, loadConversations, loadPrompts, loadSettings]);
 
-  // НОВЫЙ ЭФФЕКТ: Восстановление скролла при загрузке сообщений для чата
-  useEffect(() => {
-    // Этот эффект сработает каждый раз, когда массив `messages` изменится,
-    // например, после выбора другого чата и загрузки его истории.
-    // `setTimeout` с 0 задержкой — это трюк, чтобы выполнить код после того,
-    // как React закончит рендеринг и DOM обновится.
-    const timer = setTimeout(() => {
-      checkAndRestoreScroll();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [messages, checkAndRestoreScroll]);
-
-
-  // Редирект, если пользователь разлогинился
   useEffect(() => {
     if (isInitialized && !authLoading && !user) {
       navigate({ to: '/login' });
@@ -165,6 +144,31 @@ function Home() {
   const handleCopyMessage = useCallback((content: string) => {
     navigator.clipboard.writeText(content);
   }, []);
+  
+  // ИЗМЕНЕНИЕ: Создаем объект с пропсами для Sidebar для чистоты кода
+  const sidebarProps = {
+    conversations: sidebar.conversations,
+    currentConversationId: sidebar.currentConversationId,
+    handleNewChat: sidebar.handleNewChat,
+    setCurrentConversationId: sidebar.handleSelectChat,
+    handleDeleteChat: sidebar.handleDeleteChat,
+    handleDuplicateChat: sidebar.handleDuplicateChat,
+    editingChatId: sidebar.editingChatId,
+    setEditingChatId: (id: string | null) => {
+      const conversation = sidebar.conversations.find((c) => c.id === id);
+      if (id && conversation) {
+        sidebar.handleStartEdit(id, conversation.title);
+      } else {
+        sidebar.handleCancelEdit();
+      }
+    },
+    editingTitle: sidebar.editingTitle,
+    setEditingTitle: sidebar.setEditingTitle,
+    handleUpdateChatTitle: sidebar.handleSaveEdit,
+    isOpen: sidebar.isOpen,
+    setIsOpen: sidebar.setIsOpen,
+    isCollapsed: sidebar.isCollapsed,
+  };
 
   if (!isInitialized || authLoading || !dataLoaded) {
     return (
@@ -203,59 +207,20 @@ function Home() {
             onCollapse={sidebar.toggleCollapse as PanelOnCollapse}
             className="flex flex-col"
           >
-            <Sidebar
-              conversations={sidebar.conversations}
-              currentConversationId={sidebar.currentConversationId}
-              handleNewChat={sidebar.handleNewChat}
-              setCurrentConversationId={sidebar.handleSelectChat}
-              handleDeleteChat={sidebar.handleDeleteChat}
-              handleDuplicateChat={sidebar.handleDuplicateChat}
-              editingChatId={sidebar.editingChatId}
-              setEditingChatId={(id) => {
-                const conversation = sidebar.conversations.find(
-                  (c: Conversation) => c.id === id
-                );
-                if (id && conversation) {
-                  sidebar.handleStartEdit(id, conversation.title);
-                } else {
-                  sidebar.handleCancelEdit();
-                }
-              }}
-              editingTitle={sidebar.editingTitle}
-              setEditingTitle={sidebar.setEditingTitle}
-              handleUpdateChatTitle={(_id, _title) => sidebar.handleSaveEdit()}
-              isOpen={true}
-              setIsOpen={() => {}}
-              isCollapsed={sidebar.isCollapsed}
-            />
+            {/* ИЗМЕНЕНИЕ: Используем объект sidebarProps */}
+            <Sidebar {...sidebarProps} isOpen={true} setIsOpen={() => {}} />
           </Panel>
           <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
           <Panel className="flex-1 flex flex-col relative min-h-0">
-            <Header
-              onMenuClick={() => {}}
-              onSettingsClick={() => setIsSettingsOpen(true)}
-              onLogout={handleLogout}
-              isMobile={false}
-            />
+            <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} />
             <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
               <div ref={contentRef}>
                 <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                  <ChatArea
-                    messages={displayMessages}
-                    pendingMessage={pendingMessage}
-                    isLoading={isLoading}
-                    error={error}
-                    currentConversationId={currentConversationId}
-                    editingMessageId={editingMessageId}
-                    onStartEdit={handleStartEdit}
-                    onCancelEdit={handleCancelEdit}
-                    onSaveEdit={handleSaveEdit}
-                    onCopyMessage={handleCopyMessage}
-                  />
+                  <ChatArea messages={displayMessages} pendingMessage={pendingMessage} isLoading={isLoading} error={error} currentConversationId={currentConversationId} editingMessageId={editingMessageId} onStartEdit={handleStartEdit} onCancelEdit={handleCancelEdit} onSaveEdit={handleSaveEdit} onCopyMessage={handleCopyMessage} />
                 </div>
               </div>
             </main>
-            {showScrollDownButton && <ScrollDownButton onClick={forceScrollToBottom} className="bottom-28 right-10" />}
+            {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-10" />}
             <Footer ref={textareaRef} input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
           </Panel>
         </PanelGroup>
@@ -267,47 +232,15 @@ function Home() {
   return (
     <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
       {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />}
-      <Sidebar
-        conversations={sidebar.conversations}
-        currentConversationId={sidebar.currentConversationId}
-        handleNewChat={sidebar.handleNewChat}
-        setCurrentConversationId={sidebar.handleSelectChat}
-        handleDeleteChat={sidebar.handleDeleteChat}
-        handleDuplicateChat={sidebar.handleDuplicateChat}
-        editingChatId={sidebar.editingChatId}
-        setEditingChatId={(id) => {
-          const conversation = sidebar.conversations.find((c: Conversation) => c.id === id);
-          if (id && conversation) {
-            sidebar.handleStartEdit(id, conversation.title);
-          } else {
-            sidebar.handleCancelEdit();
-          }
-        }}
-        editingTitle={sidebar.editingTitle}
-        setEditingTitle={sidebar.setEditingTitle}
-        handleUpdateChatTitle={(_id, _title) => sidebar.handleSaveEdit()}
-        isOpen={sidebar.isOpen}
-        setIsOpen={sidebar.setIsOpen}
-        isCollapsed={false}
-      />
+      {/* ИЗМЕНЕНИЕ: Используем объект sidebarProps */}
+      <Sidebar {...sidebarProps} />
       <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
       <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
         <div ref={contentRef}>
-          <ChatArea
-            messages={displayMessages}
-            pendingMessage={pendingMessage}
-            isLoading={isLoading}
-            error={error}
-            currentConversationId={currentConversationId}
-            editingMessageId={editingMessageId}
-            onStartEdit={handleStartEdit}
-            onCancelEdit={handleCancelEdit}
-            onSaveEdit={handleSaveEdit}
-            onCopyMessage={handleCopyMessage}
-          />
+          <ChatArea messages={displayMessages} pendingMessage={pendingMessage} isLoading={isLoading} error={error} currentConversationId={currentConversationId} editingMessageId={editingMessageId} onStartEdit={handleStartEdit} onCancelEdit={handleCancelEdit} onSaveEdit={handleSaveEdit} onCopyMessage={handleCopyMessage} />
         </div>
       </main>
-      {showScrollDownButton && <ScrollDownButton onClick={forceScrollToBottom} className="bottom-24 right-4" />}
+      {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
       <Footer ref={textareaRef} input={input} setInput={setInput} handleSubmit={handleSubmit} isLoading={isLoading} />
       <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>

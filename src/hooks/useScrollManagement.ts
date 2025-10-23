@@ -1,150 +1,98 @@
-// 📄 src/hooks/useScrollManagement.ts (Улучшенная версия)
+// 📄 src/hooks/useScrollManagement.ts (Исправленная версия)
 
-import { useRef, useState, useCallback, useLayoutEffect, useEffect } from 'react';
+import { useRef, useState, useCallback, useLayoutEffect } from 'react';
+// ИЗМЕНЕНИЕ: Убран неиспользуемый импорт `Message`
 
-// Порог в пикселях, определяющий, находится ли пользователь "у самого низа"
-const SCROLL_NEAR_BOTTOM_THRESHOLD = 10;
-
-export function useScrollManagement() {
+export function useScrollManagement(dependencies: any[] = []) {
   const scrollContainerRef = useRef<HTMLElement>(null);
-  const contentWrapperRef = useRef<HTMLDivElement>(null);
-  
-  // Ref для отслеживания, был ли скролл инициирован пользователем.
-  // Это помогает отличить ручной скролл от программного.
-  const userScrollRef = useRef(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
-  // Состояние, показывающее, должен ли скролл быть "приклеен" к низу.
-  const [isLockedToBottom, setIsLockedToBottom] = useState(true);
+  // Ref для отслеживания, привязан ли скролл к низу.
+  const isLockedToBottomRef = useRef(true);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
-  // --- Основная функция прокрутки ---
-  const scrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'auto') => {
+  // --- Функция для немедленной прокрутки ---
+  const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'auto') => {
     const container = scrollContainerRef.current;
     if (container) {
-      // Исполняем скролл в следующем кадре анимации, чтобы DOM успел обновиться.
-      requestAnimationFrame(() => {
-        container.scrollTo({
-          top: container.scrollHeight,
-          behavior,
-        });
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior,
       });
     }
   }, []);
 
-  // --- Эффект для отслеживания ручного скролла пользователем ---
-  useEffect(() => {
+  // --- Эффект, который следит за всем ---
+  useLayoutEffect(() => {
     const container = scrollContainerRef.current;
-    if (!container) return;
+    const content = contentRef.current;
+    if (!container || !content) return;
 
+    // --- Обработчик скролла пользователем ---
     const handleScroll = () => {
-      // Если скролл был программным, игнорируем этот вызов.
-      if (!userScrollRef.current) {
-        return;
-      }
-
       const { scrollTop, scrollHeight, clientHeight } = container;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < SCROLL_NEAR_BOTTOM_THRESHOLD;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 5;
+      
+      // Обновляем состояние привязки
+      isLockedToBottomRef.current = isAtBottom;
 
-      // Если пользователь доскроллил до низа, снова "приклеиваемся".
-      // Если он отскроллил вверх, "отклеиваемся".
-      setIsLockedToBottom(isAtBottom);
+      // Управляем видимостью кнопки "Вниз"
+      const shouldShowButton = scrollHeight - scrollTop - clientHeight > 150;
+      setShowScrollDownButton(shouldShowButton && !isAtBottom);
     };
 
-    const handleTouchStart = () => { userScrollRef.current = true; };
-    const handleWheel = () => { userScrollRef.current = true; };
+    // --- Observer'ы для автоматической прокрутки ---
+    const observerCallback = () => {
+      if (isLockedToBottomRef.current) {
+        forceScrollToBottom('auto');
+      }
+    };
+    
+    // ResizeObserver следит за изменением размера, включая стриминг
+    const resizeObserver = new ResizeObserver(observerCallback);
+    resizeObserver.observe(content);
+    
+    // MutationObserver следит за добавлением/удалением сообщений
+    const mutationObserver = new MutationObserver(observerCallback);
+    mutationObserver.observe(content, { childList: true, subtree: true });
 
-    // Мы слушаем события, которые точно инициирует пользователь.
-    container.addEventListener('wheel', handleWheel, { passive: true });
-    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    // --- Добавляем слушатель ---
     container.addEventListener('scroll', handleScroll, { passive: true });
 
+    // --- Начальная прокрутка при монтировании или смене зависимостей ---
+    // Это сработает при загрузке новых чатов.
+    forceScrollToBottom('auto');
+
+    // --- Очистка ---
     return () => {
-      container.removeEventListener('wheel', handleWheel);
-      container.removeEventListener('touchstart', handleTouchStart);
       container.removeEventListener('scroll', handleScroll);
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
     };
-  }, []);
+    // Мы передаем `dependencies` (например, массив `messages`), чтобы этот
+    // эффект перезапускался при смене чата, гарантируя начальную прокрутку.
+  }, [dependencies, forceScrollToBottom]);
 
-  // --- Эффект для управления видимостью кнопки "Вниз" ---
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
 
-    const checkButtonVisibility = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      
-      // Показываем кнопку, если пользователь не приклеен к низу 
-      // и отскроллил на значительное расстояние (например, > 150px)
-      const isScrolledUp = scrollHeight - scrollTop - clientHeight > 150;
-      setShowScrollDownButton(isScrolledUp && !isLockedToBottom);
-    };
+  // --- Публичные методы ---
+  
+  // Для кнопки "Вниз"
+  const scrollToBottom = useCallback(() => {
+    isLockedToBottomRef.current = true;
+    forceScrollToBottom('smooth');
+  }, [forceScrollToBottom]);
 
-    // Проверяем видимость при любом скролле и изменении состояния привязки.
-    container.addEventListener('scroll', checkButtonVisibility, { passive: true });
-    checkButtonVisibility(); // Начальная проверка
-
-    return () => {
-      container.removeEventListener('scroll', checkButtonVisibility);
-    };
-  }, [isLockedToBottom]);
-
-  // --- Главный эффект, который реагирует на изменение контента и состояние привязки ---
-  useLayoutEffect(() => {
-    const content = contentWrapperRef.current;
-    if (!content) return;
-
-    // Этот ResizeObserver будет следить за высотой блока с сообщениями.
-    const resizeObserver = new ResizeObserver(() => {
-      // Если мы "приклеены" к низу, то при любом изменении размера контента
-      // (например, при добавлении нового сообщения или стриминге),
-      // мы прокручиваемся вниз.
-      if (isLockedToBottom) {
-        // Устанавливаем флаг, что это не пользовательский скролл.
-        userScrollRef.current = false;
-        scrollToBottom('auto');
-      }
-    });
-
-    resizeObserver.observe(content);
-
-    return () => resizeObserver.disconnect();
-  }, [isLockedToBottom, scrollToBottom]);
-
-  // --- Публичные методы для управления скроллом извне ---
-
-  // Используется при отправке нового сообщения, чтобы принудительно "приклеиться" к низу.
-  const lockToBottomAndScroll = useCallback(() => {
-    setIsLockedToBottom(true);
-    setShowScrollDownButton(false);
-    userScrollRef.current = false;
-    scrollToBottom('smooth');
-  }, [scrollToBottom]);
-
-  // Используется при нажатии на кнопку "Вниз".
-  const forceScrollToBottom = useCallback(() => {
-    setIsLockedToBottom(true);
-    setShowScrollDownButton(false);
-    userScrollRef.current = false;
-    scrollToBottom('smooth');
-  }, [scrollToBottom]);
-
-  // Используется после первоначальной загрузки чатов для установки правильной позиции.
-  const checkAndRestoreScroll = useCallback(() => {
-    if (isLockedToBottom) {
-      scrollToBottom('auto');
-    }
-  }, [isLockedToBottom, scrollToBottom]);
+  // Для отправки сообщения
+  const lockToBottom = useCallback(() => {
+    isLockedToBottomRef.current = true;
+    forceScrollToBottom('auto');
+  }, [forceScrollToBottom]);
 
   return {
-    // Переименовываем ref'ы для большей ясности
     messagesContainerRef: scrollContainerRef,
-    contentRef: contentWrapperRef,
-    
+    contentRef,
     showScrollDownButton,
-    
-    // Переименовываем методы для ясности их назначения
-    forceScrollToBottom, // для кнопки "Вниз"
-    lockToBottom: lockToBottomAndScroll, // для отправки сообщения
-    checkAndRestoreScroll,
+    scrollToBottom,
+    lockToBottom,
   };
 }
