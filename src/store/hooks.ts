@@ -199,24 +199,36 @@ export function useConversations() {
     }
   }, [user]);
 
-  const editMessageAndUpdate = useCallback(async (messageId: string, newContent: string) => {
+  // ИЗМЕНЕНИЕ: Теперь возвращает обрезанный массив сообщений для отправки в AI
+  const editMessageAndUpdate = useCallback(async (messageId: string, newContent: string): Promise<Message[] | null> => {
     const originalMessages = selectors.getCurrentMessages(store.state);
     const originalMessageIndex = originalMessages.findIndex(m => m.id === messageId);
-    if (originalMessageIndex === -1) return null;
+    
+    if (originalMessageIndex === -1) {
+      console.error('Message not found:', messageId);
+      return null;
+    }
 
+    // Получаем ID сообщений, которые нужно удалить (все после редактируемого)
     const idsToDelete = originalMessages
       .slice(originalMessageIndex + 1)
       .map(m => m.id);
 
+    // Обновляем локальный state (это обрежет массив)
     actions.editMessage(messageId, newContent);
     
     try {
+      // Параллельно выполняем операции с БД
       const promises = [];
 
+      // Удаляем последующие сообщения из БД
       if (idsToDelete.length > 0) {
-        promises.push(supabase.from('messages').delete().in('id', idsToDelete));
+        promises.push(
+          supabase.from('messages').delete().in('id', idsToDelete)
+        );
       }
 
+      // Обновляем содержимое редактируемого сообщения в БД
       promises.push(
         supabase
           .from('messages')
@@ -225,18 +237,24 @@ export function useConversations() {
       );
       
       const results = await Promise.all(promises);
-      results.forEach(res => {
+      
+      // Проверяем на ошибки
+      for (const res of results) {
         if (res.error) throw res.error;
-      });
+      }
 
     } catch (error) {
       console.error('Failed to update messages in Supabase after edit:', error);
+      // Откатываем изменения в state
       actions.setMessages(originalMessages);
       return null;
     }
 
+    // Получаем актуальное состояние после обновления
     const updatedMessages = selectors.getCurrentMessages(store.state);
-    return updatedMessages.at(-1) || null;
+    
+    // ИЗМЕНЕНИЕ: Возвращаем весь массив обрезанных сообщений
+    return updatedMessages;
   }, []);
   
   const duplicateConversation = useCallback(async (id: string) => {
@@ -256,7 +274,6 @@ export function useConversations() {
       return;
     }
 
-    // ИЗМЕНЕНИЕ: Проверяем что первое сообщение от пользователя
     if (!messagesToCopy || messagesToCopy.length === 0) {
       console.warn('Cannot duplicate empty conversation');
       return;

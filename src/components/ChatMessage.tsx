@@ -6,7 +6,7 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
 import { Pencil, Copy, Check, X } from 'lucide-react';
-import type { Message } from '../utils/ai';
+import type { Message } from '../lib/ai/types'; // <- ИСПРАВЛЕННЫЙ ПУТЬ
 import { CodeBlock } from './CodeBlock';
 
 interface ChatMessageProps {
