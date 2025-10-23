@@ -20,7 +20,8 @@ import {
   useMediaQuery,
 } from '../hooks';
 import { useConversations, useSettings, usePrompts } from '../store';
-import type { Conversation, Message } from '../store/store';
+// -> ИЗМЕНЕНИЕ: Убираем неиспользуемый импорт `Conversation`
+import type { Message } from '../store/store';
 
 export const Route = createFileRoute('/')({
   component: Home,
@@ -71,24 +72,21 @@ function Home() {
   useEffect(() => {
     const loadAndScroll = async () => {
       if (currentConversationId && user) {
+        console.log(`[Home.tsx] useEffect for convId: ${currentConversationId} STARTING.`);
         const { data, error } = await supabase
           .from('messages')
           .select('*')
           .eq('conversation_id', currentConversationId)
           .order('created_at', { ascending: true });
 
-        if (error) {
-          console.error('Error loading messages:', error);
-          setMessages([]);
-        } else {
-          const formattedMessages = data.map(m => ({
-            id: m.id,
-            role: m.role as 'user' | 'assistant' | 'system',
-            content: m.content
-          })) as Message[];
-          setMessages(formattedMessages);
-        }
+        const formattedMessages = error ? [] : data.map(m => ({
+          id: m.id, role: m.role as 'user' | 'assistant' | 'system', content: m.content
+        })) as Message[];
         
+        console.log(`[Home.tsx] Loaded ${formattedMessages.length} messages.`);
+        setMessages(formattedMessages);
+        
+        console.log('[Home.tsx] Calling lockToBottom() and scheduling forceScrollToBottom()');
         lockToBottom();
         setTimeout(() => forceScrollToBottom('auto'), 0);
       }
@@ -104,9 +102,7 @@ function Home() {
     pendingMessage,
   } = useChat({
     onMessageSent: () => {
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
     },
     onResponseComplete: () => {},
     onError: (error) => console.error('Chat error:', error),
@@ -124,6 +120,7 @@ function Home() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    console.log('[Home.tsx] handleSubmit CALLED.');
     lockToBottom(); 
 
     const currentInput = input;
@@ -143,6 +140,7 @@ function Home() {
 
   const handleSaveEdit = useCallback(async (id: string, newContent: string) => {
     setEditingMessageId(null);
+    console.log('[Home.tsx] handleSaveEdit CALLED.');
     lockToBottom();
     await editAndRegenerate(id, newContent);
   }, [editAndRegenerate, lockToBottom]);
@@ -152,14 +150,7 @@ function Home() {
   }, []);
 
   if (authLoading) {
-    return (
-      <div className="h-[100dvh] bg-gray-900 text-white flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-400">Загрузка...</p>
-        </div>
-      </div>
-    );
+    return <div className="h-[100dvh] bg-gray-900 text-white flex items-center justify-center"><div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div></div>;
   }
   if (!user) return null;
 
@@ -172,56 +163,49 @@ function Home() {
             collapsedSize={0} onCollapse={sidebar.toggleCollapse as PanelOnCollapse}
             className="flex flex-col"
           >
+            {/* -> ИСПРАВЛЕНИЕ: Явно передаем все props */}
             <Sidebar 
-              conversations={sidebar.conversations} currentConversationId={sidebar.currentConversationId}
-              handleNewChat={sidebar.handleNewChat} setCurrentConversationId={sidebar.handleSelectChat}
-              handleDeleteChat={sidebar.handleDeleteChat} handleDuplicateChat={sidebar.handleDuplicateChat}
+              conversations={sidebar.conversations}
+              currentConversationId={sidebar.currentConversationId}
+              handleNewChat={sidebar.handleNewChat}
+              setCurrentConversationId={sidebar.handleSelectChat}
+              handleDeleteChat={sidebar.handleDeleteChat}
+              handleDuplicateChat={sidebar.handleDuplicateChat}
               editingChatId={sidebar.editingChatId}
               setEditingChatId={(id) => {
-                const conversation = sidebar.conversations.find((c: Conversation) => c.id === id);
-                id && conversation ? sidebar.handleStartEdit(id, conversation.title) : sidebar.handleCancelEdit();
+                const conversation = sidebar.conversations.find((c) => c.id === id);
+                if (id && conversation) {
+                  sidebar.handleStartEdit(id, conversation.title);
+                } else {
+                  sidebar.handleCancelEdit();
+                }
               }}
-              editingTitle={sidebar.editingTitle} setEditingTitle={sidebar.setEditingTitle}
-              handleUpdateChatTitle={(_id, _title) => sidebar.handleSaveEdit()}
-              isOpen={true} setIsOpen={() => {}} isCollapsed={sidebar.isCollapsed}
+              editingTitle={sidebar.editingTitle}
+              setEditingTitle={sidebar.setEditingTitle}
+              handleUpdateChatTitle={() => sidebar.handleSaveEdit()}
+              isOpen={sidebar.isOpen}
+              setIsOpen={sidebar.setIsOpen}
+              isCollapsed={sidebar.isCollapsed}
             />
           </Panel>
           <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
           
-          {/* -> ИЗМЕНЕНИЕ: Этот Panel теперь является relative-контейнером */}
           <Panel className="flex-1 flex flex-col relative min-h-0">
             <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} />
             
-            {/* -> ИЗМЕНЕНИЕ: `main` теперь занимает все место и имеет внутренний отступ снизу */}
-            <main ref={messagesContainerRef} className="absolute inset-0 overflow-y-auto pb-28">
+            <main ref={messagesContainerRef} className="flex-1 overflow-y-auto pb-28">
               <div ref={contentRef}>
                 <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                  <ChatArea
-                    messages={displayMessages} pendingMessage={pendingMessage} isLoading={isLoading}
-                    error={error} currentConversationId={currentConversationId} editingMessageId={editingMessageId}
-                    onStartEdit={handleStartEdit} onCancelEdit={handleCancelEdit}
-                    onSaveEdit={handleSaveEdit} onCopyMessage={handleCopyMessage}
-                  />
+                  <ChatArea {...{messages: displayMessages, pendingMessage, isLoading, error, currentConversationId, editingMessageId, onStartEdit: handleStartEdit, onCancelEdit: handleCancelEdit, onSaveEdit: handleSaveEdit, onCopyMessage: handleCopyMessage}} />
                 </div>
               </div>
             </main>
             
-            {showScrollDownButton && (
-              // -> ИЗМЕНЕНИЕ: Позиционирование кнопки немного изменилось, чтобы быть над футером
-              <ScrollDownButton
-                onClick={scrollToBottom}
-                className="bottom-32 right-10"
-              />
-            )}
-
-            {/* -> ИЗМЕНЕНИЕ: Футер теперь абсолютно позиционирован внизу */}
-            <Footer
-              ref={textareaRef}
-              input={input}
-              setInput={setInput}
-              handleSubmit={handleSubmit}
-              isLoading={isLoading}
-            />
+            {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-32 right-10" />}
+            
+            <div className="absolute bottom-0 left-0 right-0">
+                <Footer ref={textareaRef} {...{input, setInput, handleSubmit, isLoading}} />
+            </div>
           </Panel>
         </PanelGroup>
         <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
@@ -229,60 +213,49 @@ function Home() {
     );
   }
 
-  // Рендер для мобильных устройств
+  // Рендер для мобильных
   return (
-    // -> ИЗМЕНЕНИЕ: Убираем flex-col, добавляем relative
-    <div className="h-[100dvh] bg-gray-900 text-white relative">
+    <div className="h-[100dvh] bg-gray-900 text-white flex flex-col">
       {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />}
+      
+      {/* -> ИСПРАВЛЕНИЕ: Явно передаем все props */}
       <Sidebar 
-        conversations={sidebar.conversations} currentConversationId={sidebar.currentConversationId}
-        handleNewChat={sidebar.handleNewChat} setCurrentConversationId={sidebar.handleSelectChat}
-        handleDeleteChat={sidebar.handleDeleteChat} handleDuplicateChat={sidebar.handleDuplicateChat}
+        conversations={sidebar.conversations}
+        currentConversationId={sidebar.currentConversationId}
+        handleNewChat={sidebar.handleNewChat}
+        setCurrentConversationId={sidebar.handleSelectChat}
+        handleDeleteChat={sidebar.handleDeleteChat}
+        handleDuplicateChat={sidebar.handleDuplicateChat}
         editingChatId={sidebar.editingChatId}
         setEditingChatId={(id) => {
-          const conversation = sidebar.conversations.find((c: Conversation) => c.id === id);
-          id && conversation ? sidebar.handleStartEdit(id, conversation.title) : sidebar.handleCancelEdit();
+          const conversation = sidebar.conversations.find((c) => c.id === id);
+          if (id && conversation) {
+            sidebar.handleStartEdit(id, conversation.title);
+          } else {
+            sidebar.handleCancelEdit();
+          }
         }}
-        editingTitle={sidebar.editingTitle} setEditingTitle={sidebar.setEditingTitle}
-        handleUpdateChatTitle={(_id, _title) => sidebar.handleSaveEdit()}
-        isOpen={sidebar.isOpen} setIsOpen={sidebar.setIsOpen} isCollapsed={false}
+        editingTitle={sidebar.editingTitle}
+        setEditingTitle={sidebar.setEditingTitle}
+        handleUpdateChatTitle={() => sidebar.handleSaveEdit()}
+        isOpen={sidebar.isOpen}
+        setIsOpen={sidebar.setIsOpen}
+        isCollapsed={sidebar.isCollapsed}
       />
       
-      {/* -> ИЗМЕНЕНИЕ: Создаем обертку для основного контента, чтобы Header был в потоке, а остальное - нет */}
-      <div className="flex flex-col h-full">
-        <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
-        <div className="flex-1 relative min-h-0">
-          {/* -> ИЗМЕНЕНИЕ: main теперь занимает все место и имеет отступ */}
-          <main 
-            ref={messagesContainerRef} 
-            className={`absolute inset-0 overflow-y-auto pb-24 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}
-          >
-            <div ref={contentRef}>
-              <ChatArea
-                messages={displayMessages} pendingMessage={pendingMessage} isLoading={isLoading}
-                error={error} currentConversationId={currentConversationId} editingMessageId={editingMessageId}
-                onStartEdit={handleStartEdit} onCancelEdit={handleCancelEdit}
-                onSaveEdit={handleSaveEdit} onCopyMessage={handleCopyMessage}
-              />
-            </div>
-          </main>
-          
-          {showScrollDownButton && (
-            // -> ИЗМЕНЕНИЕ: Отступ снизу для кнопки
-            <ScrollDownButton
-              onClick={scrollToBottom}
-              className="bottom-28 right-4"
-            />
-          )}
-          
-          {/* -> ИЗМЕНЕНИЕ: Футер абсолютно позиционирован */}
-          <Footer
-            ref={textareaRef}
-            input={input}
-            setInput={setInput}
-            handleSubmit={handleSubmit}
-            isLoading={isLoading}
-          />
+      <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
+      
+      <div className="flex-1 relative min-h-0">
+        <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto pb-24 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
+          <div ref={contentRef}>
+            <ChatArea {...{messages: displayMessages, pendingMessage, isLoading, error, currentConversationId, editingMessageId, onStartEdit: handleStartEdit, onCancelEdit: handleCancelEdit, onSaveEdit: handleSaveEdit, onCopyMessage: handleCopyMessage}} />
+          </div>
+        </main>
+        
+        {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-4" />}
+        
+        <div className="absolute bottom-0 left-0 right-0">
+            <Footer ref={textareaRef} {...{input, setInput, handleSubmit, isLoading}} />
         </div>
       </div>
       

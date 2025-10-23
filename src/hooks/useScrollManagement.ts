@@ -8,60 +8,78 @@ export function useScrollManagement() {
   const isLockedToBottomRef = useRef(true);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
+  console.log(`[useScrollManagement] HOOK INITIALIZED. Initial lock: ${isLockedToBottomRef.current}`);
+
   const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'smooth') => {
     const container = messagesContainerRef.current;
     if (container) {
+      console.log(`[useScrollManagement] ---> forceScrollToBottom CALLED. Behavior: ${behavior}, ScrollHeight: ${container.scrollHeight}`);
       container.scrollTo({ top: container.scrollHeight, behavior });
+    } else {
+      console.warn('[useScrollManagement] forceScrollToBottom called but container is null.');
     }
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    // Эта функция вызывается кнопкой "вниз" или при отправке сообщения
+    console.log('[useScrollManagement] scrollToBottom CALLED (from button or other UI). Setting lock to TRUE.');
     isLockedToBottomRef.current = true;
     setShowScrollDownButton(false);
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
-  // Следим за ростом контента (стриминг)
   useLayoutEffect(() => {
     const contentElement = contentRef.current;
     if (!contentElement) return;
 
-    const observer = new ResizeObserver(() => {
+    console.log('[useScrollManagement] ResizeObserver ATTACHED.');
+    const observer = new ResizeObserver((entries) => {
+      const newHeight = entries[0]?.contentRect?.height;
+      console.log(`[useScrollManagement] ResizeObserver FIRED. New height: ${newHeight}. Lock is: ${isLockedToBottomRef.current}`);
       if (isLockedToBottomRef.current) {
         forceScrollToBottom('auto');
       }
     });
 
     observer.observe(contentElement);
-    return () => observer.disconnect();
+    return () => {
+        console.log('[useScrollManagement] ResizeObserver DISCONNECTED.');
+        observer.disconnect();
+    }
   }, [forceScrollToBottom]);
 
-  // Следим за скроллом пользователя
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    console.log('[useScrollManagement] Scroll listener ATTACHED.');
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
-      // Простой порог в 10 пикселей, чтобы избежать ложных срабатываний
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 10;
-      isLockedToBottomRef.current = isAtBottom;
+      const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+      
+      const isAtBottom = distanceToBottom < 10;
+      const oldLockState = isLockedToBottomRef.current;
 
-      // Показываем кнопку, если пользователь прокрутил значительно вверх
-      const isScrolledUp = scrollHeight - scrollTop - clientHeight > 150;
-      setShowScrollDownButton(isScrolledUp);
+      if (isAtBottom !== oldLockState) {
+        isLockedToBottomRef.current = isAtBottom;
+        console.log(`[useScrollManagement] LOCK STATE CHANGED to ${isAtBottom}. (Distance to bottom: ${distanceToBottom.toFixed(2)})`);
+      }
+      
+      const isScrolledUp = distanceToBottom > 150;
+      if (showScrollDownButton !== isScrolledUp) {
+        setShowScrollDownButton(isScrolledUp);
+      }
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
-    
-    // Первичная проверка при монтировании
     handleScroll();
-
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, []);
+    return () => {
+        console.log('[useScrollManagement] Scroll listener REMOVED.');
+        container.removeEventListener('scroll', handleScroll);
+    }
+  }, [showScrollDownButton]); // Добавили зависимость для корректного обновления
 
   const lockToBottom = useCallback(() => {
+    console.log('[useScrollManagement] lockToBottom CALLED. Setting lock to TRUE.');
     isLockedToBottomRef.current = true;
     setShowScrollDownButton(false);
   }, []);
