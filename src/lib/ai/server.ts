@@ -24,21 +24,33 @@ export const streamChat = createServerFn({
     try {
       const provider = AIProviderFactory.getProvider(data.provider);
       
-      // Объединяем системные инструкции
+      // ИЗМЕНЕНИЕ: Правильно формируем финальный массив сообщений
+      const finalMessages = [...data.messages];
+      
       const fullSystemInstruction = [
         data.systemInstruction,
         data.activePromptContent
       ].filter(Boolean).join('\n\n');
 
+      // Если есть системная инструкция, добавляем ее как первое сообщение
+      if (fullSystemInstruction) {
+        finalMessages.unshift({
+          id: 'system-instruction', // ID не важен, т.к. это временное сообщение
+          role: 'system',
+          content: fullSystemInstruction,
+        });
+      }
+
       const config: Partial<AIProviderConfig> = {
         model: data.model,
-        systemInstruction: fullSystemInstruction,
+        // systemInstruction больше не нужен, т.к. он уже в `finalMessages`
         temperature: data.temperature,
         maxTokens: data.maxTokens,
         reasoningEffort: data.reasoningEffort,
       };
 
-      const stream = await provider.streamChat(data.messages, config);
+      // Передаем в провайдер уже полностью готовый массив сообщений
+      const stream = await provider.streamChat(finalMessages, config);
       
       return new Response(stream, {
         headers: {

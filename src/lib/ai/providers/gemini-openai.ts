@@ -10,13 +10,14 @@ export class GeminiOpenAIProvider implements AIProvider {
   private currentKeyIndex = 0;
 
   constructor() {
-    // Собираем все доступные ключи
     this.apiKeys = Object.keys(process.env)
       .filter(key => key.startsWith('GEMINI_API_KEY_') && process.env[key])
       .map(key => process.env[key] as string);
     
     if (this.apiKeys.length === 0) {
-      throw new Error('No GEMINI_API_KEY_* environment variables found');
+      // ИЗМЕНЕНИЕ: Выбрасываем ошибку сразу, если ключей нет.
+      // Это поможет быстрее диагностировать проблему на сервере.
+      throw new Error('CRITICAL: No GEMINI_API_KEY_* environment variables found. The AI service will not work.');
     }
   }
 
@@ -34,63 +35,48 @@ export class GeminiOpenAIProvider implements AIProvider {
       baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     });
 
-    // Преобразуем сообщения в формат OpenAI
+    // ИЗМЕНЕНИЕ: Преобразуем сообщения "как есть", без добавления системных инструкций
     const openAIMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,
     }));
 
-    // Добавляем системную инструкцию если есть
-    if (config.systemInstruction) {
-      openAIMessages.unshift({
-        role: 'system',
-        content: config.systemInstruction,
-      });
-    }
-
-    // Подготавливаем параметры запроса
     const requestOptions: any = {
       model: config.model || 'gemini-2.5-flash',
-      messages: openAIMessages,
+      messages: openAIMessages, // Используем уже готовый массив
       stream: true,
       temperature: config.temperature || 0.7,
       max_tokens: config.maxTokens || 8192,
     };
 
-    // Добавляем reasoning_effort для моделей 2.5
     if (config.model?.includes('2.5')) {
       if (config.reasoningEffort && config.reasoningEffort !== 'none') {
         requestOptions.reasoning_effort = config.reasoningEffort;
       }
       
-      // Для gemini-2.5-pro нельзя отключать reasoning, поэтому если none - не передаем
       if (config.model === 'gemini-2.5-pro' && (!config.reasoningEffort || config.reasoningEffort === 'none')) {
-        requestOptions.reasoning_effort = 'low'; // Значение по умолчанию для Pro
+        requestOptions.reasoning_effort = 'low';
       }
     }
 
     try {
-      console.log(`Using Gemini model: ${requestOptions.model}`);
+      console.log(`Using Gemini model: ${requestOptions.model} with ${openAIMessages.length} messages.`);
       const response = await openai.chat.completions.create(requestOptions);
 
-      // Создаем ReadableStream для совместимости с существующим кодом
       return new ReadableStream({
         async start(controller) {
           const encoder = new TextEncoder();
           
           try {
-            // Используем правильный способ итерации по стриму
             if (Symbol.asyncIterator in response) {
               for await (const chunk of response as AsyncIterable<any>) {
                 const content = chunk.choices[0]?.delta?.content;
                 if (content) {
                   const streamChunk: StreamChunk = { text: content };
-                  // Отправляем каждый чанк в отдельной строке
                   controller.enqueue(encoder.encode(JSON.stringify(streamChunk) + '\n'));
                 }
               }
             } else {
-              // Альтернативный способ для старых версий OpenAI
               const stream = response as any;
               for await (const chunk of stream) {
                 const content = chunk.choices[0]?.delta?.content;
@@ -116,7 +102,6 @@ export class GeminiOpenAIProvider implements AIProvider {
       });
     } catch (error) {
       console.error('Error in GeminiOpenAIProvider:', error);
-      // Добавляем более информативное сообщение об ошибке
       if (error instanceof Error) {
         throw new Error(`Gemini API Error: ${error.message}`);
       }

@@ -5,6 +5,7 @@ import { streamChat } from '../lib/ai/server';
 import type { Message } from '../lib/ai/types';
 import { useConversations, useSettings, usePrompts } from '../store/hooks';
 
+// ... (остальной код до processAIResponse без изменений) ...
 interface UseChatOptions {
   onMessageSent?: (message: Message) => void;
   onResponseComplete?: (message: Message) => void;
@@ -96,7 +97,7 @@ export function useChat(options: UseChatOptions = {}) {
   }, []);
 
   const processAIResponse = useCallback(
-    async (messageHistory: Message[]): Promise<Message | null> => { // <- Явно указываем возвращаемый тип
+    async (messageHistory: Message[]): Promise<Message | null> => {
       if (!settings) {
         const errorMsg = "User settings not loaded.";
         setError(errorMsg);
@@ -111,17 +112,21 @@ export function useChat(options: UseChatOptions = {}) {
       const assistantMessageId = crypto.randomUUID();
 
       try {
-        const provider = settings.provider;
-
         const response = await streamChat({
           data: {
             messages: messageHistory,
-            provider,
+            provider: settings.provider,
             model: settings.model,
             systemInstruction: settings.system_instruction,
             activePromptContent: activePrompt?.content,
           },
         });
+
+        // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Проверяем статус ответа
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Server responded with status ${response.status}`);
+        }
 
         if (!response.body) throw new Error('No response body');
 
@@ -130,7 +135,6 @@ export function useChat(options: UseChatOptions = {}) {
         let isFirstChunk = true;
         let streamDone = false;
 
-        // Читаем стрим в цикле
         while (!streamDone) {
           const { value, done } = await reader.read();
           streamDone = done;
@@ -161,12 +165,10 @@ export function useChat(options: UseChatOptions = {}) {
           }
         }
 
-        // Ждем завершения анимации и возвращаем результат
         return new Promise<Message | null>(resolve => {
           const checkCompletion = () => {
             if (textQueueRef.current.length === 0) {
               stopTextAnimation();
-              // ИЗМЕНЕНИЕ: Проверяем, что контент не пустой
               if (finalContentRef.current.trim()) {
                 const finalMessage = { 
                   id: assistantMessageId, 
@@ -175,7 +177,7 @@ export function useChat(options: UseChatOptions = {}) {
                 };
                 resolve(finalMessage);
               } else {
-                resolve(null); // Возвращаем null, если ответ пустой
+                resolve(null);
               }
             } else {
               setTimeout(checkCompletion, 50);
@@ -197,7 +199,9 @@ export function useChat(options: UseChatOptions = {}) {
     },
     [settings, activePrompt, startTextAnimation, stopTextAnimation, options, parseNDJSON]
   );
-
+  
+  // Функции sendMessage и editAndRegenerate остаются без изменений,
+  // так как они уже корректно используют await processAIResponse
   const sendMessage = useCallback(
     async (content: string, conversationTitle?: string) => {
       if (!content.trim() || isLoading) return;
@@ -229,7 +233,7 @@ export function useChat(options: UseChatOptions = {}) {
 
         const aiResponse = await processAIResponse(currentMessages);
         
-        if (aiResponse) { // Проверка на пустой контент уже внутри processAIResponse
+        if (aiResponse) {
           await addMessage(convId, aiResponse);
           options.onResponseComplete?.(aiResponse);
         }
@@ -272,10 +276,9 @@ export function useChat(options: UseChatOptions = {}) {
         const lastMessage = updatedHistory[updatedHistory.length - 1];
         options.onMessageSent?.(lastMessage);
 
-        // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Добавили `await`
         const aiResponse = await processAIResponse(updatedHistory);
         
-        if (aiResponse) { // Проверка на пустой контент уже внутри processAIResponse
+        if (aiResponse) {
           await addMessage(currentConversationId, aiResponse);
           options.onResponseComplete?.(aiResponse);
         }
