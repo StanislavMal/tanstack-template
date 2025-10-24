@@ -43,16 +43,34 @@ export function useChat(options: UseChatOptions = {}) {
     };
   }, [currentConversationId]);
 
+  // ✅ АДАПТИВНЫЙ THROTTLING (как ChatGPT)
   const startTypingAnimation = useCallback((messageId: string) => {
     if (intervalIdRef.current) {
       clearInterval(intervalIdRef.current);
     }
 
     const streamSpeed = settings?.streamSpeed || 30;
-    const intervalMs = 50;
-    const charsPerTick = Math.max(1, Math.round((streamSpeed * intervalMs) / 1000));
+    
+    // ✅ Адаптивный интервал обновления:
+    // 5-30: каждые 33ms (30 FPS) - плавно
+    // 31-60: каждые 50ms (20 FPS) - баланс
+    // 61-100: каждые 75ms (13 FPS) - производительность
+    // 101-200: каждые 100ms (10 FPS) - максимальная производительность
+    let updateIntervalMs: number;
+    
+    if (streamSpeed <= 30) {
+      updateIntervalMs = 33;
+    } else if (streamSpeed <= 60) {
+      updateIntervalMs = 50;
+    } else if (streamSpeed <= 100) {
+      updateIntervalMs = 75;
+    } else {
+      updateIntervalMs = 100;
+    }
+    
+    const charsPerTick = Math.max(1, Math.round((streamSpeed * updateIntervalMs) / 1000));
 
-    console.log(`[Animation] Starting with speed: ${streamSpeed} chars/sec, ${charsPerTick} chars per tick`);
+    console.log(`[Animation] Speed: ${streamSpeed} chars/sec, Interval: ${updateIntervalMs}ms, Chars/tick: ${charsPerTick}`);
 
     intervalIdRef.current = setInterval(() => {
       if (textQueueRef.current.length > 0) {
@@ -66,17 +84,14 @@ export function useChat(options: UseChatOptions = {}) {
           }
           return prev;
         });
-
-        console.log(`[Animation] Displayed: ${displayedTextRef.current.length}, Queue: ${textQueueRef.current.length}`);
       } else {
-        // Очередь пустая - останавливаем
         if (intervalIdRef.current) {
           console.log('[Animation] Queue empty, stopping');
           clearInterval(intervalIdRef.current);
           intervalIdRef.current = null;
         }
       }
-    }, intervalMs);
+    }, updateIntervalMs);
   }, [settings?.streamSpeed]);
 
   const stopTypingAnimation = useCallback(() => {
@@ -150,7 +165,6 @@ export function useChat(options: UseChatOptions = {}) {
         const decoder = new TextDecoder();
         let animationStarted = false;
 
-        // ✅ ШАГ 1: Получаем все чанки
         while (true) {
           if (activeRequestIdRef.current !== requestId) {
             reader.cancel();
@@ -182,24 +196,21 @@ export function useChat(options: UseChatOptions = {}) {
               }
               
               textQueueRef.current += chunk.text;
-              console.log(`[Stream] Queue size: ${textQueueRef.current.length}`);
             }
           }
         }
 
-        console.log('[Stream] All chunks received, total queue size:', textQueueRef.current.length);
+        console.log('[Stream] All chunks received, waiting for animation to finish');
 
-        // ✅ ШАГ 2: Ждём пока анимация допечатает ВСЁ
+        // Ждём завершения анимации
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
             const queueEmpty = textQueueRef.current.length === 0;
             const animationStopped = intervalIdRef.current === null;
             
-            console.log(`[Wait] Queue: ${textQueueRef.current.length}, Animation running: ${!animationStopped}`);
-            
             if (queueEmpty && animationStopped) {
               clearInterval(checkInterval);
-              console.log('[Wait] Animation complete!');
+              console.log('[Stream] Animation complete');
               resolve();
             }
           }, 100);
@@ -207,14 +218,13 @@ export function useChat(options: UseChatOptions = {}) {
           setTimeout(() => {
             clearInterval(checkInterval);
             stopTypingAnimation();
-            console.log('[Wait] Timeout reached, forcing stop');
+            console.log('[Stream] Timeout reached');
             resolve();
-          }, 120000); // 120 секунд максимум
+          }, 30000);
         });
 
-        console.log('[Stream] Final displayed length:', displayedTextRef.current.length);
+        console.log('[Stream] Final length:', displayedTextRef.current.length);
 
-        // ✅ ШАГ 3: Возвращаем ФИНАЛЬНЫЙ текст
         const finalMessage = { 
           id: assistantMessageId, 
           role: 'assistant' as const, 
@@ -270,16 +280,15 @@ export function useChat(options: UseChatOptions = {}) {
         const { selectors, store } = await import('../store/store');
         const currentMessages = selectors.getCurrentMessages(store.state);
 
-        // ✅ Ждём полного завершения анимации
         const aiResponse = await processAIResponse(currentMessages);
         
         if (aiResponse && aiResponse.content.trim()) {
-          // ✅ Сохраняем только ПОСЛЕ того как анимация закончилась
+          // ✅ Сначала очищаем pendingMessage (убираем StreamingMessage)
+          setPendingMessage(null);
+          
+          // ✅ Затем добавляем как обычное сообщение (ChatMessage с Markdown)
           await addMessage(convId, aiResponse);
           options.onResponseComplete?.(aiResponse);
-          
-          // ✅ Теперь можно безопасно очистить
-          setPendingMessage(null);
         }
 
       } catch (error) {
@@ -289,7 +298,6 @@ export function useChat(options: UseChatOptions = {}) {
         options.onError?.(errorMsg);
       } finally {
         setIsLoading(false);
-        // ✅ НЕ очищаем pendingMessage здесь!
       }
     },
     [
@@ -323,9 +331,9 @@ export function useChat(options: UseChatOptions = {}) {
         const aiResponse = await processAIResponse(updatedHistory);
         
         if (aiResponse && aiResponse.content.trim()) {
+          setPendingMessage(null);
           await addMessage(currentConversationId, aiResponse);
           options.onResponseComplete?.(aiResponse);
-          setPendingMessage(null);
         }
 
       } catch (error) {
