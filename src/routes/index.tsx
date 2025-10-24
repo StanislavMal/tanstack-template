@@ -18,7 +18,12 @@ import {
   useScrollManagement,
   useMediaQuery,
 } from '../hooks';
-import { useConversations, useSettings, usePrompts, actions } from '../store';
+import { useConversations, useSettings, usePrompts, actions, store } from '../store';
+import type { Conversation, UserSettings, Prompt } from '../store';
+import type { Message } from '../lib/ai/types';
+
+type MessageWithConversationId = Message & { conversation_id: string };
+type ProfilePayload = { id: string; settings: UserSettings | null };
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
@@ -38,6 +43,9 @@ function Home() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
   const footerRef = useRef<FooterRef>(null);
+
+  // ИЗМЕНЕНИЕ: Генерируем уникальный ID для этого экземпляра клиента
+  const clientId = useMemo(() => crypto.randomUUID(), []);
 
   const isDesktop = useMediaQuery('(min-width: 768px)');
   
@@ -68,6 +76,59 @@ function Home() {
       loadUserData();
     }
   }, [user, isInitialized, authLoading, dataLoaded, loadConversations, loadPrompts, loadSettings]);
+  
+  useEffect(() => {
+    if (!user || !dataLoaded) return;
+
+    // ИЗМЕНЕНИЕ: Используем уникальный ID клиента для имен каналов
+    console.log(`[Realtime] Subscribing with client ID: ${clientId}`);
+    
+    const channels = [
+      supabase.channel(`conversations-changes-${clientId}`).on<Conversation>(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'conversations', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          switch (payload.eventType) {
+            case 'INSERT': actions.addConversation(payload.new); break;
+            case 'UPDATE': actions.updateConversationTitle(payload.new.id, payload.new.title); break;
+            case 'DELETE': actions.deleteConversation((payload.old as Conversation).id); break;
+          }
+        }
+      ).subscribe(),
+      supabase.channel(`messages-changes-${clientId}`).on<MessageWithConversationId>(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${user.id}`},
+        (payload) => {
+          if (store.state.currentConversationId === payload.new.conversation_id) {
+            if (!store.state.currentMessages.some(m => m.id === payload.new.id)) {
+              actions.addMessage(payload.new);
+            }
+          }
+        }
+      ).subscribe(),
+      supabase.channel(`profiles-changes-${clientId}`).on<ProfilePayload>(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}`},
+        (payload) => {
+            if (payload.new.settings) {
+                actions.setSettings(payload.new.settings);
+            }
+        }
+      ).subscribe(),
+      supabase.channel(`prompts-changes-${clientId}`).on<Prompt>(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'prompts', filter: `user_id=eq.${user.id}`},
+        () => { loadPrompts(); }
+      ).subscribe()
+    ];
+    return () => {
+      console.log(`[Realtime] Unsubscribing for client ID: ${clientId}`);
+      // supabase.removeChannel можно вызывать для каждого канала, но removeAllChannels надежнее при выходе.
+      // Эта функция очистки сработает, если компонент размонтируется по другой причине, кроме логаута.
+      channels.forEach(channel => supabase.removeChannel(channel));
+    };
+  }, [user, dataLoaded, loadPrompts, clientId]); // Добавляем clientId в зависимости
+
 
   useEffect(() => {
     if (isInitialized && !authLoading && !user) {
@@ -77,20 +138,10 @@ function Home() {
 
   const sidebar = useSidebar();
   
-  const {
-    sendMessage,
-    editAndRegenerate,
-    isLoading,
-    error,
-    pendingMessage,
-  } = useChat({
-    onMessageSent: () => {
-      lockToBottom();
-    },
+  const { sendMessage, editAndRegenerate, isLoading, error, pendingMessage } = useChat({
+    onMessageSent: () => { lockToBottom(); },
     onResponseComplete: () => {},
-    onError: (error) => {
-      console.error('Chat error:', error);
-    },
+    onError: (error) => { console.error('Chat error:', error); },
   });
 
   const displayMessages = useMemo(() => {
@@ -104,28 +155,31 @@ function Home() {
   const handleSend = useCallback(
     async (message: string) => {
       if (!message.trim() || isLoading) return;
-
       const words = message.trim().split(/\s+/);
       const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
-
       await sendMessage(message, title);
     },
     [isLoading, sendMessage]
   );
 
   const handleLogout = useCallback(async () => {
-    actions.resetStore();
-    await supabase.auth.signOut();
-    navigate({ to: '/login' });
+    try {
+      console.log('Logout process started...');
+      await supabase.removeAllChannels();
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Error during sign out:', error.message);
+      }
+      actions.resetStore();
+      navigate({ to: '/login', replace: true });
+    } catch (e) {
+      console.error('A critical error occurred during the logout process:', e);
+      window.location.href = '/login';
+    }
   }, [navigate]);
 
-  const handleStartEdit = useCallback((id: string) => {
-    setEditingMessageId(id);
-  }, []);
-
-  const handleCancelEdit = useCallback(() => {
-    setEditingMessageId(null);
-  }, []);
+  const handleStartEdit = useCallback((id: string) => { setEditingMessageId(id); }, []);
+  const handleCancelEdit = useCallback(() => { setEditingMessageId(null); }, []);
 
   const handleSaveEdit = useCallback(
     async (id: string, newContent: string) => {
@@ -159,7 +213,8 @@ function Home() {
     isCollapsed: sidebar.isCollapsed,
   };
 
-  // ИЗМЕНЕНИЕ: Убрал невалидные комментарии из JSX
+  // ... остальная часть компонента без изменений ...
+
   if (!isInitialized || authLoading || !dataLoaded) {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900">
@@ -173,7 +228,6 @@ function Home() {
     );
   }
 
-  // ИЗМЕНЕНИЕ: Убрал невалидные комментарии из JSX
   if (!user) {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900">
