@@ -29,11 +29,12 @@ export function useChat(options: UseChatOptions = {}) {
   const animationFrameRef = useRef<number | undefined>(undefined);
   const finalContentRef = useRef<string>('');
   const bufferRef = useRef<string>('');
-  
-  // ✅ ИСПРАВЛЕНИЕ: Добавляем ref для отслеживания активного запроса
   const activeRequestIdRef = useRef<string | null>(null);
+  
+  // ✅ НОВОЕ: Ref для отслеживания последнего обновления
+  const lastUpdateTimeRef = useRef<number>(0);
+  const isStreamingActiveRef = useRef<boolean>(false);
 
-  // ✅ ИСПРАВЛЕНИЕ: Очищаем всё состояние при размонтировании или смене чата
   useEffect(() => {
     return () => {
       if (animationFrameRef.current) {
@@ -43,26 +44,72 @@ export function useChat(options: UseChatOptions = {}) {
       bufferRef.current = '';
       finalContentRef.current = '';
       activeRequestIdRef.current = null;
+      isStreamingActiveRef.current = false;
     };
-  }, [currentConversationId]); // Пересоздаём при смене чата
+  }, [currentConversationId]);
 
+  // ✅ ИСПРАВЛЕНИЕ: Умная адаптивная анимация печати
   const startTextAnimation = useCallback(() => {
     const animatePrinting = () => {
-      if (textQueueRef.current.length > 0) {
-        const speed = 10;
-        const charsToPrint = textQueueRef.current.substring(0, speed);
-        textQueueRef.current = textQueueRef.current.substring(speed);
+      const now = performance.now();
+      const queueLength = textQueueRef.current.length;
+      
+      if (queueLength > 0) {
+        // ✅ АДАПТИВНАЯ СКОРОСТЬ
+        // Если очередь большая - печатаем быстрее
+        // Если маленькая - медленнее для плавности
+        let charsPerFrame: number;
+        
+        if (queueLength > 200) {
+          charsPerFrame = 30; // Очень быстро для больших блоков
+        } else if (queueLength > 100) {
+          charsPerFrame = 20; // Быстро
+        } else if (queueLength > 50) {
+          charsPerFrame = 15; // Средне
+        } else if (queueLength > 20) {
+          charsPerFrame = 10; // Нормально
+        } else if (queueLength > 5) {
+          charsPerFrame = 5; // Медленно
+        } else {
+          charsPerFrame = 2; // Очень медленно для последних символов
+        }
 
+        const charsToPrint = textQueueRef.current.substring(0, charsPerFrame);
+        textQueueRef.current = textQueueRef.current.substring(charsPerFrame);
+
+        // ✅ ОПТИМИЗАЦИЯ: Обновляем не чаще 60 FPS
+        const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
+        if (timeSinceLastUpdate >= 16) { // ~60 FPS
+          setPendingMessage(prev => {
+            if (prev) {
+              const newContent = prev.content + charsToPrint;
+              finalContentRef.current = newContent;
+              lastUpdateTimeRef.current = now;
+              return { ...prev, content: newContent };
+            }
+            return null;
+          });
+        } else {
+          // Просто добавляем в finalContent без ре-рендера
+          finalContentRef.current += charsToPrint;
+        }
+        
+        // ✅ ИСПРАВЛЕНИЕ: Продолжаем только если есть текст
+        animationFrameRef.current = requestAnimationFrame(animatePrinting);
+      } else if (isStreamingActiveRef.current) {
+        // ✅ ИСПРАВЛЕНИЕ: Если стрим активен, но очередь пустая - ждём новых данных
+        animationFrameRef.current = requestAnimationFrame(animatePrinting);
+      } else {
+        // ✅ ИСПРАВЛЕНИЕ: Финальное обновление с актуальным контентом
         setPendingMessage(prev => {
-          if (prev) {
-            const newContent = prev.content + charsToPrint;
-            finalContentRef.current = newContent;
-            return { ...prev, content: newContent };
+          if (prev && prev.content !== finalContentRef.current) {
+            return { ...prev, content: finalContentRef.current };
           }
-          return null;
+          return prev;
         });
+        // Останавливаем анимацию
+        animationFrameRef.current = undefined;
       }
-      animationFrameRef.current = requestAnimationFrame(animatePrinting);
     };
 
     if (animationFrameRef.current) {
@@ -72,10 +119,15 @@ export function useChat(options: UseChatOptions = {}) {
   }, []);
 
   const stopTextAnimation = useCallback(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = undefined;
-    }
+    isStreamingActiveRef.current = false;
+    
+    // Даём время допечатать оставшееся
+    setTimeout(() => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = undefined;
+      }
+    }, 100);
   }, []);
 
   const parseNDJSON = useCallback((data: string) => {
@@ -112,14 +164,13 @@ export function useChat(options: UseChatOptions = {}) {
         return null;
       }
 
-      // ✅ ИСПРАВЛЕНИЕ: Генерируем уникальный ID для этого запроса
       const requestId = crypto.randomUUID();
       activeRequestIdRef.current = requestId;
 
-      // Сбрасываем состояние
       bufferRef.current = '';
       finalContentRef.current = '';
       textQueueRef.current = '';
+      isStreamingActiveRef.current = false;
       
       const assistantMessageId = crypto.randomUUID();
 
@@ -136,7 +187,6 @@ export function useChat(options: UseChatOptions = {}) {
           },
         });
 
-        // ✅ ИСПРАВЛЕНИЕ: Проверяем, не отменён ли запрос
         if (activeRequestIdRef.current !== requestId) {
           console.log('[useChat] Request cancelled, aborting stream processing');
           return null;
@@ -149,7 +199,6 @@ export function useChat(options: UseChatOptions = {}) {
         let isFirstChunk = true;
 
         while (true) {
-          // ✅ ИСПРАВЛЕНИЕ: Проверяем перед каждой итерацией
           if (activeRequestIdRef.current !== requestId) {
             reader.cancel();
             console.log('[useChat] Request cancelled during streaming');
@@ -174,29 +223,40 @@ export function useChat(options: UseChatOptions = {}) {
                   role: 'assistant', 
                   content: '' 
                 });
+                isStreamingActiveRef.current = true;
                 startTextAnimation();
                 setIsLoading(false);
                 isFirstChunk = false;
               }
+              
+              // ✅ ИСПРАВЛЕНИЕ: Добавляем текст в очередь
               textQueueRef.current += chunk.text;
             }
           }
         }
 
-        // ✅ ИСПРАВЛЕНИЕ: Финальная проверка перед сохранением
         if (activeRequestIdRef.current !== requestId) {
           console.log('[useChat] Request cancelled before saving');
           return null;
         }
 
+        // ✅ ИСПРАВЛЕНИЕ: Останавливаем стрим и ждём допечатывания
+        isStreamingActiveRef.current = false;
+
         // Ждём завершения анимации печати
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
-            if (textQueueRef.current.length === 0) {
+            if (textQueueRef.current.length === 0 && animationFrameRef.current === undefined) {
               clearInterval(checkInterval);
               resolve();
             }
           }, 50);
+          
+          // Таймаут на случай зависания
+          setTimeout(() => {
+            clearInterval(checkInterval);
+            resolve();
+          }, 5000);
         });
 
         const finalMessage = { 
@@ -208,7 +268,6 @@ export function useChat(options: UseChatOptions = {}) {
         return finalMessage;
 
       } catch (error) {
-        // ✅ ИСПРАВЛЕНИЕ: Игнорируем ошибки отменённых запросов
         if (activeRequestIdRef.current !== requestId) {
           return null;
         }
