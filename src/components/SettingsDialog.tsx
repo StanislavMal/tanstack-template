@@ -1,9 +1,10 @@
-// 📄 components/SettingsDialog.tsx
+// 📄 src/components/SettingsDialog.tsx
 import { useState, useEffect } from 'react'
 import { PlusCircle, Trash2 } from 'lucide-react'
 import { usePrompts, useSettings } from '../store/hooks'
 import { type UserSettings } from '../store'
 import { useTranslation } from 'react-i18next'
+import { validatePromptName, validatePromptContent, sanitizeString } from '../utils/validation'
 
 interface SettingsDialogProps {
   isOpen: boolean
@@ -11,10 +12,10 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
-  // -> ИЗМЕНЕНИЕ: Добавляем i18n из хука useTranslation
   const { t, i18n } = useTranslation(); 
   const [promptForm, setPromptForm] = useState({ name: '', content: '' })
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   const { prompts, createPrompt, deletePrompt, setPromptActive, loadPrompts } = usePrompts();
   const { settings, updateSettings, loadSettings } = useSettings();
@@ -35,10 +36,27 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   }, [settings]);
 
   const handleAddPrompt = async () => {
-    if (!promptForm.name.trim() || !promptForm.content.trim()) return
-    await createPrompt(promptForm.name, promptForm.content)
-    setPromptForm({ name: '', content: '' })
-    setIsAddingPrompt(false)
+    setValidationError(null);
+    
+    const nameValidation = validatePromptName(promptForm.name);
+    if (!nameValidation.isValid) {
+      setValidationError(nameValidation.error!);
+      return;
+    }
+    
+    const contentValidation = validatePromptContent(promptForm.content);
+    if (!contentValidation.isValid) {
+      setValidationError(contentValidation.error!);
+      return;
+    }
+    
+    const sanitizedName = sanitizeString(promptForm.name);
+    const sanitizedContent = sanitizeString(promptForm.content);
+    
+    await createPrompt(sanitizedName, sanitizedContent);
+    setPromptForm({ name: '', content: '' });
+    setIsAddingPrompt(false);
+    setValidationError(null);
   }
 
   const handleSaveChanges = () => {
@@ -52,12 +70,12 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
   const handleClose = () => {
     setLocalSettings(settings);
+    setValidationError(null);
     onClose()
     setIsAddingPrompt(false)
     setPromptForm({ name: '', content: '' })
   }
   
-  // -> ИЗМЕНЕНИЕ: Функция для смены языка
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const lang = e.target.value;
     i18n.changeLanguage(lang);
@@ -82,7 +100,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             <div className="space-y-4">
                 <h3 className="text-lg font-medium text-white">{t('generalSettings')}</h3>
 
-                {/* -> ИЗМЕНЕНИЕ: Новый блок для выбора языка */}
                 <div className="p-3 rounded-lg bg-gray-700/50">
                   <label htmlFor="language-select" className="block text-sm font-medium text-gray-300 mb-2">{t('language')}</label>
                   <select
@@ -108,6 +125,34 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       <option value="gemini-2.5-pro">{t('modelPro')}</option>
                   </select>
                 </div>
+
+                {/* ✅ НОВОЕ: Слайдер скорости стриминга */}
+                <div className="p-3 rounded-lg bg-gray-700/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="stream-speed" className="block text-sm font-medium text-gray-300">
+                      {t('streamSpeed')}
+                    </label>
+                    <span className="text-sm text-orange-400 font-semibold">
+                      {localSettings.streamSpeed || 30} {t('streamSpeedUnit')}
+                    </span>
+                  </div>
+                  <input
+                    id="stream-speed"
+                    type="range"
+                    min="10"
+                    max="500"
+                    step="10"
+                    value={localSettings.streamSpeed || 30}
+                    onChange={(e) => setLocalSettings(prev => prev ? { ...prev, streamSpeed: parseInt(e.target.value) } : null)}
+                    className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                  />
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>{t('slow')}</span>
+                    <span>{t('fast')}</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">{t('streamSpeedNote')}</p>
+                </div>
+
                 <div className="p-3 rounded-lg bg-gray-700/50">
                   <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300 mb-2">{t('systemInstruction')}</label>
                   <textarea
@@ -133,8 +178,13 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                 <div className="p-3 mb-4 space-y-3 rounded-lg bg-gray-700/50">
                   <input type="text" value={promptForm.name} onChange={(e) => setPromptForm(prev => ({ ...prev, name: e.target.value }))} placeholder={t('promptNamePlaceholder')} className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
                   <textarea value={promptForm.content} onChange={(e) => setPromptForm(prev => ({ ...prev, content: e.target.value }))} placeholder={t('promptContentPlaceholder')} className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
+                  
+                  {validationError && (
+                    <p className="text-sm text-red-400">{validationError}</p>
+                  )}
+                  
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setIsAddingPrompt(false)} className="px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">{t('cancel')}</button>
+                    <button onClick={() => { setIsAddingPrompt(false); setValidationError(null); }} className="px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">{t('cancel')}</button>
                     <button onClick={handleAddPrompt} className="px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-600 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">{t('savePrompt')}</button>
                   </div>
                 </div>

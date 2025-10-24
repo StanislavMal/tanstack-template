@@ -1,7 +1,7 @@
 // 📄 src/components/Sidebar.tsx
 
-import { PlusCircle, MessageCircle, Trash2, Edit2, X, Copy } from 'lucide-react'; // -> ИЗМЕНЕНИЕ
-import { useRef, useState } from 'react';
+import { PlusCircle, MessageCircle, Trash2, Edit2, X, Copy } from 'lucide-react';
+import { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
@@ -10,7 +10,7 @@ interface SidebarProps {
   handleNewChat: () => void;
   setCurrentConversationId: (id: string) => void;
   handleDeleteChat: (id: string) => void;
-  handleDuplicateChat: (id: string) => void; // -> НОВОЕ
+  handleDuplicateChat: (id: string) => void;
   editingChatId: string | null;
   setEditingChatId: (id: string | null) => void;
   editingTitle: string;
@@ -27,7 +27,7 @@ export const Sidebar = ({
   handleNewChat, 
   setCurrentConversationId, 
   handleDeleteChat,
-  handleDuplicateChat, // -> НОВОЕ
+  handleDuplicateChat,
   editingChatId, 
   setEditingChatId, 
   editingTitle, 
@@ -41,20 +41,35 @@ export const Sidebar = ({
   const [contextMenuChatId, setContextMenuChatId] = useState<string | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // ✅ ИСПРАВЛЕНИЕ: Очистка таймера при размонтировании
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+      }
+    };
+  }, []);
 
   const handleTouchStart = (chatId: string) => {
     if (contextMenuChatId !== chatId) {
       setContextMenuChatId(null);
     }
     
+    // ✅ ИСПРАВЛЕНИЕ: Очищаем предыдущий таймер перед созданием нового
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+    }
+    
     longPressTimer.current = setTimeout(() => {
       setContextMenuChatId(chatId);
+      longPressTimer.current = null;
     }, 500);
   };
 
   const handleTouchEnd = () => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
     }
   };
 
@@ -154,7 +169,6 @@ export const Sidebar = ({
                     >
                       <Edit2 className="w-3 h-3" />
                     </button>
-                    {/* -> НОВАЯ КНОПКА */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

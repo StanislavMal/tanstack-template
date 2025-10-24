@@ -11,12 +11,13 @@ export interface Prompt {
 }
 
 export interface UserSettings {
-  model: string // Теперь это может быть любая модель
-  provider: string // Новое поле для провайдера
+  model: string
+  provider: string
   system_instruction: string
   temperature?: number
   maxTokens?: number
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high'
+  streamSpeed?: number // ✅ НОВОЕ: символов в секунду (5-100)
 }
 
 export interface Conversation {
@@ -47,7 +48,6 @@ const initialState: State = {
 export const store = new Store<State>(initialState)
 
 export const actions = {
-  // НОВОЕ ДЕЙСТВИЕ: Сброс состояния к начальному
   resetStore: () => {
     store.setState(() => initialState);
   },

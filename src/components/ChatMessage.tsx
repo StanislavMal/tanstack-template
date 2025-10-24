@@ -1,6 +1,6 @@
 // 📄 src/components/ChatMessage.tsx
 
-import { useState, memo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
@@ -16,15 +16,26 @@ interface ChatMessageProps {
   onCancelEdit: () => void;
 }
 
-export const ChatMessage = memo(({ 
+// ✅ УБРАЛИ MEMO - пусть рендерится каждый раз
+export function ChatMessage({ 
   message,
   isEditing,
   onSaveEdit,
   onCancelEdit
-}: ChatMessageProps) => {
+}: ChatMessageProps) {
   const isAssistant = message.role === 'assistant';
   const [editedContent, setEditedContent] = useState(message.content);
   const [isCopied, setIsCopied] = useState(false);
+  
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSave = () => {
     if (editedContent.trim() !== message.content.trim() && editedContent.trim()) {
@@ -34,11 +45,18 @@ export const ChatMessage = memo(({
     }
   };
 
-  // ИЗМЕНЕНИЕ: Убираем неиспользуемый аргумент `e`
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
     setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+    
+    if (copyTimeoutRef.current) {
+      clearTimeout(copyTimeoutRef.current);
+    }
+    
+    copyTimeoutRef.current = setTimeout(() => {
+      setIsCopied(false);
+      copyTimeoutRef.current = null;
+    }, 2000);
   };
 
   return (
@@ -111,6 +129,4 @@ export const ChatMessage = memo(({
       </div>
     </div>
   );
-});
-
-ChatMessage.displayName = 'ChatMessage';
+}

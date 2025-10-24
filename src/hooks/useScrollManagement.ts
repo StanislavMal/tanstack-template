@@ -1,88 +1,111 @@
-// 📄 src/hooks/useScrollManagement.ts (Исправленная версия)
+// 📄 src/hooks/useScrollManagement.ts
 
 import { useRef, useState, useCallback, useLayoutEffect } from 'react';
-// ИЗМЕНЕНИЕ: Убран неиспользуемый импорт `Message`
 
-export function useScrollManagement(dependencies: any[] = []) {
+export function useScrollManagement(messageCount: number = 0) {
   const scrollContainerRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Ref для отслеживания, привязан ли скролл к низу.
   const isLockedToBottomRef = useRef(true);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
+  
+  const prevMessageCountRef = useRef(messageCount);
+  
+  // ✅ НОВОЕ: Флаг программного скролла (вызванного из кода, а не пользователем)
+  const isProgrammaticScrollRef = useRef(false);
+  
+  // ✅ НОВОЕ: Таймер для дебаунсинга (защита от частых срабатываний)
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --- Функция для немедленной прокрутки ---
   const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'auto') => {
     const container = scrollContainerRef.current;
     if (container) {
+      // ✅ КРИТИЧНО: Помечаем что это программный скролл, не реакция пользователя
+      isProgrammaticScrollRef.current = true;
+      
       container.scrollTo({
         top: container.scrollHeight,
         behavior,
       });
+      
+      // ✅ Сбрасываем флаг через небольшую задержку
+      // На мобильных scrollTo может выполняться до 150ms
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 150);
     }
   }, []);
 
-  // --- Эффект, который следит за всем ---
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     const content = contentRef.current;
     if (!container || !content) return;
 
-    // --- Обработчик скролла пользователем ---
+    // ✅ УЛУЧШЕНО: Обработчик с защитой от ложных срабатываний
     const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 5;
+      // ✅ КРИТИЧНО: Игнорируем события scroll, вызванные программно (из ResizeObserver)
+      if (isProgrammaticScrollRef.current) {
+        return;
+      }
       
-      // Обновляем состояние привязки
-      isLockedToBottomRef.current = isAtBottom;
-
-      // Управляем видимостью кнопки "Вниз"
-      const shouldShowButton = scrollHeight - scrollTop - clientHeight > 150;
-      setShowScrollDownButton(shouldShowButton && !isAtBottom);
+      // ✅ НОВОЕ: Дебаунсинг - обрабатываем только когда скролл остановился
+      // Это защищает от "дрожания" на мобильных при быстром стриминге
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      
+      scrollTimeoutRef.current = setTimeout(() => {
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        
+        // ✅ УЛУЧШЕНО: Увеличен порог для мобильных устройств
+        // Было 5px → стало 20px (более мягкая проверка)
+        const threshold = 20;
+        const isAtBottom = scrollHeight - scrollTop - clientHeight < threshold;
+        
+        // Обновляем состояние блокировки
+        isLockedToBottomRef.current = isAtBottom;
+        
+        // Показываем кнопку "вниз" если далеко от низа
+        const shouldShowButton = scrollHeight - scrollTop - clientHeight > 150;
+        setShowScrollDownButton(shouldShowButton && !isAtBottom);
+        
+        scrollTimeoutRef.current = null;
+      }, 50); // ✅ Дебаунс 50ms - обрабатываем после остановки скролла
     };
 
-    // --- Observer'ы для автоматической прокрутки ---
-    const observerCallback = () => {
+    // ResizeObserver следит за изменением размера контента (стриминг текста)
+    const resizeObserver = new ResizeObserver(() => {
       if (isLockedToBottomRef.current) {
         forceScrollToBottom('auto');
       }
-    };
-    
-    // ResizeObserver следит за изменением размера, включая стриминг
-    const resizeObserver = new ResizeObserver(observerCallback);
-    resizeObserver.observe(content);
-    
-    // MutationObserver следит за добавлением/удалением сообщений
-    const mutationObserver = new MutationObserver(observerCallback);
-    mutationObserver.observe(content, { childList: true, subtree: true });
+    });
 
-    // --- Добавляем слушатель ---
+    resizeObserver.observe(content);
     container.addEventListener('scroll', handleScroll, { passive: true });
 
-    // --- Начальная прокрутка при монтировании или смене зависимостей ---
-    // Это сработает при загрузке новых чатов.
-    forceScrollToBottom('auto');
+    // Прокручиваем вниз при добавлении новых сообщений
+    if (messageCount > prevMessageCountRef.current) {
+      isLockedToBottomRef.current = true;
+      forceScrollToBottom('auto');
+      prevMessageCountRef.current = messageCount;
+    }
 
-    // --- Очистка ---
     return () => {
       container.removeEventListener('scroll', handleScroll);
       resizeObserver.disconnect();
-      mutationObserver.disconnect();
+      
+      // ✅ Очищаем таймер при размонтировании
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
     };
-    // Мы передаем `dependencies` (например, массив `messages`), чтобы этот
-    // эффект перезапускался при смене чата, гарантируя начальную прокрутку.
-  }, [dependencies, forceScrollToBottom]);
+  }, [messageCount, forceScrollToBottom]);
 
-
-  // --- Публичные методы ---
-  
-  // Для кнопки "Вниз"
   const scrollToBottom = useCallback(() => {
     isLockedToBottomRef.current = true;
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
-  // Для отправки сообщения
   const lockToBottom = useCallback(() => {
     isLockedToBottomRef.current = true;
     forceScrollToBottom('auto');

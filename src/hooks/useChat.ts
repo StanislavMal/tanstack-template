@@ -1,6 +1,6 @@
 // 📄 src/hooks/useChat.ts
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { streamChat } from '../lib/ai/server';
 import type { Message } from '../lib/ai/types';
 import { useConversations, useSettings, usePrompts } from '../store/hooks';
@@ -26,40 +26,80 @@ export function useChat(options: UseChatOptions = {}) {
   } = useConversations();
 
   const textQueueRef = useRef<string>('');
-  const animationFrameRef = useRef<number | undefined>(undefined);
-  const finalContentRef = useRef<string>('');
+  const displayedTextRef = useRef<string>('');
+  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
   const bufferRef = useRef<string>('');
+  const activeRequestIdRef = useRef<string | null>(null);
+  const isStreamActiveRef = useRef<boolean>(false); // ✅ НОВОЕ
 
-  // Анимация печатания текста с увеличенной скоростью
-  const startTextAnimation = useCallback(() => {
-    const animatePrinting = () => {
+  useEffect(() => {
+    return () => {
+      if (intervalIdRef.current) {
+        clearInterval(intervalIdRef.current);
+      }
+      textQueueRef.current = '';
+      displayedTextRef.current = '';
+      bufferRef.current = '';
+      activeRequestIdRef.current = null;
+      isStreamActiveRef.current = false;
+    };
+  }, [currentConversationId]);
+
+  // ✅ ИСПРАВЛЕНО: interval работает пока стрим активен ИЛИ есть символы
+  const startTypingAnimation = useCallback((messageId: string) => {
+    if (intervalIdRef.current) {
+      clearInterval(intervalIdRef.current);
+    }
+
+    const streamSpeed = settings?.streamSpeed || 30;
+    
+    // Адаптивный интервал
+    let updateIntervalMs: number;
+    if (streamSpeed <= 30) {
+      updateIntervalMs = 33;  // 30 FPS
+    } else if (streamSpeed <= 60) {
+      updateIntervalMs = 50;  // 20 FPS
+    } else if (streamSpeed <= 100) {
+      updateIntervalMs = 75;  // 13 FPS
+    } else {
+      updateIntervalMs = 100; // 10 FPS
+    }
+    
+    const charsPerTick = Math.max(1, Math.round((streamSpeed * updateIntervalMs) / 1000));
+
+    console.log(`[Animation] Speed: ${streamSpeed} chars/sec, Interval: ${updateIntervalMs}ms, ${charsPerTick} chars/tick`);
+
+    intervalIdRef.current = setInterval(() => {
+      // ✅ Если есть символы - печатаем
       if (textQueueRef.current.length > 0) {
-        const speed = 10;
-        const charsToPrint = textQueueRef.current.substring(0, speed);
-        textQueueRef.current = textQueueRef.current.substring(speed);
+        const charsToAdd = textQueueRef.current.substring(0, charsPerTick);
+        textQueueRef.current = textQueueRef.current.substring(charsPerTick);
+        displayedTextRef.current += charsToAdd;
 
         setPendingMessage(prev => {
-          if (prev) {
-            const newContent = prev.content + charsToPrint;
-            finalContentRef.current = newContent;
-            return { ...prev, content: newContent };
+          if (prev && prev.id === messageId) {
+            return { ...prev, content: displayedTextRef.current };
           }
-          return null;
+          return prev;
         });
+
+        console.log(`[Animation] Displayed: ${displayedTextRef.current.length}, Queue: ${textQueueRef.current.length}`);
       }
-      animationFrameRef.current = requestAnimationFrame(animatePrinting);
-    };
+      
+      // ✅ КЛЮЧЕВОЕ: останавливаем ТОЛЬКО если стрим завершён И очередь пуста
+      if (!isStreamActiveRef.current && textQueueRef.current.length === 0) {
+        if (intervalIdRef.current) {
+          console.log('[Animation] Stream finished and queue empty, stopping');
+          clearInterval(intervalIdRef.current);
+          intervalIdRef.current = null;
+        }
+      }
+    }, updateIntervalMs);
+  }, [settings?.streamSpeed]);
 
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    animationFrameRef.current = requestAnimationFrame(animatePrinting);
-  }, []);
-
-  const stopTextAnimation = useCallback(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
+  const stopTypingAnimation = useCallback(() => {
+    isStreamActiveRef.current = false; // ✅ Сигнализируем что стрим завершён
+    // НЕ останавливаем interval сразу - он сам остановится когда очередь опустеет
   }, []);
 
   const parseNDJSON = useCallback((data: string) => {
@@ -77,17 +117,13 @@ export function useChat(options: UseChatOptions = {}) {
         const chunk = JSON.parse(trimmedLine);
         chunks.push(chunk);
       } catch (parseError) {
-        console.warn('[useChat] Failed to parse NDJSON line:', {
-          line: trimmedLine,
-          error: parseError instanceof Error ? parseError.message : 'Unknown error'
-        });
+        console.warn('[useChat] Failed to parse NDJSON line');
       }
     }
     
     return chunks;
   }, []);
 
-  // ИЗМЕНЕНИЕ: Теперь принимает явную историю сообщений
   const processAIResponse = useCallback(
     async (messageHistory: Message[]) => {
       if (!settings) {
@@ -97,17 +133,24 @@ export function useChat(options: UseChatOptions = {}) {
         return null;
       }
 
-      // Сбрасываем состояние
+      const requestId = crypto.randomUUID();
+      activeRequestIdRef.current = requestId;
+
+      // Очистка
       bufferRef.current = '';
-      finalContentRef.current = '';
       textQueueRef.current = '';
+      displayedTextRef.current = '';
+      isStreamActiveRef.current = false;
+      if (intervalIdRef.current) {
+        clearInterval(intervalIdRef.current);
+        intervalIdRef.current = null;
+      }
       
       const assistantMessageId = crypto.randomUUID();
 
       try {
         const provider = settings.model.startsWith('gemini') ? 'gemini' : 'gemini';
 
-        // ИЗМЕНЕНИЕ: Используем явно переданную историю
         const response = await streamChat({
           data: {
             messages: messageHistory,
@@ -118,13 +161,23 @@ export function useChat(options: UseChatOptions = {}) {
           },
         });
 
+        if (activeRequestIdRef.current !== requestId) {
+          return null;
+        }
+
         if (!response.body) throw new Error('No response body');
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let isFirstChunk = true;
+        let animationStarted = false;
 
+        // ✅ Получаем чанки
         while (true) {
+          if (activeRequestIdRef.current !== requestId) {
+            reader.cancel();
+            return null;
+          }
+
           const { value, done } = await reader.read();
           if (done) break;
 
@@ -137,51 +190,90 @@ export function useChat(options: UseChatOptions = {}) {
             }
             
             if (chunk.text) {
-              if (isFirstChunk) {
+              if (!animationStarted) {
+                console.log('[Stream] First chunk received, starting animation');
+                
+                // Инициализируем пустое сообщение
                 setPendingMessage({ 
                   id: assistantMessageId, 
                   role: 'assistant', 
                   content: '' 
                 });
-                startTextAnimation();
+                
+                // ✅ Отмечаем что стрим активен
+                isStreamActiveRef.current = true;
+                
+                // Запускаем анимацию
+                startTypingAnimation(assistantMessageId);
                 setIsLoading(false);
-                isFirstChunk = false;
+                animationStarted = true;
               }
+              
+              // Просто добавляем в очередь - анимация сама заберёт
               textQueueRef.current += chunk.text;
+              console.log(`[Stream] Added to queue, total: ${textQueueRef.current.length}`);
             }
           }
         }
 
-        // Ждём завершения анимации печати
+        console.log('[Stream] All chunks received, total queue: ', textQueueRef.current.length);
+
+        // ✅ Сигнализируем что стрим завершён
+        isStreamActiveRef.current = false;
+
+        // ✅ Ждём пока очередь опустеет
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
-            if (textQueueRef.current.length === 0) {
+            const queueEmpty = textQueueRef.current.length === 0;
+            const animationStopped = intervalIdRef.current === null;
+            
+            console.log(`[Wait] Queue: ${textQueueRef.current.length}, Animation: ${animationStopped ? 'stopped' : 'running'}`);
+            
+            if (queueEmpty && animationStopped) {
               clearInterval(checkInterval);
+              console.log('[Wait] Animation complete!');
               resolve();
             }
-          }, 50);
+          }, 100);
+          
+          setTimeout(() => {
+            clearInterval(checkInterval);
+            // Форсируем остановку если что-то пошло не так
+            if (intervalIdRef.current) {
+              clearInterval(intervalIdRef.current);
+              intervalIdRef.current = null;
+            }
+            console.log('[Wait] Timeout reached');
+            resolve();
+          }, 120000);
         });
+
+        console.log('[Stream] Final displayed length:', displayedTextRef.current.length);
 
         const finalMessage = { 
           id: assistantMessageId, 
           role: 'assistant' as const, 
-          content: finalContentRef.current 
+          content: displayedTextRef.current 
         };
 
         return finalMessage;
 
       } catch (error) {
+        if (activeRequestIdRef.current !== requestId) {
+          return null;
+        }
+
         const errorMsg = error instanceof Error ? error.message : 'An error occurred';
-        console.error('[useChat] Error in processAIResponse:', error);
+        console.error('[useChat] Error:', error);
         setError(errorMsg);
         options.onError?.(errorMsg);
         return null;
       } finally {
-        stopTextAnimation();
+        stopTypingAnimation();
         bufferRef.current = '';
       }
     },
-    [settings, activePrompt, startTextAnimation, stopTextAnimation, options, parseNDJSON]
+    [settings, activePrompt, startTypingAnimation, stopTypingAnimation, options, parseNDJSON]
   );
 
   const sendMessage = useCallback(
@@ -210,8 +302,6 @@ export function useChat(options: UseChatOptions = {}) {
         await addMessage(convId, userMessage);
         options.onMessageSent?.(userMessage);
 
-        // ИЗМЕНЕНИЕ: Получаем актуальные сообщения из store
-        // Так как addMessage уже вызван, новое сообщение уже в store
         const { selectors, store } = await import('../store/store');
         const currentMessages = selectors.getCurrentMessages(store.state);
 
@@ -220,6 +310,7 @@ export function useChat(options: UseChatOptions = {}) {
         if (aiResponse && aiResponse.content.trim()) {
           await addMessage(convId, aiResponse);
           options.onResponseComplete?.(aiResponse);
+          setPendingMessage(null);
         }
 
       } catch (error) {
@@ -229,7 +320,6 @@ export function useChat(options: UseChatOptions = {}) {
         options.onError?.(errorMsg);
       } finally {
         setIsLoading(false);
-        setPendingMessage(null);
       }
     },
     [
@@ -242,7 +332,6 @@ export function useChat(options: UseChatOptions = {}) {
     ]
   );
 
-  // ИЗМЕНЕНИЕ: Теперь использует обновленную историю из editMessageAndUpdate
   const editAndRegenerate = useCallback(
     async (messageId: string, newContent: string) => {
       if (!currentConversationId) return;
@@ -252,23 +341,21 @@ export function useChat(options: UseChatOptions = {}) {
       setPendingMessage(null);
 
       try {
-        // ИЗМЕНЕНИЕ: Получаем обрезанный массив сообщений
         const updatedHistory = await editMessageAndUpdate(messageId, newContent);
         
         if (!updatedHistory || updatedHistory.length === 0) {
           throw new Error("Failed to update message");
         }
 
-        // Последнее сообщение в истории - это отредактированное пользовательское сообщение
         const lastMessage = updatedHistory[updatedHistory.length - 1];
         options.onMessageSent?.(lastMessage);
 
-        // ИЗМЕНЕНИЕ: Передаем актуальную обрезанную историю в processAIResponse
         const aiResponse = await processAIResponse(updatedHistory);
         
         if (aiResponse && aiResponse.content.trim()) {
           await addMessage(currentConversationId, aiResponse);
           options.onResponseComplete?.(aiResponse);
+          setPendingMessage(null);
         }
 
       } catch (error) {
@@ -278,7 +365,6 @@ export function useChat(options: UseChatOptions = {}) {
         options.onError?.(errorMsg);
       } finally {
         setIsLoading(false);
-        setPendingMessage(null);
       }
     },
     [

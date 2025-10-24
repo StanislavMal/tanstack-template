@@ -17,8 +17,6 @@ interface ChatAreaProps {
   onStartEdit: (id: string) => void;
   onCancelEdit: () => void;
   onSaveEdit: (id: string, content: string) => void;
-  // ИЗМЕНЕНИЕ: Убираем onCopyMessage, так как он больше не нужен
-  // onCopyMessage: (content: string) => void;
 }
 
 const ChatAreaComponent = ReactMemo(
@@ -34,8 +32,6 @@ const ChatAreaComponent = ReactMemo(
         onStartEdit,
         onCancelEdit,
         onSaveEdit,
-        // ИЗМЕНЕНИЕ: Убираем из деструктуризации
-        // onCopyMessage,
       },
       ref
     ) => {
@@ -67,7 +63,6 @@ const ChatAreaComponent = ReactMemo(
         if (action === 'start-edit') {
           onStartEdit(messageId);
         }
-        
       }, [onStartEdit]);
 
       return (
@@ -107,7 +102,37 @@ const ChatAreaComponent = ReactMemo(
         </div>
       );
     }
-  )
+  ),
+  // ✅ ИСПРАВЛЕНО: правильное сравнение pendingMessage
+  (prevProps, nextProps) => {
+    // Быстрые проверки
+    if (
+      prevProps.messages.length !== nextProps.messages.length ||
+      prevProps.currentConversationId !== nextProps.currentConversationId ||
+      prevProps.editingMessageId !== nextProps.editingMessageId ||
+      prevProps.isLoading !== nextProps.isLoading ||
+      prevProps.error !== nextProps.error
+    ) {
+      return false;
+    }
+
+    // ✅ КРИТИЧНО: сравниваем pendingMessage полностью
+    const prevPending = prevProps.pendingMessage;
+    const nextPending = nextProps.pendingMessage;
+
+    // ID изменился?
+    if (prevPending?.id !== nextPending?.id) {
+      return false;
+    }
+
+    // ✅ КЛЮЧЕВОЕ: content изменился?
+    if (prevPending?.content !== nextPending?.content) {
+      return false; // Нужен ре-рендер!
+    }
+
+    // Всё одинаково - можно пропустить
+    return true;
+  }
 );
 
 ChatAreaComponent.displayName = 'ChatArea';
