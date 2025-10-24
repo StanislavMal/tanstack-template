@@ -1,10 +1,9 @@
 // 📄 src/components/ChatArea.tsx
 
-import { memo as ReactMemo, useMemo, forwardRef } from 'react';
+import { memo as ReactMemo, useMemo, forwardRef, useCallback } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ChatMessage, LoadingIndicator, WelcomeScreen } from '../components';
-import { StreamingMessage } from './StreamingMessage';
 import type { Message } from '../lib/ai/types';
 
 interface ChatAreaProps {
@@ -38,12 +37,17 @@ const ChatAreaComponent = ReactMemo(
     ) => {
       const { t } = useTranslation();
 
-      // ✅ Мемоизируем сохранённые сообщения
-      const savedMessages = useMemo(() => messages, [messages]);
+      const displayMessages = useMemo(() => {
+        const combined = [...messages];
+        if (pendingMessage && pendingMessage.content && !messages.some((m) => m.id === pendingMessage.id)) {
+          combined.push(pendingMessage);
+        }
+        return combined;
+      }, [messages, pendingMessage]);
 
       const showLoading = isLoading || (pendingMessage && !pendingMessage.content);
 
-      const handleMessageActions = useMemo(() => (e: React.MouseEvent<HTMLDivElement>) => {
+      const handleMessageActions = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
         const button = target.closest('button[data-action]');
         
@@ -80,8 +84,7 @@ const ChatAreaComponent = ReactMemo(
           <div className="space-y-4">
             {currentConversationId ? (
               <>
-                {/* ✅ Сохранённые сообщения - мемоизированы строго */}
-                {savedMessages.map((message) => (
+                {displayMessages.map((message) => (
                   <ChatMessage
                     key={message.id}
                     message={message}
@@ -90,12 +93,6 @@ const ChatAreaComponent = ReactMemo(
                     onCancelEdit={onCancelEdit}
                   />
                 ))}
-                
-                {/* ✅ Стримящееся сообщение - отдельный lightweight компонент */}
-                {pendingMessage && pendingMessage.content && (
-                  <StreamingMessage content={pendingMessage.content} />
-                )}
-                
                 {showLoading && <LoadingIndicator />}
               </>
             ) : (
@@ -106,35 +103,35 @@ const ChatAreaComponent = ReactMemo(
       );
     }
   ),
-  // ✅ Мемоизация: ре-рендерим только если изменились сохранённые сообщения
+  // ✅ ИСПРАВЛЕНО: правильное сравнение pendingMessage
   (prevProps, nextProps) => {
-    // Изменились сохранённые сообщения?
+    // Быстрые проверки
     if (
       prevProps.messages.length !== nextProps.messages.length ||
       prevProps.currentConversationId !== nextProps.currentConversationId ||
       prevProps.editingMessageId !== nextProps.editingMessageId ||
+      prevProps.isLoading !== nextProps.isLoading ||
       prevProps.error !== nextProps.error
     ) {
       return false;
     }
 
-    // Появилось/исчезло стримящееся сообщение?
-    const hadPending = !!prevProps.pendingMessage?.content;
-    const hasPending = !!nextProps.pendingMessage?.content;
-    
-    if (hadPending !== hasPending) {
-      return false; // Нужно показать/скрыть StreamingMessage
-    }
+    // ✅ КРИТИЧНО: сравниваем pendingMessage полностью
+    const prevPending = prevProps.pendingMessage;
+    const nextPending = nextProps.pendingMessage;
 
-    // isLoading изменился?
-    if (prevProps.isLoading !== nextProps.isLoading) {
+    // ID изменился?
+    if (prevPending?.id !== nextPending?.id) {
       return false;
     }
 
-    // ✅ ВАЖНО: НЕ сравниваем pendingMessage.content!
-    // Это позволяет StreamingMessage обновляться независимо
-    
-    return true; // Всё остальное одинаково - пропускаем ре-рендер
+    // ✅ КЛЮЧЕВОЕ: content изменился?
+    if (prevPending?.content !== nextPending?.content) {
+      return false; // Нужен ре-рендер!
+    }
+
+    // Всё одинаково - можно пропустить
+    return true;
   }
 );
 
