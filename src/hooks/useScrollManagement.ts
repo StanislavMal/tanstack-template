@@ -1,17 +1,17 @@
-// 📄 src/hooks/useScrollManagement.ts (Исправленная версия)
+// 📄 src/hooks/useScrollManagement.ts
 
 import { useRef, useState, useCallback, useLayoutEffect } from 'react';
-// ИЗМЕНЕНИЕ: Убран неиспользуемый импорт `Message`
 
-export function useScrollManagement(dependencies: any[] = []) {
+export function useScrollManagement(messageCount: number = 0) {
   const scrollContainerRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Ref для отслеживания, привязан ли скролл к низу.
   const isLockedToBottomRef = useRef(true);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
+  
+  // ✅ ИСПРАВЛЕНИЕ: Используем количество сообщений вместо массива
+  const prevMessageCountRef = useRef(messageCount);
 
-  // --- Функция для немедленной прокрутки ---
   const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'auto') => {
     const container = scrollContainerRef.current;
     if (container) {
@@ -22,67 +22,52 @@ export function useScrollManagement(dependencies: any[] = []) {
     }
   }, []);
 
-  // --- Эффект, который следит за всем ---
+  // ✅ ИСПРАВЛЕНИЕ: Объединяем всю логику в один эффект
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     const content = contentRef.current;
     if (!container || !content) return;
 
-    // --- Обработчик скролла пользователем ---
+    // Обработчик прокрутки пользователем
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
       const isAtBottom = scrollHeight - scrollTop - clientHeight < 5;
       
-      // Обновляем состояние привязки
       isLockedToBottomRef.current = isAtBottom;
-
-      // Управляем видимостью кнопки "Вниз"
+      
       const shouldShowButton = scrollHeight - scrollTop - clientHeight > 150;
       setShowScrollDownButton(shouldShowButton && !isAtBottom);
     };
 
-    // --- Observer'ы для автоматической прокрутки ---
-    const observerCallback = () => {
+    // ✅ ИСПРАВЛЕНИЕ: Используем только ResizeObserver для отслеживания изменений
+    // Он покрывает и добавление сообщений, и стриминг текста
+    const resizeObserver = new ResizeObserver(() => {
       if (isLockedToBottomRef.current) {
         forceScrollToBottom('auto');
       }
-    };
-    
-    // ResizeObserver следит за изменением размера, включая стриминг
-    const resizeObserver = new ResizeObserver(observerCallback);
-    resizeObserver.observe(content);
-    
-    // MutationObserver следит за добавлением/удалением сообщений
-    const mutationObserver = new MutationObserver(observerCallback);
-    mutationObserver.observe(content, { childList: true, subtree: true });
+    });
 
-    // --- Добавляем слушатель ---
+    resizeObserver.observe(content);
     container.addEventListener('scroll', handleScroll, { passive: true });
 
-    // --- Начальная прокрутка при монтировании или смене зависимостей ---
-    // Это сработает при загрузке новых чатов.
-    forceScrollToBottom('auto');
+    // ✅ ИСПРАВЛЕНИЕ: Прокручиваем вниз только при добавлении НОВЫХ сообщений
+    if (messageCount > prevMessageCountRef.current) {
+      isLockedToBottomRef.current = true;
+      forceScrollToBottom('auto');
+      prevMessageCountRef.current = messageCount;
+    }
 
-    // --- Очистка ---
     return () => {
       container.removeEventListener('scroll', handleScroll);
       resizeObserver.disconnect();
-      mutationObserver.disconnect();
     };
-    // Мы передаем `dependencies` (например, массив `messages`), чтобы этот
-    // эффект перезапускался при смене чата, гарантируя начальную прокрутку.
-  }, [dependencies, forceScrollToBottom]);
+  }, [messageCount, forceScrollToBottom]);
 
-
-  // --- Публичные методы ---
-  
-  // Для кнопки "Вниз"
   const scrollToBottom = useCallback(() => {
     isLockedToBottomRef.current = true;
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
-  // Для отправки сообщения
   const lockToBottom = useCallback(() => {
     isLockedToBottomRef.current = true;
     forceScrollToBottom('auto');

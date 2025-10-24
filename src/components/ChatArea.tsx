@@ -17,10 +17,9 @@ interface ChatAreaProps {
   onStartEdit: (id: string) => void;
   onCancelEdit: () => void;
   onSaveEdit: (id: string, content: string) => void;
-  // ИЗМЕНЕНИЕ: Убираем onCopyMessage, так как он больше не нужен
-  // onCopyMessage: (content: string) => void;
 }
 
+// ✅ ОПТИМИЗАЦИЯ: Мемоизируем весь компонент для предотвращения лишних ре-рендеров
 const ChatAreaComponent = ReactMemo(
   forwardRef<HTMLDivElement, ChatAreaProps>(
     (
@@ -34,13 +33,12 @@ const ChatAreaComponent = ReactMemo(
         onStartEdit,
         onCancelEdit,
         onSaveEdit,
-        // ИЗМЕНЕНИЕ: Убираем из деструктуризации
-        // onCopyMessage,
       },
       ref
     ) => {
       const { t } = useTranslation();
 
+      // ✅ ОПТИМИЗАЦИЯ: Мемоизируем финальный массив сообщений
       const displayMessages = useMemo(() => {
         const combined = [...messages];
         if (pendingMessage && pendingMessage.content && !messages.some((m) => m.id === pendingMessage.id)) {
@@ -51,6 +49,7 @@ const ChatAreaComponent = ReactMemo(
 
       const showLoading = isLoading || (pendingMessage && !pendingMessage.content);
 
+      // ✅ ОПТИМИЗАЦИЯ: Мемоизируем обработчик событий
       const handleMessageActions = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
         const button = target.closest('button[data-action]');
@@ -107,7 +106,18 @@ const ChatAreaComponent = ReactMemo(
         </div>
       );
     }
-  )
+  ),
+  // ✅ ОПТИМИЗАЦИЯ: Кастомная функция сравнения для memo
+  (prevProps, nextProps) => {
+    return (
+      prevProps.messages.length === nextProps.messages.length &&
+      prevProps.pendingMessage?.id === nextProps.pendingMessage?.id &&
+      prevProps.isLoading === nextProps.isLoading &&
+      prevProps.error === nextProps.error &&
+      prevProps.currentConversationId === nextProps.currentConversationId &&
+      prevProps.editingMessageId === nextProps.editingMessageId
+    );
+  }
 );
 
 ChatAreaComponent.displayName = 'ChatArea';

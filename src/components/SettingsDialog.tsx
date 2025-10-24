@@ -4,6 +4,7 @@ import { PlusCircle, Trash2 } from 'lucide-react'
 import { usePrompts, useSettings } from '../store/hooks'
 import { type UserSettings } from '../store'
 import { useTranslation } from 'react-i18next'
+import { validatePromptName, validatePromptContent, sanitizeString } from '../utils/validation'
 
 interface SettingsDialogProps {
   isOpen: boolean
@@ -11,10 +12,11 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
-  // -> ИЗМЕНЕНИЕ: Добавляем i18n из хука useTranslation
   const { t, i18n } = useTranslation(); 
   const [promptForm, setPromptForm] = useState({ name: '', content: '' })
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
+  // ✅ ИСПРАВЛЕНИЕ: Добавляем состояние для ошибок валидации
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   const { prompts, createPrompt, deletePrompt, setPromptActive, loadPrompts } = usePrompts();
   const { settings, updateSettings, loadSettings } = useSettings();
@@ -34,11 +36,30 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     }
   }, [settings]);
 
+  // ✅ ИСПРАВЛЕНИЕ: Валидация перед добавлением промпта
   const handleAddPrompt = async () => {
-    if (!promptForm.name.trim() || !promptForm.content.trim()) return
-    await createPrompt(promptForm.name, promptForm.content)
-    setPromptForm({ name: '', content: '' })
-    setIsAddingPrompt(false)
+    setValidationError(null);
+    
+    const nameValidation = validatePromptName(promptForm.name);
+    if (!nameValidation.isValid) {
+      setValidationError(nameValidation.error!);
+      return;
+    }
+    
+    const contentValidation = validatePromptContent(promptForm.content);
+    if (!contentValidation.isValid) {
+      setValidationError(contentValidation.error!);
+      return;
+    }
+    
+    // Санитизация данных
+    const sanitizedName = sanitizeString(promptForm.name);
+    const sanitizedContent = sanitizeString(promptForm.content);
+    
+    await createPrompt(sanitizedName, sanitizedContent);
+    setPromptForm({ name: '', content: '' });
+    setIsAddingPrompt(false);
+    setValidationError(null);
   }
 
   const handleSaveChanges = () => {
@@ -52,12 +73,12 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
   const handleClose = () => {
     setLocalSettings(settings);
+    setValidationError(null);
     onClose()
     setIsAddingPrompt(false)
     setPromptForm({ name: '', content: '' })
   }
   
-  // -> ИЗМЕНЕНИЕ: Функция для смены языка
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const lang = e.target.value;
     i18n.changeLanguage(lang);
@@ -82,7 +103,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             <div className="space-y-4">
                 <h3 className="text-lg font-medium text-white">{t('generalSettings')}</h3>
 
-                {/* -> ИЗМЕНЕНИЕ: Новый блок для выбора языка */}
                 <div className="p-3 rounded-lg bg-gray-700/50">
                   <label htmlFor="language-select" className="block text-sm font-medium text-gray-300 mb-2">{t('language')}</label>
                   <select
@@ -133,8 +153,14 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                 <div className="p-3 mb-4 space-y-3 rounded-lg bg-gray-700/50">
                   <input type="text" value={promptForm.name} onChange={(e) => setPromptForm(prev => ({ ...prev, name: e.target.value }))} placeholder={t('promptNamePlaceholder')} className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
                   <textarea value={promptForm.content} onChange={(e) => setPromptForm(prev => ({ ...prev, content: e.target.value }))} placeholder={t('promptContentPlaceholder')} className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
+                  
+                  {/* ✅ ИСПРАВЛЕНИЕ: Показываем ошибки валидации */}
+                  {validationError && (
+                    <p className="text-sm text-red-400">{validationError}</p>
+                  )}
+                  
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setIsAddingPrompt(false)} className="px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">{t('cancel')}</button>
+                    <button onClick={() => { setIsAddingPrompt(false); setValidationError(null); }} className="px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">{t('cancel')}</button>
                     <button onClick={handleAddPrompt} className="px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-600 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">{t('savePrompt')}</button>
                   </div>
                 </div>

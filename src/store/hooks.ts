@@ -5,49 +5,95 @@ import { useStore } from '@tanstack/react-store';
 import { actions, selectors, store, type Conversation, type Prompt, type UserSettings } from './store';
 import type { Message } from '../lib/ai/types';
 import { supabase } from '../utils/supabase';
+import { retryAsync } from '../utils/retry';
 import { useAuth } from '../providers/AuthProvider';
+import type { PostgrestSingleResponse, PostgrestResponse } from '@supabase/supabase-js';
 
 export function useSettings() {
     const { user } = useAuth();
     const settings = useStore(store, s => selectors.getSettings(s));
 
     const loadSettings = useCallback(async () => {
-    if (!user) return;
-    const { data, error } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
-    if (error) console.error("Error loading settings:", error);
-    if (data && data.settings) {
-        const loadedSettings = data.settings as UserSettings;
-        const settingsWithDefaults: UserSettings = {
-            model: loadedSettings.model || 'gemini-2.5-flash',
-            provider: loadedSettings.provider || 'gemini',
-            system_instruction: loadedSettings.system_instruction || '',
-            temperature: loadedSettings.temperature || 0.7,
-            maxTokens: loadedSettings.maxTokens || 8192,
-            reasoningEffort: loadedSettings.reasoningEffort || 'none',
-        };
-        actions.setSettings(settingsWithDefaults);
-    } else {
-        const defaultSettings: UserSettings = {
-            model: 'gemini-2.5-flash',
-            provider: 'gemini',
-            system_instruction: '',
-            temperature: 0.7,
-            maxTokens: 8192,
-            reasoningEffort: 'none',
-        };
-        actions.setSettings(defaultSettings);
-        await supabase.from('profiles').update({ settings: defaultSettings }).eq('id', user.id);
-    }
-}, [user]);
+      if (!user) return;
+      
+      try {
+        const result = await retryAsync(
+          async () => {
+            return await supabase.from('profiles').select('settings').eq('id', user.id).single();
+          },
+          {
+            maxAttempts: 3,
+            onRetry: (attempt, error) => {
+              console.warn(`[Settings] Retry attempt ${attempt} after error:`, error.message);
+            }
+          }
+        ) as PostgrestSingleResponse<{ settings: UserSettings | null }>;
+        
+        const { data, error } = result;
+        
+        if (error) {
+          console.error("Error loading settings:", error);
+          return;
+        }
+        
+        if (data && data.settings) {
+            const loadedSettings = data.settings as UserSettings;
+            const settingsWithDefaults: UserSettings = {
+                model: loadedSettings.model || 'gemini-2.5-flash',
+                provider: loadedSettings.provider || 'gemini',
+                system_instruction: loadedSettings.system_instruction || '',
+                temperature: loadedSettings.temperature || 0.7,
+                maxTokens: loadedSettings.maxTokens || 8192,
+                reasoningEffort: loadedSettings.reasoningEffort || 'none',
+            };
+            actions.setSettings(settingsWithDefaults);
+        } else {
+            const defaultSettings: UserSettings = {
+                model: 'gemini-2.5-flash',
+                provider: 'gemini',
+                system_instruction: '',
+                temperature: 0.7,
+                maxTokens: 8192,
+                reasoningEffort: 'none',
+            };
+            actions.setSettings(defaultSettings);
+            
+            await retryAsync(
+              async () => {
+                return await supabase.from('profiles').update({ settings: defaultSettings }).eq('id', user.id);
+              }
+            );
+        }
+      } catch (error) {
+        console.error("Failed to load settings after all retries:", error);
+      }
+    }, [user]);
 
     const updateSettings = useCallback(async (newSettings: Partial<UserSettings>) => {
         if (!user || !settings) return;
         const updated = { ...settings, ...newSettings };
         actions.setSettings(updated);
-        const { error } = await supabase.from('profiles').update({ settings: updated }).eq('id', user.id);
-        if (error) {
-            console.error("Error updating settings:", error);
-            actions.setSettings(settings); 
+        
+        try {
+          const result = await retryAsync(
+            async () => {
+              return await supabase.from('profiles').update({ settings: updated }).eq('id', user.id);
+            },
+            {
+              maxAttempts: 3,
+              onRetry: (attempt, error) => {
+                console.warn(`[Settings Update] Retry attempt ${attempt}:`, error.message);
+              }
+            }
+          ) as PostgrestResponse<any>;
+          
+          if (result.error) {
+              console.error("Error updating settings:", result.error);
+              actions.setSettings(settings); 
+          }
+        } catch (error) {
+          console.error("Failed to update settings after all retries:", error);
+          actions.setSettings(settings);
         }
     }, [user, settings]);
 
@@ -61,32 +107,88 @@ export function usePrompts() {
 
     const loadPrompts = useCallback(async () => {
         if (!user) return;
-        const { data, error } = await supabase.from('prompts').select('*').eq('user_id', user.id).order('created_at');
-        if (error) console.error("Error loading prompts:", error);
-        if (data) actions.setPrompts(data as Prompt[]);
+        
+        try {
+          const result = await retryAsync(
+            async () => {
+              return await supabase.from('prompts').select('*').eq('user_id', user.id).order('created_at');
+            }
+          ) as PostgrestResponse<Prompt>;
+          
+          const { data, error } = result;
+          
+          if (error) {
+            console.error("Error loading prompts:", error);
+            return;
+          }
+          
+          if (data) actions.setPrompts(data as Prompt[]);
+        } catch (error) {
+          console.error("Failed to load prompts after all retries:", error);
+        }
     }, [user]);
 
     const createPrompt = useCallback(async (name: string, content: string) => {
         if (!user) return;
-        const { error } = await supabase.from('prompts').insert({ name, content, user_id: user.id });
-        if (error) console.error("Error creating prompt:", error);
-        else await loadPrompts();
+        
+        try {
+          const result = await retryAsync(
+            async () => {
+              return await supabase.from('prompts').insert({ name, content, user_id: user.id });
+            }
+          ) as PostgrestResponse<any>;
+          
+          if (result.error) {
+            console.error("Error creating prompt:", result.error);
+          } else {
+            await loadPrompts();
+          }
+        } catch (error) {
+          console.error("Failed to create prompt after all retries:", error);
+        }
     }, [user, loadPrompts]);
 
     const deletePrompt = useCallback(async (id: string) => {
         if (!user) return;
-        const { error } = await supabase.from('prompts').delete().eq('id', id);
-        if (error) console.error("Error deleting prompt:", error);
-        else await loadPrompts();
+        
+        try {
+          const result = await retryAsync(
+            async () => {
+              return await supabase.from('prompts').delete().eq('id', id);
+            }
+          ) as PostgrestResponse<any>;
+          
+          if (result.error) {
+            console.error("Error deleting prompt:", result.error);
+          } else {
+            await loadPrompts();
+          }
+        } catch (error) {
+          console.error("Failed to delete prompt after all retries:", error);
+        }
     }, [user, loadPrompts]);
 
     const setPromptActive = useCallback(async (id: string, isActive: boolean) => {
         if (!user) return;
-        await supabase.from('prompts').update({ is_active: false }).eq('user_id', user.id);
-        if (isActive) {
-            await supabase.from('prompts').update({ is_active: true }).eq('id', id);
+        
+        try {
+          await retryAsync(
+            async () => {
+              return await supabase.from('prompts').update({ is_active: false }).eq('user_id', user.id);
+            }
+          );
+          
+          if (isActive) {
+              await retryAsync(
+                async () => {
+                  return await supabase.from('prompts').update({ is_active: true }).eq('id', id);
+                }
+              );
+          }
+          await loadPrompts();
+        } catch (error) {
+          console.error("Failed to update prompt active state after all retries:", error);
         }
-        await loadPrompts();
     }, [user, loadPrompts]);
     
     return { prompts, activePrompt, loadPrompts, createPrompt, deletePrompt, setPromptActive };
@@ -110,30 +212,44 @@ export function useConversations() {
   useEffect(() => {
     if (currentConversationId && user) {
       const loadMessages = async () => {
-        // Сначала очищаем сообщения для нового чата
-        actions.setMessages([]);
-        
-        const { data, error } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('conversation_id', currentConversationId)
-          .order('created_at', { ascending: true });
-        
-        if (error) {
-          console.error('Error loading messages:', error);
+        try {
+          const result = await retryAsync(
+            async () => {
+              return await supabase
+                .from('messages')
+                .select('*')
+                .eq('conversation_id', currentConversationId)
+                .order('created_at', { ascending: true });
+            },
+            {
+              maxAttempts: 3,
+              onRetry: (attempt, error) => {
+                console.warn(`[Messages] Retry attempt ${attempt}:`, error.message);
+              }
+            }
+          ) as PostgrestResponse<any>;
+          
+          const { data, error } = result;
+          
+          if (error) {
+            console.error('Error loading messages:', error);
+            actions.setMessages([]);
+          } else {
+            const formattedMessages = data.map((m: any) => ({
+              id: m.id,
+              role: m.role as 'user' | 'assistant' | 'system',
+              content: m.content
+            })) as Message[];
+            
+            actions.setMessages(formattedMessages);
+          }
+        } catch (error) {
+          console.error('Failed to load messages after all retries:', error);
           actions.setMessages([]);
-        } else {
-          const formattedMessages = data.map(m => ({
-            id: m.id,
-            role: m.role as 'user' | 'assistant' | 'system',
-            content: m.content
-          })) as Message[];
-          actions.setMessages(formattedMessages);
         }
       };
       loadMessages();
     } else if (!currentConversationId) {
-      // Если нет активного чата, очищаем сообщения
       actions.setMessages([]);
     }
   }, [currentConversationId, user]);
@@ -144,47 +260,101 @@ export function useConversations() {
 
   const loadConversations = useCallback(async () => {
       if (!user) return;
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      
+      try {
+        const result = await retryAsync(
+          async () => {
+            return await supabase
+              .from('conversations')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false });
+          }
+        ) as PostgrestResponse<Conversation>;
 
-      if (error) { 
-        console.error('Error loading conversations:', error); 
-        return; 
+        const { data, error } = result;
+
+        if (error) { 
+          console.error('Error loading conversations:', error); 
+          return; 
+        }
+        
+        actions.setConversations(data as Conversation[]);
+      } catch (error) {
+        console.error('Failed to load conversations after all retries:', error);
       }
-      actions.setConversations(data as Conversation[]);
   }, [user]);
 
   const createNewConversation = useCallback(async (title: string = 'New Conversation') => {
       if (!user) return null;
-      const { data, error } = await supabase
-        .from('conversations')
-        .insert({ title, user_id: user.id })
-        .select()
-        .single();
       
-      if (error || !data) { 
-        console.error('Failed to create conversation in Supabase:', error); 
-        return null; 
+      try {
+        const result = await retryAsync(
+          async () => {
+            return await supabase
+              .from('conversations')
+              .insert({ title, user_id: user.id })
+              .select()
+              .single();
+          },
+          {
+            maxAttempts: 3,
+            onRetry: (attempt, error) => {
+              console.warn(`[Create Conversation] Retry attempt ${attempt}:`, error.message);
+            }
+          }
+        ) as PostgrestSingleResponse<Conversation>;
+        
+        const { data, error } = result;
+        
+        if (error || !data) { 
+          console.error('Failed to create conversation in Supabase:', error); 
+          return null; 
+        }
+        
+        const newConversation: Conversation = data as Conversation;
+        actions.addConversation(newConversation);
+        return newConversation.id;
+      } catch (error) {
+        console.error('Failed to create conversation after all retries:', error);
+        return null;
       }
-      
-      const newConversation: Conversation = data as Conversation;
-      actions.addConversation(newConversation);
-      return newConversation.id;
   }, [user]);
 
   const updateConversationTitle = useCallback(async (id: string, title: string) => {
       actions.updateConversationTitle(id, title);
-      const { error } = await supabase.from('conversations').update({ title }).eq('id', id);
-      if (error) console.error('Failed to update title in Supabase:', error);
+      
+      try {
+        const result = await retryAsync(
+          async () => {
+            return await supabase.from('conversations').update({ title }).eq('id', id);
+          }
+        ) as PostgrestResponse<any>;
+        
+        if (result.error) {
+          console.error('Failed to update title in Supabase:', result.error);
+        }
+      } catch (error) {
+        console.error('Failed to update title after all retries:', error);
+      }
   }, []);
 
   const deleteConversation = useCallback(async (id: string) => {
       actions.deleteConversation(id);
-      const { error } = await supabase.from('conversations').delete().eq('id', id);
-      if (error) console.error('Failed to delete conversation from Supabase:', error);
+      
+      try {
+        const result = await retryAsync(
+          async () => {
+            return await supabase.from('conversations').delete().eq('id', id);
+          }
+        ) as PostgrestResponse<any>;
+        
+        if (result.error) {
+          console.error('Failed to delete conversation from Supabase:', result.error);
+        }
+      } catch (error) {
+        console.error('Failed to delete conversation after all retries:', error);
+      }
   }, []);
   
   const addMessage = useCallback(async (conversationId: string, message: Message) => {
@@ -192,20 +362,33 @@ export function useConversations() {
 
     actions.addMessage(message);
 
-    const { error } = await supabase.from('messages').insert({
-      id: message.id,
-      conversation_id: conversationId,
-      user_id: user.id,
-      role: message.role,
-      content: message.content
-    });
+    try {
+      const result = await retryAsync(
+        async () => {
+          return await supabase.from('messages').insert({
+            id: message.id,
+            conversation_id: conversationId,
+            user_id: user.id,
+            role: message.role,
+            content: message.content
+          });
+        },
+        {
+          maxAttempts: 3,
+          onRetry: (attempt, error) => {
+            console.warn(`[Add Message] Retry attempt ${attempt}:`, error.message);
+          }
+        }
+      ) as PostgrestResponse<any>;
 
-    if (error) {
-      console.error('Failed to add message to Supabase:', error);
+      if (result.error) {
+        console.error('Failed to add message to Supabase:', result.error);
+      }
+    } catch (error) {
+      console.error('Failed to add message after all retries:', error);
     }
   }, [user]);
 
-  // ИЗМЕНЕНИЕ: Теперь возвращает обрезанный массив сообщений для отправки в AI
   const editMessageAndUpdate = useCallback(async (messageId: string, newContent: string): Promise<Message[] | null> => {
     const originalMessages = selectors.getCurrentMessages(store.state);
     const originalMessageIndex = originalMessages.findIndex(m => m.id === messageId);
@@ -215,51 +398,46 @@ export function useConversations() {
       return null;
     }
 
-    // Получаем ID сообщений, которые нужно удалить (все после редактируемого)
     const idsToDelete = originalMessages
       .slice(originalMessageIndex + 1)
       .map(m => m.id);
 
-    // Обновляем локальный state (это обрежет массив)
     actions.editMessage(messageId, newContent);
     
     try {
-      // Параллельно выполняем операции с БД
-      const promises = [];
+      const promises: Promise<PostgrestResponse<any>>[] = [];
 
-      // Удаляем последующие сообщения из БД
       if (idsToDelete.length > 0) {
         promises.push(
-          supabase.from('messages').delete().in('id', idsToDelete)
+          retryAsync(async () => {
+            return await supabase.from('messages').delete().in('id', idsToDelete);
+          }) as Promise<PostgrestResponse<any>>
         );
       }
 
-      // Обновляем содержимое редактируемого сообщения в БД
       promises.push(
-        supabase
-          .from('messages')
-          .update({ content: newContent })
-          .eq('id', messageId)
+        retryAsync(async () => {
+          return await supabase
+            .from('messages')
+            .update({ content: newContent })
+            .eq('id', messageId);
+        }) as Promise<PostgrestResponse<any>>
       );
       
       const results = await Promise.all(promises);
       
-      // Проверяем на ошибки
       for (const res of results) {
         if (res.error) throw res.error;
       }
 
     } catch (error) {
       console.error('Failed to update messages in Supabase after edit:', error);
-      // Откатываем изменения в state
       actions.setMessages(originalMessages);
       return null;
     }
 
-    // Получаем актуальное состояние после обновления
     const updatedMessages = selectors.getCurrentMessages(store.state);
     
-    // ИЗМЕНЕНИЕ: Возвращаем весь массив обрезанных сообщений
     return updatedMessages;
   }, []);
   
@@ -269,56 +447,76 @@ export function useConversations() {
     const originalConversation = conversations.find(c => c.id === id);
     if (!originalConversation) return;
 
-    const { data: messagesToCopy, error: messagesError } = await supabase
-      .from('messages')
-      .select('role, content, user_id')
-      .eq('conversation_id', id)
-      .order('created_at', { ascending: true });
+    try {
+      const messagesResult = await retryAsync(
+        async () => {
+          return await supabase
+            .from('messages')
+            .select('role, content, user_id')
+            .eq('conversation_id', id)
+            .order('created_at', { ascending: true });
+        }
+      ) as PostgrestResponse<any>;
 
-    if (messagesError) {
-      console.error('Failed to load messages for duplication:', messagesError);
-      return;
+      const { data: messagesToCopy, error: messagesError } = messagesResult;
+
+      if (messagesError) {
+        console.error('Failed to load messages for duplication:', messagesError);
+        return;
+      }
+
+      if (!messagesToCopy || messagesToCopy.length === 0) {
+        console.warn('Cannot duplicate empty conversation');
+        return;
+      }
+
+      if (messagesToCopy[0].role !== 'user') {
+        console.error('First message must be from user. Skipping duplicate.');
+        return;
+      }
+
+      const newTitle = `copy_${originalConversation.title}`;
+      const convResult = await retryAsync(
+        async () => {
+          return await supabase
+            .from('conversations')
+            .insert({ title: newTitle, user_id: user.id })
+            .select()
+            .single();
+        }
+      ) as PostgrestSingleResponse<Conversation>;
+
+      const { data: newConvData, error: newConvError } = convResult;
+
+      if (newConvError || !newConvData) {
+        console.error('Failed to create duplicated conversation:', newConvError);
+        return;
+      }
+
+      const newConversation = newConvData as Conversation;
+
+      const newMessages = messagesToCopy.map((msg: any) => ({
+        ...msg,
+        conversation_id: newConversation.id,
+      }));
+      
+      const insertResult = await retryAsync(
+        async () => {
+          return await supabase.from('messages').insert(newMessages);
+        }
+      ) as PostgrestResponse<any>;
+      
+      if (insertResult.error) {
+        console.error('Failed to insert duplicated messages:', insertResult.error);
+        await supabase.from('conversations').delete().eq('id', newConversation.id);
+        return;
+      }
+      
+      await loadConversations();
+      setCurrentConversationId(newConversation.id);
+    } catch (error) {
+      console.error('Failed to duplicate conversation after all retries:', error);
     }
-
-    if (!messagesToCopy || messagesToCopy.length === 0) {
-      console.warn('Cannot duplicate empty conversation');
-      return;
-    }
-
-    if (messagesToCopy[0].role !== 'user') {
-      console.error('First message must be from user. Skipping duplicate.');
-      return;
-    }
-
-    const newTitle = `copy_${originalConversation.title}`;
-    const { data: newConvData, error: newConvError } = await supabase
-      .from('conversations')
-      .insert({ title: newTitle, user_id: user.id })
-      .select()
-      .single();
-
-    if (newConvError || !newConvData) {
-      console.error('Failed to create duplicated conversation:', newConvError);
-      return;
-    }
-
-    const newConversation = newConvData as Conversation;
-
-    const newMessages = messagesToCopy.map(msg => ({
-      ...msg,
-      conversation_id: newConversation.id,
-    }));
-    
-    const { error: insertError } = await supabase.from('messages').insert(newMessages);
-    if (insertError) {
-      console.error('Failed to insert duplicated messages:', insertError);
-      await supabase.from('conversations').delete().eq('id', newConversation.id);
-      return;
-    }
-    
-    await loadConversations();
-    setCurrentConversationId(newConversation.id);
-
   }, [user, conversations, loadConversations, setCurrentConversationId]);
 
   return {
