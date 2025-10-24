@@ -12,4 +12,3 @@ export { Header } from './Header';
 export { ChatArea } from './ChatArea';
 export { Footer } from './Footer';
 export { AuthGuard } from './AuthGuard';
-export { StreamingMessage } from './StreamingMessage'; // ✅ НОВОЕ

@@ -1,10 +1,9 @@
 // 📄 src/components/ChatArea.tsx
 
-import { memo as ReactMemo, forwardRef, useCallback } from 'react';
+import { memo as ReactMemo, useMemo, forwardRef } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ChatMessage, LoadingIndicator, WelcomeScreen } from '../components';
-import { StreamingMessage } from './StreamingMessage';
 import type { Message } from '../lib/ai/types';
 
 interface ChatAreaProps {
@@ -38,13 +37,17 @@ const ChatAreaComponent = ReactMemo(
     ) => {
       const { t } = useTranslation();
 
-      const showLoading = isLoading || (pendingMessage && !pendingMessage.content);
-      
-      // ✅ КЛЮЧЕВОЕ: только стримящееся сообщение в pendingMessage
-      // Сохранённые сообщения в messages[] - они НЕ ре-рендерятся
-      const isStreaming = pendingMessage && pendingMessage.content;
+      const displayMessages = useMemo(() => {
+        const combined = [...messages];
+        if (pendingMessage && pendingMessage.content && !messages.some((m) => m.id === pendingMessage.id)) {
+          combined.push(pendingMessage);
+        }
+        return combined;
+      }, [messages, pendingMessage]);
 
-      const handleMessageActions = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+      const showLoading = isLoading || (pendingMessage && !pendingMessage.content);
+
+      const handleMessageActions = useMemo(() => (e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
         const button = target.closest('button[data-action]');
         
@@ -81,8 +84,7 @@ const ChatAreaComponent = ReactMemo(
           <div className="space-y-4">
             {currentConversationId ? (
               <>
-                {/* ✅ Сохранённые сообщения - МЕМОИЗИРОВАНЫ */}
-                {messages.map((message) => (
+                {displayMessages.map((message) => (
                   <ChatMessage
                     key={message.id}
                     message={message}
@@ -91,12 +93,6 @@ const ChatAreaComponent = ReactMemo(
                     onCancelEdit={onCancelEdit}
                   />
                 ))}
-                
-                {/* ✅ Стримящееся сообщение - ИЗОЛИРОВАННЫЙ компонент */}
-                {isStreaming && (
-                  <StreamingMessage content={pendingMessage.content} />
-                )}
-                
                 {showLoading && <LoadingIndicator />}
               </>
             ) : (
@@ -107,35 +103,33 @@ const ChatAreaComponent = ReactMemo(
       );
     }
   ),
-  // ✅ КРИТИЧНО: НЕ сравниваем pendingMessage.content
+  // ✅ ИСПРАВЛЕНИЕ: сравниваем СОДЕРЖИМОЕ pendingMessage
   (prevProps, nextProps) => {
-    // Изменились сохранённые сообщения?
-    if (prevProps.messages.length !== nextProps.messages.length) {
-      return false;
-    }
-    
-    // Изменились другие критичные props?
+    // Быстрая проверка: если разные ID или длина - точно изменилось
     if (
+      prevProps.messages.length !== nextProps.messages.length ||
       prevProps.currentConversationId !== nextProps.currentConversationId ||
       prevProps.editingMessageId !== nextProps.editingMessageId ||
-      prevProps.error !== nextProps.error ||
-      prevProps.isLoading !== nextProps.isLoading
+      prevProps.isLoading !== nextProps.isLoading ||
+      prevProps.error !== nextProps.error
     ) {
-      return false;
+      return false; // Нужен ре-рендер
     }
 
-    // Появилось/исчезло стримящееся сообщение?
-    const hadPending = !!prevProps.pendingMessage?.content;
-    const hasPending = !!nextProps.pendingMessage?.content;
-    
-    if (hadPending !== hasPending) {
-      return false; // Показать/скрыть StreamingMessage
+    // ✅ КРИТИЧНО: сравниваем содержимое pendingMessage
+    const prevPending = prevProps.pendingMessage;
+    const nextPending = nextProps.pendingMessage;
+
+    if (prevPending?.id !== nextPending?.id) {
+      return false; // ID изменился
     }
 
-    // ✅ НЕ сравниваем pendingMessage.content!
-    // Это позволяет StreamingMessage обновляться независимо
-    
-    return true; // Можно пропустить ре-рендер ChatArea
+    if (prevPending?.content !== nextPending?.content) {
+      return false; // ← ВОТ ЭТО КЛЮЧЕВОЕ! Контент изменился - рендерим!
+    }
+
+    // Всё одинаково - можно пропустить ре-рендер
+    return true;
   }
 );
 

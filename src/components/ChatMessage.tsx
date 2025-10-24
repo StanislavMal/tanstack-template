@@ -1,6 +1,6 @@
 // 📄 src/components/ChatMessage.tsx
 
-import { useState, memo, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
@@ -16,13 +16,13 @@ interface ChatMessageProps {
   onCancelEdit: () => void;
 }
 
-// ✅ ВЕРНУЛИ MEMO - теперь это важно для производительности
-export const ChatMessage = memo(({ 
+// ✅ УБРАЛИ MEMO - пусть рендерится каждый раз
+export function ChatMessage({ 
   message,
   isEditing,
   onSaveEdit,
   onCancelEdit
-}: ChatMessageProps) => {
+}: ChatMessageProps) {
   const isAssistant = message.role === 'assistant';
   const [editedContent, setEditedContent] = useState(message.content);
   const [isCopied, setIsCopied] = useState(false);
@@ -129,13 +129,4 @@ export const ChatMessage = memo(({
       </div>
     </div>
   );
-}, (prevProps, nextProps) => {
-  // ✅ Мемоизация: ре-рендерим только если изменились props
-  return (
-    prevProps.message.id === nextProps.message.id &&
-    prevProps.message.content === nextProps.message.content &&
-    prevProps.isEditing === nextProps.isEditing
-  );
-});
-
-ChatMessage.displayName = 'ChatMessage';
+}
