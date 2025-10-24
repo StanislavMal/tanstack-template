@@ -1,6 +1,6 @@
 // 📄 src/hooks/useChat.ts
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { streamChat } from '../lib/ai/server';
 import type { Message } from '../lib/ai/types';
 import { useConversations, useSettings, usePrompts } from '../store/hooks';
@@ -29,8 +29,23 @@ export function useChat(options: UseChatOptions = {}) {
   const animationFrameRef = useRef<number | undefined>(undefined);
   const finalContentRef = useRef<string>('');
   const bufferRef = useRef<string>('');
+  
+  // ✅ ИСПРАВЛЕНИЕ: Добавляем ref для отслеживания активного запроса
+  const activeRequestIdRef = useRef<string | null>(null);
 
-  // Анимация печатания текста с увеличенной скоростью
+  // ✅ ИСПРАВЛЕНИЕ: Очищаем всё состояние при размонтировании или смене чата
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      textQueueRef.current = '';
+      bufferRef.current = '';
+      finalContentRef.current = '';
+      activeRequestIdRef.current = null;
+    };
+  }, [currentConversationId]); // Пересоздаём при смене чата
+
   const startTextAnimation = useCallback(() => {
     const animatePrinting = () => {
       if (textQueueRef.current.length > 0) {
@@ -59,6 +74,7 @@ export function useChat(options: UseChatOptions = {}) {
   const stopTextAnimation = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = undefined;
     }
   }, []);
 
@@ -87,7 +103,6 @@ export function useChat(options: UseChatOptions = {}) {
     return chunks;
   }, []);
 
-  // ИЗМЕНЕНИЕ: Теперь принимает явную историю сообщений
   const processAIResponse = useCallback(
     async (messageHistory: Message[]) => {
       if (!settings) {
@@ -96,6 +111,10 @@ export function useChat(options: UseChatOptions = {}) {
         options.onError?.(errorMsg);
         return null;
       }
+
+      // ✅ ИСПРАВЛЕНИЕ: Генерируем уникальный ID для этого запроса
+      const requestId = crypto.randomUUID();
+      activeRequestIdRef.current = requestId;
 
       // Сбрасываем состояние
       bufferRef.current = '';
@@ -107,7 +126,6 @@ export function useChat(options: UseChatOptions = {}) {
       try {
         const provider = settings.model.startsWith('gemini') ? 'gemini' : 'gemini';
 
-        // ИЗМЕНЕНИЕ: Используем явно переданную историю
         const response = await streamChat({
           data: {
             messages: messageHistory,
@@ -118,6 +136,12 @@ export function useChat(options: UseChatOptions = {}) {
           },
         });
 
+        // ✅ ИСПРАВЛЕНИЕ: Проверяем, не отменён ли запрос
+        if (activeRequestIdRef.current !== requestId) {
+          console.log('[useChat] Request cancelled, aborting stream processing');
+          return null;
+        }
+
         if (!response.body) throw new Error('No response body');
 
         const reader = response.body.getReader();
@@ -125,6 +149,13 @@ export function useChat(options: UseChatOptions = {}) {
         let isFirstChunk = true;
 
         while (true) {
+          // ✅ ИСПРАВЛЕНИЕ: Проверяем перед каждой итерацией
+          if (activeRequestIdRef.current !== requestId) {
+            reader.cancel();
+            console.log('[useChat] Request cancelled during streaming');
+            return null;
+          }
+
           const { value, done } = await reader.read();
           if (done) break;
 
@@ -152,6 +183,12 @@ export function useChat(options: UseChatOptions = {}) {
           }
         }
 
+        // ✅ ИСПРАВЛЕНИЕ: Финальная проверка перед сохранением
+        if (activeRequestIdRef.current !== requestId) {
+          console.log('[useChat] Request cancelled before saving');
+          return null;
+        }
+
         // Ждём завершения анимации печати
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
@@ -171,6 +208,11 @@ export function useChat(options: UseChatOptions = {}) {
         return finalMessage;
 
       } catch (error) {
+        // ✅ ИСПРАВЛЕНИЕ: Игнорируем ошибки отменённых запросов
+        if (activeRequestIdRef.current !== requestId) {
+          return null;
+        }
+
         const errorMsg = error instanceof Error ? error.message : 'An error occurred';
         console.error('[useChat] Error in processAIResponse:', error);
         setError(errorMsg);
@@ -210,8 +252,6 @@ export function useChat(options: UseChatOptions = {}) {
         await addMessage(convId, userMessage);
         options.onMessageSent?.(userMessage);
 
-        // ИЗМЕНЕНИЕ: Получаем актуальные сообщения из store
-        // Так как addMessage уже вызван, новое сообщение уже в store
         const { selectors, store } = await import('../store/store');
         const currentMessages = selectors.getCurrentMessages(store.state);
 
@@ -242,7 +282,6 @@ export function useChat(options: UseChatOptions = {}) {
     ]
   );
 
-  // ИЗМЕНЕНИЕ: Теперь использует обновленную историю из editMessageAndUpdate
   const editAndRegenerate = useCallback(
     async (messageId: string, newContent: string) => {
       if (!currentConversationId) return;
@@ -252,18 +291,15 @@ export function useChat(options: UseChatOptions = {}) {
       setPendingMessage(null);
 
       try {
-        // ИЗМЕНЕНИЕ: Получаем обрезанный массив сообщений
         const updatedHistory = await editMessageAndUpdate(messageId, newContent);
         
         if (!updatedHistory || updatedHistory.length === 0) {
           throw new Error("Failed to update message");
         }
 
-        // Последнее сообщение в истории - это отредактированное пользовательское сообщение
         const lastMessage = updatedHistory[updatedHistory.length - 1];
         options.onMessageSent?.(lastMessage);
 
-        // ИЗМЕНЕНИЕ: Передаем актуальную обрезанную историю в processAIResponse
         const aiResponse = await processAIResponse(updatedHistory);
         
         if (aiResponse && aiResponse.content.trim()) {

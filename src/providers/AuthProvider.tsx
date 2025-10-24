@@ -1,6 +1,5 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../utils/supabase'
-// ИЗМЕНЕНИЕ: Убираем AuthChangeEvent, так как используем только event: string
 import type { Session, User } from '@supabase/supabase-js'
 import { actions } from '../store';
 
@@ -23,13 +22,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isInitialized, setIsInitialized] = useState(false)
+  
+  // ✅ ИСПРАВЛЕНИЕ: Используем ref для предотвращения пересоздания функции
+  const cleanupExecutedRef = useRef(false);
 
   const cleanupAndReset = useCallback(() => {
+    if (cleanupExecutedRef.current) return;
+    
     console.log('[AuthProvider] Cleaning up session and resetting store.');
+    cleanupExecutedRef.current = true;
+    
     supabase.removeAllChannels(); 
     actions.resetStore();
     setUser(null);
     setSession(null);
+    
+    // Сбрасываем флаг через небольшую задержку
+    setTimeout(() => {
+      cleanupExecutedRef.current = false;
+    }, 100);
   }, []);
 
   useEffect(() => {

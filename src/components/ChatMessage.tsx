@@ -1,6 +1,6 @@
 // 📄 src/components/ChatMessage.tsx
 
-import { useState, memo } from 'react';
+import { useState, memo, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
@@ -25,6 +25,18 @@ export const ChatMessage = memo(({
   const isAssistant = message.role === 'assistant';
   const [editedContent, setEditedContent] = useState(message.content);
   const [isCopied, setIsCopied] = useState(false);
+  
+  // ✅ ИСПРАВЛЕНИЕ: Добавляем ref для отслеживания таймера
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ ИСПРАВЛЕНИЕ: Очищаем таймер при размонтировании
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSave = () => {
     if (editedContent.trim() !== message.content.trim() && editedContent.trim()) {
@@ -34,11 +46,19 @@ export const ChatMessage = memo(({
     }
   };
 
-  // ИЗМЕНЕНИЕ: Убираем неиспользуемый аргумент `e`
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
     setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+    
+    // ✅ ИСПРАВЛЕНИЕ: Очищаем предыдущий таймер и сохраняем новый
+    if (copyTimeoutRef.current) {
+      clearTimeout(copyTimeoutRef.current);
+    }
+    
+    copyTimeoutRef.current = setTimeout(() => {
+      setIsCopied(false);
+      copyTimeoutRef.current = null;
+    }, 2000);
   };
 
   return (
