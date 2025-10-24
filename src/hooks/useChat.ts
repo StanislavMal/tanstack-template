@@ -44,40 +44,48 @@ export function useChat(options: UseChatOptions = {}) {
   }, [currentConversationId]);
 
   const startTypingAnimation = useCallback((messageId: string) => {
-    if (intervalIdRef.current) {
-      clearInterval(intervalIdRef.current);
-    }
+  if (intervalIdRef.current) {
+    clearInterval(intervalIdRef.current);
+  }
 
-    const streamSpeed = settings?.streamSpeed || 30;
-    const intervalMs = 50;
-    const charsPerTick = Math.max(1, Math.round((streamSpeed * intervalMs) / 1000));
+  const streamSpeed = settings?.streamSpeed || 30;
+  
+  // ✅ АДАПТИВНЫЙ THROTTLING:
+  // Чем быстрее скорость → тем реже обновляем React
+  // Но не реже 60 FPS (16ms) и не чаще 20 FPS (50ms)
+  const updateIntervalMs = streamSpeed > 50 
+    ? 100  // Очень быстро → обновляем каждые 100ms (10 FPS)
+    : streamSpeed > 30 
+      ? 50   // Быстро → каждые 50ms (20 FPS)
+      : 33;  // Нормально → каждые 33ms (30 FPS)
+  
+  const charsPerTick = Math.max(1, Math.round((streamSpeed * updateIntervalMs) / 1000));
 
-    console.log(`[Animation] Starting with speed: ${streamSpeed} chars/sec, ${charsPerTick} chars per tick`);
+  console.log(`[Animation] Speed: ${streamSpeed} chars/sec, Update: ${updateIntervalMs}ms, Chars/tick: ${charsPerTick}`);
 
-    intervalIdRef.current = setInterval(() => {
-      if (textQueueRef.current.length > 0) {
-        const charsToAdd = textQueueRef.current.substring(0, charsPerTick);
-        textQueueRef.current = textQueueRef.current.substring(charsPerTick);
-        displayedTextRef.current += charsToAdd;
+  intervalIdRef.current = setInterval(() => {
+    if (textQueueRef.current.length > 0) {
+      const charsToAdd = textQueueRef.current.substring(0, charsPerTick);
+      textQueueRef.current = textQueueRef.current.substring(charsPerTick);
+      displayedTextRef.current += charsToAdd;
 
-        setPendingMessage(prev => {
-          if (prev && prev.id === messageId) {
-            return { ...prev, content: displayedTextRef.current };
-          }
-          return prev;
-        });
-
-        console.log(`[Animation] Displayed: ${displayedTextRef.current.length}, Queue: ${textQueueRef.current.length}`);
-      } else {
-        // Очередь пустая - останавливаем
-        if (intervalIdRef.current) {
-          console.log('[Animation] Queue empty, stopping');
-          clearInterval(intervalIdRef.current);
-          intervalIdRef.current = null;
+      setPendingMessage(prev => {
+        if (prev && prev.id === messageId) {
+          return { ...prev, content: displayedTextRef.current };
         }
+        return prev;
+      });
+
+      console.log(`[Animation] Displayed: ${displayedTextRef.current.length}, Queue: ${textQueueRef.current.length}`);
+    } else {
+      if (intervalIdRef.current) {
+        console.log('[Animation] Queue empty, stopping');
+        clearInterval(intervalIdRef.current);
+        intervalIdRef.current = null;
       }
-    }, intervalMs);
-  }, [settings?.streamSpeed]);
+    }
+  }, updateIntervalMs);
+}, [settings?.streamSpeed]);
 
   const stopTypingAnimation = useCallback(() => {
     if (intervalIdRef.current) {
