@@ -44,9 +44,6 @@ function Home() {
   const [dataLoaded, setDataLoaded] = useState(false);
   const footerRef = useRef<FooterRef>(null);
 
-  // ИЗМЕНЕНИЕ: Генерируем уникальный ID для этого экземпляра клиента
-  const clientId = useMemo(() => crypto.randomUUID(), []);
-
   const isDesktop = useMediaQuery('(min-width: 768px)');
   
   const { messages, currentConversationId } = useConversations();
@@ -79,14 +76,9 @@ function Home() {
   
   useEffect(() => {
     if (!user || !dataLoaded) return;
-
-    // ИЗМЕНЕНИЕ: Используем уникальный ID клиента для имен каналов
-    console.log(`[Realtime] Subscribing with client ID: ${clientId}`);
-    
     const channels = [
-      supabase.channel(`conversations-changes-${clientId}`).on<Conversation>(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'conversations', filter: `user_id=eq.${user.id}` },
+      supabase.channel('conversations-changes').on<Conversation>(
+        'postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `user_id=eq.${user.id}` },
         (payload) => {
           switch (payload.eventType) {
             case 'INSERT': actions.addConversation(payload.new); break;
@@ -95,9 +87,8 @@ function Home() {
           }
         }
       ).subscribe(),
-      supabase.channel(`messages-changes-${clientId}`).on<MessageWithConversationId>(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${user.id}`},
+      supabase.channel('messages-changes').on<MessageWithConversationId>(
+        'postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${user.id}`},
         (payload) => {
           if (store.state.currentConversationId === payload.new.conversation_id) {
             if (!store.state.currentMessages.some(m => m.id === payload.new.id)) {
@@ -106,33 +97,25 @@ function Home() {
           }
         }
       ).subscribe(),
-      supabase.channel(`profiles-changes-${clientId}`).on<ProfilePayload>(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}`},
-        (payload) => {
-            if (payload.new.settings) {
-                actions.setSettings(payload.new.settings);
-            }
-        }
+      supabase.channel('profiles-changes').on<ProfilePayload>(
+        'postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}`},
+        (payload) => { if (payload.new.settings) { actions.setSettings(payload.new.settings); } }
       ).subscribe(),
-      supabase.channel(`prompts-changes-${clientId}`).on<Prompt>(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'prompts', filter: `user_id=eq.${user.id}`},
+      supabase.channel('prompts-changes').on<Prompt>(
+        'postgres_changes', { event: '*', schema: 'public', table: 'prompts', filter: `user_id=eq.${user.id}`},
         () => { loadPrompts(); }
       ).subscribe()
     ];
     return () => {
-      console.log(`[Realtime] Unsubscribing for client ID: ${clientId}`);
-      // supabase.removeChannel можно вызывать для каждого канала, но removeAllChannels надежнее при выходе.
-      // Эта функция очистки сработает, если компонент размонтируется по другой причине, кроме логаута.
+      console.log('[Realtime] Unsubscribing from all channels.');
       channels.forEach(channel => supabase.removeChannel(channel));
     };
-  }, [user, dataLoaded, loadPrompts, clientId]); // Добавляем clientId в зависимости
+  }, [user, dataLoaded, loadPrompts]);
 
 
   useEffect(() => {
     if (isInitialized && !authLoading && !user) {
-      navigate({ to: '/login' });
+      navigate({ to: '/login', replace: true });
     }
   }, [user, authLoading, isInitialized, navigate]);
 
@@ -144,6 +127,7 @@ function Home() {
     onError: (error) => { console.error('Chat error:', error); },
   });
 
+  // ИЗМЕНЕНИЕ: Восстановленный код
   const displayMessages = useMemo(() => {
     const combined = [...messages];
     if (pendingMessage && !messages.some((m) => m.id === pendingMessage.id)) {
@@ -163,20 +147,11 @@ function Home() {
   );
 
   const handleLogout = useCallback(async () => {
-    try {
-      console.log('Logout process started...');
-      await supabase.removeAllChannels();
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Error during sign out:', error.message);
-      }
-      actions.resetStore();
-      navigate({ to: '/login', replace: true });
-    } catch (e) {
-      console.error('A critical error occurred during the logout process:', e);
-      window.location.href = '/login';
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Error on sign out attempt:', error.message);
     }
-  }, [navigate]);
+  }, []);
 
   const handleStartEdit = useCallback((id: string) => { setEditingMessageId(id); }, []);
   const handleCancelEdit = useCallback(() => { setEditingMessageId(null); }, []);
@@ -199,11 +174,7 @@ function Home() {
     editingChatId: sidebar.editingChatId,
     setEditingChatId: (id: string | null) => {
       const conversation = sidebar.conversations.find((c) => c.id === id);
-      if (id && conversation) {
-        sidebar.handleStartEdit(id, conversation.title);
-      } else {
-        sidebar.handleCancelEdit();
-      }
+      if (id && conversation) { sidebar.handleStartEdit(id, conversation.title); } else { sidebar.handleCancelEdit(); }
     },
     editingTitle: sidebar.editingTitle,
     setEditingTitle: sidebar.setEditingTitle,
@@ -213,91 +184,11 @@ function Home() {
     isCollapsed: sidebar.isCollapsed,
   };
 
-  // ... остальная часть компонента без изменений ...
+  if (!isInitialized || authLoading || !dataLoaded) { return ( <div className="flex items-center justify-center min-h-screen bg-gray-900"> <div className="text-center"> <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div> <p className="mt-4 text-gray-400"> {!isInitialized || authLoading ? 'Authenticating...' : 'Loading your data...'} </p> </div> </div> ); }
+  if (!user) { return ( <div className="flex items-center justify-center min-h-screen bg-gray-900"> <div className="text-center"> <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div> <p className="mt-4 text-gray-400">Redirecting to login...</p> </div> </div> ); }
 
-  if (!isInitialized || authLoading || !dataLoaded) {
-    return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-900">
-            <div className="text-center">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-                <p className="mt-4 text-gray-400">
-                    {!isInitialized || authLoading ? 'Authenticating...' : 'Loading your data...'}
-                </p>
-            </div>
-        </div>
-    );
-  }
+  const chatAreaProps = { messages: displayMessages, pendingMessage, isLoading, error, currentConversationId, editingMessageId, onStartEdit: handleStartEdit, onCancelEdit: handleCancelEdit, onSaveEdit: handleSaveEdit };
 
-  if (!user) {
-    return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-900">
-            <div className="text-center">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-                <p className="mt-4 text-gray-400">Redirecting to login...</p>
-            </div>
-        </div>
-    );
-  }
-
-  const chatAreaProps = {
-    messages: displayMessages,
-    pendingMessage,
-    isLoading,
-    error,
-    currentConversationId,
-    editingMessageId,
-    onStartEdit: handleStartEdit,
-    onCancelEdit: handleCancelEdit,
-    onSaveEdit: handleSaveEdit,
-  };
-
-  if (isDesktop) {
-    return (
-      <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
-        <PanelGroup direction="horizontal">
-          <Panel
-            defaultSize={20}
-            minSize={15}
-            maxSize={30}
-            collapsible={true}
-            collapsedSize={0}
-            onCollapse={sidebar.toggleCollapse as PanelOnCollapse}
-            className="flex flex-col"
-          >
-            <Sidebar {...sidebarProps} isOpen={true} setIsOpen={() => {}} />
-          </Panel>
-          <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
-          <Panel className="flex-1 flex flex-col relative min-h-0">
-            <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} />
-            <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
-              <div ref={contentRef}>
-                <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                  <ChatArea {...chatAreaProps} />
-                </div>
-              </div>
-            </main>
-            {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-10" />}
-            <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
-          </Panel>
-        </PanelGroup>
-        <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
-      {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />}
-      <Sidebar {...sidebarProps} />
-      <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
-      <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
-        <div ref={contentRef}>
-          <ChatArea {...chatAreaProps} />
-        </div>
-      </main>
-      {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
-      <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
-      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-    </div>
-  );
+  if (isDesktop) { return ( <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden"> <PanelGroup direction="horizontal"> <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={sidebar.toggleCollapse as PanelOnCollapse} className="flex flex-col"> <Sidebar {...sidebarProps} isOpen={true} setIsOpen={() => {}} /> </Panel> <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" /> <Panel className="flex-1 flex flex-col relative min-h-0"> <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} /> <main ref={messagesContainerRef} className="flex-1 overflow-y-auto"> <div ref={contentRef}> <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}> <ChatArea {...chatAreaProps} /> </div> </div> </main> {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-10" />} <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} /> </Panel> </PanelGroup> <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} /> </div> ); }
+  return ( <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden"> {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />} <Sidebar {...sidebarProps} /> <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} /> <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}> <div ref={contentRef}> <ChatArea {...chatAreaProps} /> </div> </main> {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />} <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} /> <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} /> </div> );
 }

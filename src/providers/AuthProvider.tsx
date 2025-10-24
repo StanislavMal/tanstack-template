@@ -1,12 +1,14 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../utils/supabase'
-import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
+// ИЗМЕНЕНИЕ: Убираем AuthChangeEvent, так как используем только event: string
+import type { Session, User } from '@supabase/supabase-js'
+import { actions } from '../store';
 
 type AuthContextType = {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
-  isInitialized: boolean; // Новое поле для отслеживания инициализации
+  isInitialized: boolean;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -22,48 +24,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isInitialized, setIsInitialized] = useState(false)
 
+  const cleanupAndReset = useCallback(() => {
+    console.log('[AuthProvider] Cleaning up session and resetting store.');
+    supabase.removeAllChannels(); 
+    actions.resetStore();
+    setUser(null);
+    setSession(null);
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
-    const initializeAuth = async () => {
-      try {
-        // Получаем начальную сессию
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
-        
-        if (mounted) {
-          setSession(initialSession);
-          setUser(initialSession?.user ?? null);
-          setIsLoading(false);
-          setIsInitialized(true);
-        }
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-        if (mounted) {
-          setIsLoading(false);
-          setIsInitialized(true);
-        }
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      if (mounted) {
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+        setIsLoading(false);
+        setIsInitialized(true);
       }
-    };
+    });
 
-    // Подписываемся на изменения аутентификации
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event: AuthChangeEvent, newSession: Session | null) => {
-        if (mounted) {
+      (event, newSession) => {
+        if (!mounted) return;
+
+        console.log(`[AuthProvider] Auth event: ${event}`);
+
+        if (event === 'SIGNED_OUT') {
+          cleanupAndReset();
+        } else if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
           setSession(newSession);
           setUser(newSession?.user ?? null);
-          // При изменении состояния аутентификации не меняем isLoading,
-          // так как это уже не первоначальная загрузка
         }
       }
     );
-
-    initializeAuth();
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [cleanupAndReset]);
 
   const value = {
     user,
