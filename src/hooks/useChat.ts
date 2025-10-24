@@ -25,16 +25,14 @@ export function useChat(options: UseChatOptions = {}) {
     editMessageAndUpdate 
   } = useConversations();
 
+  // Refs для управления анимацией
   const textQueueRef = useRef<string>('');
+  const displayedContentRef = useRef<string>('');
   const animationFrameRef = useRef<number | undefined>(undefined);
-  const finalContentRef = useRef<string>('');
+  const lastUpdateTimeRef = useRef<number>(0);
   const bufferRef = useRef<string>('');
   const activeRequestIdRef = useRef<string | null>(null);
   const isStreamingActiveRef = useRef<boolean>(false);
-  
-  // ✅ НОВОЕ: Для контроля скорости печати
-  const lastRenderTimeRef = useRef<number>(0);
-  const accumulatedCharsRef = useRef<string>('');
 
   useEffect(() => {
     return () => {
@@ -42,58 +40,52 @@ export function useChat(options: UseChatOptions = {}) {
         cancelAnimationFrame(animationFrameRef.current);
       }
       textQueueRef.current = '';
+      displayedContentRef.current = '';
       bufferRef.current = '';
-      finalContentRef.current = '';
-      accumulatedCharsRef.current = '';
       activeRequestIdRef.current = null;
       isStreamingActiveRef.current = false;
     };
   }, [currentConversationId]);
 
-  // ✅ НОВАЯ ЛОГИКА: Постоянная настраиваемая скорость печати
+  // ✅ УПРОЩЁННАЯ ЛОГИКА: берём символы постоянно, обновляем React по таймеру
   const startTextAnimation = useCallback(() => {
-    const streamSpeed = settings?.streamSpeed || 30; // символов/секунду
-    const updateInterval = 50; // обновляем React каждые 50ms для плавности
-    const charsPerUpdate = Math.max(1, Math.round((streamSpeed * updateInterval) / 1000));
+    const streamSpeed = settings?.streamSpeed || 30;
+    const charsPerSecond = streamSpeed;
+    const updateIntervalMs = 50; // Обновляем React каждые 50ms
+    const charsPerFrame = (charsPerSecond / 1000) * 16.67; // Символов за 1 frame (60fps)
 
-    const animatePrinting = () => {
-      const now = performance.now();
-      const timeSinceLastRender = now - lastRenderTimeRef.current;
-
-      // Добавляем символы из очереди в аккумулятор
+    const animate = (currentTime: number) => {
+      // 1. Забираем символы из очереди (каждый кадр)
       if (textQueueRef.current.length > 0) {
-        const takeChars = textQueueRef.current.substring(0, charsPerUpdate);
-        textQueueRef.current = textQueueRef.current.substring(charsPerUpdate);
-        accumulatedCharsRef.current += takeChars;
+        const charsToTake = Math.max(1, Math.ceil(charsPerFrame));
+        const newChars = textQueueRef.current.substring(0, charsToTake);
+        textQueueRef.current = textQueueRef.current.substring(charsToTake);
+        displayedContentRef.current += newChars;
       }
 
-      // Обновляем React state только каждые updateInterval мс
-      if (timeSinceLastRender >= updateInterval && accumulatedCharsRef.current.length > 0) {
+      // 2. Обновляем React state только по таймеру (не каждый кадр!)
+      const timeSinceLastUpdate = currentTime - lastUpdateTimeRef.current;
+      if (timeSinceLastUpdate >= updateIntervalMs) {
         setPendingMessage(prev => {
-          if (prev) {
-            const newContent = prev.content + accumulatedCharsRef.current;
-            finalContentRef.current = newContent;
-            accumulatedCharsRef.current = ''; // Очищаем аккумулятор
-            lastRenderTimeRef.current = now;
-            return { ...prev, content: newContent };
+          if (prev && displayedContentRef.current !== prev.content) {
+            lastUpdateTimeRef.current = currentTime;
+            return { ...prev, content: displayedContentRef.current };
           }
-          return null;
+          return prev;
         });
       }
 
-      // Продолжаем анимацию если есть данные или стрим активен
-      if (textQueueRef.current.length > 0 || accumulatedCharsRef.current.length > 0 || isStreamingActiveRef.current) {
-        animationFrameRef.current = requestAnimationFrame(animatePrinting);
+      // 3. Продолжаем анимацию если стрим активен ИЛИ есть символы в очереди
+      if (isStreamingActiveRef.current || textQueueRef.current.length > 0) {
+        animationFrameRef.current = requestAnimationFrame(animate);
       } else {
         // Финальное обновление
-        if (finalContentRef.current) {
-          setPendingMessage(prev => {
-            if (prev && prev.content !== finalContentRef.current) {
-              return { ...prev, content: finalContentRef.current };
-            }
-            return prev;
-          });
-        }
+        setPendingMessage(prev => {
+          if (prev && displayedContentRef.current !== prev.content) {
+            return { ...prev, content: displayedContentRef.current };
+          }
+          return prev;
+        });
         animationFrameRef.current = undefined;
       }
     };
@@ -101,15 +93,15 @@ export function useChat(options: UseChatOptions = {}) {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
-    lastRenderTimeRef.current = performance.now();
-    animationFrameRef.current = requestAnimationFrame(animatePrinting);
+    lastUpdateTimeRef.current = performance.now();
+    animationFrameRef.current = requestAnimationFrame(animate);
   }, [settings?.streamSpeed]);
 
   const stopTextAnimation = useCallback(() => {
     isStreamingActiveRef.current = false;
-    
+    // Даём время допечатать остатки очереди
     setTimeout(() => {
-      if (animationFrameRef.current) {
+      if (animationFrameRef.current && textQueueRef.current.length === 0) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = undefined;
       }
@@ -153,10 +145,10 @@ export function useChat(options: UseChatOptions = {}) {
       const requestId = crypto.randomUUID();
       activeRequestIdRef.current = requestId;
 
+      // Очистка всех буферов
       bufferRef.current = '';
-      finalContentRef.current = '';
       textQueueRef.current = '';
-      accumulatedCharsRef.current = '';
+      displayedContentRef.current = '';
       isStreamingActiveRef.current = false;
       
       const assistantMessageId = crypto.randomUUID();
@@ -205,6 +197,7 @@ export function useChat(options: UseChatOptions = {}) {
             
             if (chunk.text) {
               if (isFirstChunk) {
+                // Инициализируем пустое сообщение
                 setPendingMessage({ 
                   id: assistantMessageId, 
                   role: 'assistant', 
@@ -216,7 +209,7 @@ export function useChat(options: UseChatOptions = {}) {
                 isFirstChunk = false;
               }
               
-              // Добавляем текст в очередь
+              // Просто добавляем текст в очередь - анимация сама его заберёт
               textQueueRef.current += chunk.text;
             }
           }
@@ -227,14 +220,13 @@ export function useChat(options: UseChatOptions = {}) {
           return null;
         }
 
-        // Останавливаем стрим и ждём завершения анимации
+        // Останавливаем получение новых чанков
         isStreamingActiveRef.current = false;
 
+        // Ждём пока очередь опустеет (но не дольше 5 секунд)
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
-            if (textQueueRef.current.length === 0 && 
-                accumulatedCharsRef.current.length === 0 && 
-                animationFrameRef.current === undefined) {
+            if (textQueueRef.current.length === 0 && animationFrameRef.current === undefined) {
               clearInterval(checkInterval);
               resolve();
             }
@@ -249,7 +241,7 @@ export function useChat(options: UseChatOptions = {}) {
         const finalMessage = { 
           id: assistantMessageId, 
           role: 'assistant' as const, 
-          content: finalContentRef.current 
+          content: displayedContentRef.current 
         };
 
         return finalMessage;
