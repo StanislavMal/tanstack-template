@@ -1,4 +1,4 @@
-// 📄 components/SettingsDialog.tsx
+// 📄 src/components/SettingsDialog.tsx
 import { useState, useEffect } from 'react'
 import { PlusCircle, Trash2 } from 'lucide-react'
 import { usePrompts, useSettings } from '../store/hooks'
@@ -15,7 +15,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const { t, i18n } = useTranslation(); 
   const [promptForm, setPromptForm] = useState({ name: '', content: '' })
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
-  // ✅ ИСПРАВЛЕНИЕ: Добавляем состояние для ошибок валидации
   const [validationError, setValidationError] = useState<string | null>(null)
 
   const { prompts, createPrompt, deletePrompt, setPromptActive, loadPrompts } = usePrompts();
@@ -36,7 +35,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     }
   }, [settings]);
 
-  // ✅ ИСПРАВЛЕНИЕ: Валидация перед добавлением промпта
   const handleAddPrompt = async () => {
     setValidationError(null);
     
@@ -52,7 +50,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       return;
     }
     
-    // Санитизация данных
     const sanitizedName = sanitizeString(promptForm.name);
     const sanitizedContent = sanitizeString(promptForm.content);
     
@@ -128,6 +125,34 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       <option value="gemini-2.5-pro">{t('modelPro')}</option>
                   </select>
                 </div>
+
+                {/* ✅ НОВОЕ: Слайдер скорости стриминга */}
+                <div className="p-3 rounded-lg bg-gray-700/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="stream-speed" className="block text-sm font-medium text-gray-300">
+                      {t('streamSpeed')}
+                    </label>
+                    <span className="text-sm text-orange-400 font-semibold">
+                      {localSettings.streamSpeed || 30} {t('streamSpeedUnit')}
+                    </span>
+                  </div>
+                  <input
+                    id="stream-speed"
+                    type="range"
+                    min="5"
+                    max="100"
+                    step="5"
+                    value={localSettings.streamSpeed || 30}
+                    onChange={(e) => setLocalSettings(prev => prev ? { ...prev, streamSpeed: parseInt(e.target.value) } : null)}
+                    className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                  />
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>{t('slow')}</span>
+                    <span>{t('fast')}</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">{t('streamSpeedNote')}</p>
+                </div>
+
                 <div className="p-3 rounded-lg bg-gray-700/50">
                   <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300 mb-2">{t('systemInstruction')}</label>
                   <textarea
@@ -154,7 +179,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                   <input type="text" value={promptForm.name} onChange={(e) => setPromptForm(prev => ({ ...prev, name: e.target.value }))} placeholder={t('promptNamePlaceholder')} className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
                   <textarea value={promptForm.content} onChange={(e) => setPromptForm(prev => ({ ...prev, content: e.target.value }))} placeholder={t('promptContentPlaceholder')} className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
                   
-                  {/* ✅ ИСПРАВЛЕНИЕ: Показываем ошибки валидации */}
                   {validationError && (
                     <p className="text-sm text-red-400">{validationError}</p>
                   )}

@@ -45,6 +45,7 @@ export function useSettings() {
                 temperature: loadedSettings.temperature || 0.7,
                 maxTokens: loadedSettings.maxTokens || 8192,
                 reasoningEffort: loadedSettings.reasoningEffort || 'none',
+                streamSpeed: loadedSettings.streamSpeed || 30,
             };
             actions.setSettings(settingsWithDefaults);
         } else {
@@ -55,6 +56,7 @@ export function useSettings() {
                 temperature: 0.7,
                 maxTokens: 8192,
                 reasoningEffort: 'none',
+                streamSpeed: 30,
             };
             actions.setSettings(defaultSettings);
             
