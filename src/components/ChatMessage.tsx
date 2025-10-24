@@ -1,6 +1,6 @@
 // 📄 src/components/ChatMessage.tsx
 
-import { useState, memo, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
@@ -16,20 +16,19 @@ interface ChatMessageProps {
   onCancelEdit: () => void;
 }
 
-export const ChatMessage = memo(({ 
+// ✅ УБРАЛИ MEMO - пусть рендерится каждый раз
+export function ChatMessage({ 
   message,
   isEditing,
   onSaveEdit,
   onCancelEdit
-}: ChatMessageProps) => {
+}: ChatMessageProps) {
   const isAssistant = message.role === 'assistant';
   const [editedContent, setEditedContent] = useState(message.content);
   const [isCopied, setIsCopied] = useState(false);
   
-  // ✅ ИСПРАВЛЕНИЕ: Добавляем ref для отслеживания таймера
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ✅ ИСПРАВЛЕНИЕ: Очищаем таймер при размонтировании
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) {
@@ -50,7 +49,6 @@ export const ChatMessage = memo(({
     navigator.clipboard.writeText(message.content);
     setIsCopied(true);
     
-    // ✅ ИСПРАВЛЕНИЕ: Очищаем предыдущий таймер и сохраняем новый
     if (copyTimeoutRef.current) {
       clearTimeout(copyTimeoutRef.current);
     }
@@ -131,6 +129,4 @@ export const ChatMessage = memo(({
       </div>
     </div>
   );
-});
-
-ChatMessage.displayName = 'ChatMessage';
+}

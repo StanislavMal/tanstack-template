@@ -1,6 +1,6 @@
 // 📄 src/components/ChatArea.tsx
 
-import { memo as ReactMemo, useMemo, forwardRef, useCallback } from 'react';
+import { memo as ReactMemo, useMemo, forwardRef } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ChatMessage, LoadingIndicator, WelcomeScreen } from '../components';
@@ -19,7 +19,6 @@ interface ChatAreaProps {
   onSaveEdit: (id: string, content: string) => void;
 }
 
-// ✅ ОПТИМИЗАЦИЯ: Мемоизируем весь компонент для предотвращения лишних ре-рендеров
 const ChatAreaComponent = ReactMemo(
   forwardRef<HTMLDivElement, ChatAreaProps>(
     (
@@ -38,7 +37,6 @@ const ChatAreaComponent = ReactMemo(
     ) => {
       const { t } = useTranslation();
 
-      // ✅ ОПТИМИЗАЦИЯ: Мемоизируем финальный массив сообщений
       const displayMessages = useMemo(() => {
         const combined = [...messages];
         if (pendingMessage && pendingMessage.content && !messages.some((m) => m.id === pendingMessage.id)) {
@@ -49,8 +47,7 @@ const ChatAreaComponent = ReactMemo(
 
       const showLoading = isLoading || (pendingMessage && !pendingMessage.content);
 
-      // ✅ ОПТИМИЗАЦИЯ: Мемоизируем обработчик событий
-      const handleMessageActions = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+      const handleMessageActions = useMemo(() => (e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
         const button = target.closest('button[data-action]');
         
@@ -66,7 +63,6 @@ const ChatAreaComponent = ReactMemo(
         if (action === 'start-edit') {
           onStartEdit(messageId);
         }
-        
       }, [onStartEdit]);
 
       return (
@@ -107,16 +103,33 @@ const ChatAreaComponent = ReactMemo(
       );
     }
   ),
-  // ✅ ОПТИМИЗАЦИЯ: Кастомная функция сравнения для memo
+  // ✅ ИСПРАВЛЕНИЕ: сравниваем СОДЕРЖИМОЕ pendingMessage
   (prevProps, nextProps) => {
-    return (
-      prevProps.messages.length === nextProps.messages.length &&
-      prevProps.pendingMessage?.id === nextProps.pendingMessage?.id &&
-      prevProps.isLoading === nextProps.isLoading &&
-      prevProps.error === nextProps.error &&
-      prevProps.currentConversationId === nextProps.currentConversationId &&
-      prevProps.editingMessageId === nextProps.editingMessageId
-    );
+    // Быстрая проверка: если разные ID или длина - точно изменилось
+    if (
+      prevProps.messages.length !== nextProps.messages.length ||
+      prevProps.currentConversationId !== nextProps.currentConversationId ||
+      prevProps.editingMessageId !== nextProps.editingMessageId ||
+      prevProps.isLoading !== nextProps.isLoading ||
+      prevProps.error !== nextProps.error
+    ) {
+      return false; // Нужен ре-рендер
+    }
+
+    // ✅ КРИТИЧНО: сравниваем содержимое pendingMessage
+    const prevPending = prevProps.pendingMessage;
+    const nextPending = nextProps.pendingMessage;
+
+    if (prevPending?.id !== nextPending?.id) {
+      return false; // ID изменился
+    }
+
+    if (prevPending?.content !== nextPending?.content) {
+      return false; // ← ВОТ ЭТО КЛЮЧЕВОЕ! Контент изменился - рендерим!
+    }
+
+    // Всё одинаково - можно пропустить ре-рендер
+    return true;
   }
 );
 
