@@ -140,7 +140,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     id="stream-speed"
                     type="range"
                     min="5"
-                    max="100"
+                    max="300"
                     step="5"
                     value={localSettings.streamSpeed || 30}
                     onChange={(e) => setLocalSettings(prev => prev ? { ...prev, streamSpeed: parseInt(e.target.value) } : null)}

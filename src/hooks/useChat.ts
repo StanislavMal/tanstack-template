@@ -30,6 +30,7 @@ export function useChat(options: UseChatOptions = {}) {
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
   const bufferRef = useRef<string>('');
   const activeRequestIdRef = useRef<string | null>(null);
+  const isStreamActiveRef = useRef<boolean>(false); // ✅ НОВОЕ
 
   useEffect(() => {
     return () => {
@@ -40,58 +41,65 @@ export function useChat(options: UseChatOptions = {}) {
       displayedTextRef.current = '';
       bufferRef.current = '';
       activeRequestIdRef.current = null;
+      isStreamActiveRef.current = false;
     };
   }, [currentConversationId]);
 
+  // ✅ ИСПРАВЛЕНО: interval работает пока стрим активен ИЛИ есть символы
   const startTypingAnimation = useCallback((messageId: string) => {
-  if (intervalIdRef.current) {
-    clearInterval(intervalIdRef.current);
-  }
-
-  const streamSpeed = settings?.streamSpeed || 30;
-  
-  // ✅ АДАПТИВНЫЙ THROTTLING:
-  // Чем быстрее скорость → тем реже обновляем React
-  // Но не реже 60 FPS (16ms) и не чаще 20 FPS (50ms)
-  const updateIntervalMs = streamSpeed > 50 
-    ? 100  // Очень быстро → обновляем каждые 100ms (10 FPS)
-    : streamSpeed > 30 
-      ? 50   // Быстро → каждые 50ms (20 FPS)
-      : 33;  // Нормально → каждые 33ms (30 FPS)
-  
-  const charsPerTick = Math.max(1, Math.round((streamSpeed * updateIntervalMs) / 1000));
-
-  console.log(`[Animation] Speed: ${streamSpeed} chars/sec, Update: ${updateIntervalMs}ms, Chars/tick: ${charsPerTick}`);
-
-  intervalIdRef.current = setInterval(() => {
-    if (textQueueRef.current.length > 0) {
-      const charsToAdd = textQueueRef.current.substring(0, charsPerTick);
-      textQueueRef.current = textQueueRef.current.substring(charsPerTick);
-      displayedTextRef.current += charsToAdd;
-
-      setPendingMessage(prev => {
-        if (prev && prev.id === messageId) {
-          return { ...prev, content: displayedTextRef.current };
-        }
-        return prev;
-      });
-
-      console.log(`[Animation] Displayed: ${displayedTextRef.current.length}, Queue: ${textQueueRef.current.length}`);
-    } else {
-      if (intervalIdRef.current) {
-        console.log('[Animation] Queue empty, stopping');
-        clearInterval(intervalIdRef.current);
-        intervalIdRef.current = null;
-      }
-    }
-  }, updateIntervalMs);
-}, [settings?.streamSpeed]);
-
-  const stopTypingAnimation = useCallback(() => {
     if (intervalIdRef.current) {
       clearInterval(intervalIdRef.current);
-      intervalIdRef.current = null;
     }
+
+    const streamSpeed = settings?.streamSpeed || 30;
+    
+    // Адаптивный интервал
+    let updateIntervalMs: number;
+    if (streamSpeed <= 30) {
+      updateIntervalMs = 33;  // 30 FPS
+    } else if (streamSpeed <= 60) {
+      updateIntervalMs = 50;  // 20 FPS
+    } else if (streamSpeed <= 100) {
+      updateIntervalMs = 75;  // 13 FPS
+    } else {
+      updateIntervalMs = 100; // 10 FPS
+    }
+    
+    const charsPerTick = Math.max(1, Math.round((streamSpeed * updateIntervalMs) / 1000));
+
+    console.log(`[Animation] Speed: ${streamSpeed} chars/sec, Interval: ${updateIntervalMs}ms, ${charsPerTick} chars/tick`);
+
+    intervalIdRef.current = setInterval(() => {
+      // ✅ Если есть символы - печатаем
+      if (textQueueRef.current.length > 0) {
+        const charsToAdd = textQueueRef.current.substring(0, charsPerTick);
+        textQueueRef.current = textQueueRef.current.substring(charsPerTick);
+        displayedTextRef.current += charsToAdd;
+
+        setPendingMessage(prev => {
+          if (prev && prev.id === messageId) {
+            return { ...prev, content: displayedTextRef.current };
+          }
+          return prev;
+        });
+
+        console.log(`[Animation] Displayed: ${displayedTextRef.current.length}, Queue: ${textQueueRef.current.length}`);
+      }
+      
+      // ✅ КЛЮЧЕВОЕ: останавливаем ТОЛЬКО если стрим завершён И очередь пуста
+      if (!isStreamActiveRef.current && textQueueRef.current.length === 0) {
+        if (intervalIdRef.current) {
+          console.log('[Animation] Stream finished and queue empty, stopping');
+          clearInterval(intervalIdRef.current);
+          intervalIdRef.current = null;
+        }
+      }
+    }, updateIntervalMs);
+  }, [settings?.streamSpeed]);
+
+  const stopTypingAnimation = useCallback(() => {
+    isStreamActiveRef.current = false; // ✅ Сигнализируем что стрим завершён
+    // НЕ останавливаем interval сразу - он сам остановится когда очередь опустеет
   }, []);
 
   const parseNDJSON = useCallback((data: string) => {
@@ -128,10 +136,15 @@ export function useChat(options: UseChatOptions = {}) {
       const requestId = crypto.randomUUID();
       activeRequestIdRef.current = requestId;
 
+      // Очистка
       bufferRef.current = '';
       textQueueRef.current = '';
       displayedTextRef.current = '';
-      stopTypingAnimation();
+      isStreamActiveRef.current = false;
+      if (intervalIdRef.current) {
+        clearInterval(intervalIdRef.current);
+        intervalIdRef.current = null;
+      }
       
       const assistantMessageId = crypto.randomUUID();
 
@@ -158,7 +171,7 @@ export function useChat(options: UseChatOptions = {}) {
         const decoder = new TextDecoder();
         let animationStarted = false;
 
-        // ✅ ШАГ 1: Получаем все чанки
+        // ✅ Получаем чанки
         while (true) {
           if (activeRequestIdRef.current !== requestId) {
             reader.cancel();
@@ -179,31 +192,42 @@ export function useChat(options: UseChatOptions = {}) {
             if (chunk.text) {
               if (!animationStarted) {
                 console.log('[Stream] First chunk received, starting animation');
+                
+                // Инициализируем пустое сообщение
                 setPendingMessage({ 
                   id: assistantMessageId, 
                   role: 'assistant', 
                   content: '' 
                 });
+                
+                // ✅ Отмечаем что стрим активен
+                isStreamActiveRef.current = true;
+                
+                // Запускаем анимацию
                 startTypingAnimation(assistantMessageId);
                 setIsLoading(false);
                 animationStarted = true;
               }
               
+              // Просто добавляем в очередь - анимация сама заберёт
               textQueueRef.current += chunk.text;
-              console.log(`[Stream] Queue size: ${textQueueRef.current.length}`);
+              console.log(`[Stream] Added to queue, total: ${textQueueRef.current.length}`);
             }
           }
         }
 
-        console.log('[Stream] All chunks received, total queue size:', textQueueRef.current.length);
+        console.log('[Stream] All chunks received, total queue: ', textQueueRef.current.length);
 
-        // ✅ ШАГ 2: Ждём пока анимация допечатает ВСЁ
+        // ✅ Сигнализируем что стрим завершён
+        isStreamActiveRef.current = false;
+
+        // ✅ Ждём пока очередь опустеет
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
             const queueEmpty = textQueueRef.current.length === 0;
             const animationStopped = intervalIdRef.current === null;
             
-            console.log(`[Wait] Queue: ${textQueueRef.current.length}, Animation running: ${!animationStopped}`);
+            console.log(`[Wait] Queue: ${textQueueRef.current.length}, Animation: ${animationStopped ? 'stopped' : 'running'}`);
             
             if (queueEmpty && animationStopped) {
               clearInterval(checkInterval);
@@ -214,15 +238,18 @@ export function useChat(options: UseChatOptions = {}) {
           
           setTimeout(() => {
             clearInterval(checkInterval);
-            stopTypingAnimation();
-            console.log('[Wait] Timeout reached, forcing stop');
+            // Форсируем остановку если что-то пошло не так
+            if (intervalIdRef.current) {
+              clearInterval(intervalIdRef.current);
+              intervalIdRef.current = null;
+            }
+            console.log('[Wait] Timeout reached');
             resolve();
-          }, 120000); // 120 секунд максимум
+          }, 120000);
         });
 
         console.log('[Stream] Final displayed length:', displayedTextRef.current.length);
 
-        // ✅ ШАГ 3: Возвращаем ФИНАЛЬНЫЙ текст
         const finalMessage = { 
           id: assistantMessageId, 
           role: 'assistant' as const, 
@@ -278,15 +305,11 @@ export function useChat(options: UseChatOptions = {}) {
         const { selectors, store } = await import('../store/store');
         const currentMessages = selectors.getCurrentMessages(store.state);
 
-        // ✅ Ждём полного завершения анимации
         const aiResponse = await processAIResponse(currentMessages);
         
         if (aiResponse && aiResponse.content.trim()) {
-          // ✅ Сохраняем только ПОСЛЕ того как анимация закончилась
           await addMessage(convId, aiResponse);
           options.onResponseComplete?.(aiResponse);
-          
-          // ✅ Теперь можно безопасно очистить
           setPendingMessage(null);
         }
 
@@ -297,7 +320,6 @@ export function useChat(options: UseChatOptions = {}) {
         options.onError?.(errorMsg);
       } finally {
         setIsLoading(false);
-        // ✅ НЕ очищаем pendingMessage здесь!
       }
     },
     [
