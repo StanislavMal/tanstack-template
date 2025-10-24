@@ -47,6 +47,11 @@ const initialState: State = {
 export const store = new Store<State>(initialState)
 
 export const actions = {
+  // НОВОЕ ДЕЙСТВИЕ: Сброс состояния к начальному
+  resetStore: () => {
+    store.setState(() => initialState);
+  },
+
   setMessages: (messages: Message[]) => {
     store.setState(state => ({ ...state, currentMessages: messages }));
   },

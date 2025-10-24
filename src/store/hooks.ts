@@ -110,6 +110,9 @@ export function useConversations() {
   useEffect(() => {
     if (currentConversationId && user) {
       const loadMessages = async () => {
+        // Сначала очищаем сообщения для нового чата
+        actions.setMessages([]);
+        
         const { data, error } = await supabase
           .from('messages')
           .select('*')
@@ -129,6 +132,9 @@ export function useConversations() {
         }
       };
       loadMessages();
+    } else if (!currentConversationId) {
+      // Если нет активного чата, очищаем сообщения
+      actions.setMessages([]);
     }
   }, [currentConversationId, user]);
 

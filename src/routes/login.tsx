@@ -1,32 +1,30 @@
-// 📄 src/routes/login.tsx
-
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase'
-import { useTranslation } from 'react-i18next';
-import { useAuth } from '../providers/AuthProvider';
+import { useTranslation } from 'react-i18next'
+import { useAuth } from '../providers/AuthProvider'
 
 export const Route = createFileRoute('/login')({
   component: LoginComponent,
 })
 
 function LoginComponent() {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
   const navigate = useNavigate()
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading, isInitialized } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // Если пользователь уже авторизован, перенаправляем на главную
+  const allowRegistration = import.meta.env.VITE_ALLOW_REGISTRATION !== 'false'
+
+  // Автоматический редирект если пользователь уже авторизован
   useEffect(() => {
-    if (!authLoading && user) {
+    if (isInitialized && !isLoading && user) {
       navigate({ to: '/' })
     }
-  }, [user, authLoading, navigate])
-
-  const allowRegistration = import.meta.env.VITE_ALLOW_REGISTRATION !== 'false';
+  }, [user, isLoading, isInitialized, navigate])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,25 +35,33 @@ function LoginComponent() {
       setError(error.message)
       setLoading(false)
     } else {
-      // Навигация произойдет через useEffect выше
+      // Навигация произойдёт автоматически через useEffect выше
+      // когда AuthProvider обновит состояние пользователя
     }
   }
 
-  // Показываем загрузку, пока проверяется авторизация
-  if (authLoading) {
+  // Показываем загрузчик пока проверяем аутентификацию
+  if (!isInitialized || isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-400">Загрузка...</p>
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+          <p className="mt-4 text-gray-400">Checking authentication...</p>
         </div>
       </div>
-    );
+    )
   }
 
-  // Если авторизован, ничего не показываем (useEffect перенаправит)
+  // Если пользователь авторизован, показываем загрузчик пока идёт редирект
   if (user) {
-    return null;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+          <p className="mt-4 text-gray-400">Redirecting to chat...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
