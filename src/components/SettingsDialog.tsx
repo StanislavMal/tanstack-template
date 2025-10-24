@@ -139,9 +139,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                   <input
                     id="stream-speed"
                     type="range"
-                    min="5"
-                    max="300"
-                    step="5"
+                    min="10"
+                    max="500"
+                    step="10"
                     value={localSettings.streamSpeed || 30}
                     onChange={(e) => setLocalSettings(prev => prev ? { ...prev, streamSpeed: parseInt(e.target.value) } : null)}
                     className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-orange-500"
