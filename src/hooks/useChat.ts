@@ -25,87 +25,76 @@ export function useChat(options: UseChatOptions = {}) {
     editMessageAndUpdate 
   } = useConversations();
 
-  // Refs для управления анимацией
+  // ✅ УПРОЩЕНО: только необходимые refs
   const textQueueRef = useRef<string>('');
-  const displayedContentRef = useRef<string>('');
-  const animationFrameRef = useRef<number | undefined>(undefined);
-  const lastUpdateTimeRef = useRef<number>(0);
+  const displayedTextRef = useRef<string>('');
+  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
   const bufferRef = useRef<string>('');
   const activeRequestIdRef = useRef<string | null>(null);
-  const isStreamingActiveRef = useRef<boolean>(false);
 
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      if (intervalIdRef.current) {
+        clearInterval(intervalIdRef.current);
       }
       textQueueRef.current = '';
-      displayedContentRef.current = '';
+      displayedTextRef.current = '';
       bufferRef.current = '';
       activeRequestIdRef.current = null;
-      isStreamingActiveRef.current = false;
     };
   }, [currentConversationId]);
 
-  // ✅ УПРОЩЁННАЯ ЛОГИКА: берём символы постоянно, обновляем React по таймеру
-  const startTextAnimation = useCallback(() => {
-    const streamSpeed = settings?.streamSpeed || 30;
-    const charsPerSecond = streamSpeed;
-    const updateIntervalMs = 50; // Обновляем React каждые 50ms
-    const charsPerFrame = (charsPerSecond / 1000) * 16.67; // Символов за 1 frame (60fps)
-
-    const animate = (currentTime: number) => {
-      // 1. Забираем символы из очереди (каждый кадр)
-      if (textQueueRef.current.length > 0) {
-        const charsToTake = Math.max(1, Math.ceil(charsPerFrame));
-        const newChars = textQueueRef.current.substring(0, charsToTake);
-        textQueueRef.current = textQueueRef.current.substring(charsToTake);
-        displayedContentRef.current += newChars;
-      }
-
-      // 2. Обновляем React state только по таймеру (не каждый кадр!)
-      const timeSinceLastUpdate = currentTime - lastUpdateTimeRef.current;
-      if (timeSinceLastUpdate >= updateIntervalMs) {
-        setPendingMessage(prev => {
-          if (prev && displayedContentRef.current !== prev.content) {
-            lastUpdateTimeRef.current = currentTime;
-            return { ...prev, content: displayedContentRef.current };
-          }
-          return prev;
-        });
-      }
-
-      // 3. Продолжаем анимацию если стрим активен ИЛИ есть символы в очереди
-      if (isStreamingActiveRef.current || textQueueRef.current.length > 0) {
-        animationFrameRef.current = requestAnimationFrame(animate);
-      } else {
-        // Финальное обновление
-        setPendingMessage(prev => {
-          if (prev && displayedContentRef.current !== prev.content) {
-            return { ...prev, content: displayedContentRef.current };
-          }
-          return prev;
-        });
-        animationFrameRef.current = undefined;
-      }
-    };
-
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
+  // ✅ НОВАЯ ЛОГИКА: простой setInterval
+  const startTypingAnimation = useCallback((messageId: string) => {
+    // Останавливаем предыдущую анимацию если была
+    if (intervalIdRef.current) {
+      clearInterval(intervalIdRef.current);
     }
-    lastUpdateTimeRef.current = performance.now();
-    animationFrameRef.current = requestAnimationFrame(animate);
+
+    const streamSpeed = settings?.streamSpeed || 30; // символов/секунду
+    const intervalMs = 50; // обновляем каждые 50ms
+    const charsPerTick = Math.max(1, Math.round((streamSpeed * intervalMs) / 1000));
+
+    console.log(`[Animation] Starting with speed: ${streamSpeed} chars/sec, ${charsPerTick} chars per tick`);
+
+    intervalIdRef.current = setInterval(() => {
+      // Забираем символы из очереди
+      if (textQueueRef.current.length > 0) {
+        const charsToAdd = textQueueRef.current.substring(0, charsPerTick);
+        textQueueRef.current = textQueueRef.current.substring(charsPerTick);
+        displayedTextRef.current += charsToAdd;
+
+        // Обновляем React state
+        setPendingMessage(prev => {
+          if (prev && prev.id === messageId) {
+            return { ...prev, content: displayedTextRef.current };
+          }
+          return prev;
+        });
+      } else if (displayedTextRef.current.length > 0) {
+        // Очередь пустая, но текст есть - финальное обновление
+        setPendingMessage(prev => {
+          if (prev && prev.id === messageId && prev.content !== displayedTextRef.current) {
+            return { ...prev, content: displayedTextRef.current };
+          }
+          return prev;
+        });
+      } else {
+        // Всё готово - останавливаем
+        if (intervalIdRef.current) {
+          console.log('[Animation] Finished');
+          clearInterval(intervalIdRef.current);
+          intervalIdRef.current = null;
+        }
+      }
+    }, intervalMs);
   }, [settings?.streamSpeed]);
 
-  const stopTextAnimation = useCallback(() => {
-    isStreamingActiveRef.current = false;
-    // Даём время допечатать остатки очереди
-    setTimeout(() => {
-      if (animationFrameRef.current && textQueueRef.current.length === 0) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = undefined;
-      }
-    }, 100);
+  const stopTypingAnimation = useCallback(() => {
+    if (intervalIdRef.current) {
+      clearInterval(intervalIdRef.current);
+      intervalIdRef.current = null;
+    }
   }, []);
 
   const parseNDJSON = useCallback((data: string) => {
@@ -123,10 +112,7 @@ export function useChat(options: UseChatOptions = {}) {
         const chunk = JSON.parse(trimmedLine);
         chunks.push(chunk);
       } catch (parseError) {
-        console.warn('[useChat] Failed to parse NDJSON line:', {
-          line: trimmedLine,
-          error: parseError instanceof Error ? parseError.message : 'Unknown error'
-        });
+        console.warn('[useChat] Failed to parse NDJSON line:', trimmedLine);
       }
     }
     
@@ -145,11 +131,11 @@ export function useChat(options: UseChatOptions = {}) {
       const requestId = crypto.randomUUID();
       activeRequestIdRef.current = requestId;
 
-      // Очистка всех буферов
+      // ✅ ОЧИСТКА всех буферов
       bufferRef.current = '';
       textQueueRef.current = '';
-      displayedContentRef.current = '';
-      isStreamingActiveRef.current = false;
+      displayedTextRef.current = '';
+      stopTypingAnimation();
       
       const assistantMessageId = crypto.randomUUID();
 
@@ -167,7 +153,6 @@ export function useChat(options: UseChatOptions = {}) {
         });
 
         if (activeRequestIdRef.current !== requestId) {
-          console.log('[useChat] Request cancelled, aborting stream processing');
           return null;
         }
 
@@ -175,12 +160,11 @@ export function useChat(options: UseChatOptions = {}) {
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let isFirstChunk = true;
+        let animationStarted = false;
 
         while (true) {
           if (activeRequestIdRef.current !== requestId) {
             reader.cancel();
-            console.log('[useChat] Request cancelled during streaming');
             return null;
           }
 
@@ -196,52 +180,54 @@ export function useChat(options: UseChatOptions = {}) {
             }
             
             if (chunk.text) {
-              if (isFirstChunk) {
-                // Инициализируем пустое сообщение
+              // ✅ При первом чанке инициализируем сообщение и запускаем анимацию
+              if (!animationStarted) {
+                console.log('[Stream] First chunk received, starting animation');
                 setPendingMessage({ 
                   id: assistantMessageId, 
                   role: 'assistant', 
                   content: '' 
                 });
-                isStreamingActiveRef.current = true;
-                startTextAnimation();
+                startTypingAnimation(assistantMessageId);
                 setIsLoading(false);
-                isFirstChunk = false;
+                animationStarted = true;
               }
               
-              // Просто добавляем текст в очередь - анимация сама его заберёт
+              // Просто добавляем в очередь
               textQueueRef.current += chunk.text;
+              console.log(`[Stream] Queue size: ${textQueueRef.current.length}`);
             }
           }
         }
 
         if (activeRequestIdRef.current !== requestId) {
-          console.log('[useChat] Request cancelled before saving');
           return null;
         }
 
-        // Останавливаем получение новых чанков
-        isStreamingActiveRef.current = false;
+        console.log('[Stream] All chunks received, waiting for animation to finish');
 
-        // Ждём пока очередь опустеет (но не дольше 5 секунд)
+        // ✅ Ждём пока анимация допечатает всё
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
-            if (textQueueRef.current.length === 0 && animationFrameRef.current === undefined) {
+            if (textQueueRef.current.length === 0 && !intervalIdRef.current) {
               clearInterval(checkInterval);
               resolve();
             }
-          }, 50);
+          }, 100);
           
+          // Таймаут 10 секунд
           setTimeout(() => {
             clearInterval(checkInterval);
             resolve();
-          }, 5000);
+          }, 10000);
         });
+
+        console.log('[Stream] Animation finished, final content length:', displayedTextRef.current.length);
 
         const finalMessage = { 
           id: assistantMessageId, 
           role: 'assistant' as const, 
-          content: displayedContentRef.current 
+          content: displayedTextRef.current 
         };
 
         return finalMessage;
@@ -252,16 +238,16 @@ export function useChat(options: UseChatOptions = {}) {
         }
 
         const errorMsg = error instanceof Error ? error.message : 'An error occurred';
-        console.error('[useChat] Error in processAIResponse:', error);
+        console.error('[useChat] Error:', error);
         setError(errorMsg);
         options.onError?.(errorMsg);
         return null;
       } finally {
-        stopTextAnimation();
+        stopTypingAnimation();
         bufferRef.current = '';
       }
     },
-    [settings, activePrompt, startTextAnimation, stopTextAnimation, options, parseNDJSON]
+    [settings, activePrompt, startTypingAnimation, stopTypingAnimation, options, parseNDJSON]
   );
 
   const sendMessage = useCallback(
