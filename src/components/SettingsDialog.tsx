@@ -81,6 +81,23 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     i18n.changeLanguage(lang);
   };
 
+  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedModel = e.target.value;
+    let newProvider: 'gemini' | 'deepseek' = 'gemini';
+    
+    if (selectedModel.startsWith('deepseek')) {
+      newProvider = 'deepseek';
+    } else if (selectedModel.startsWith('gemini')) {
+      newProvider = 'gemini';
+    }
+    
+    setLocalSettings(prev => prev ? { 
+      ...prev, 
+      model: selectedModel,
+      provider: newProvider
+    } : null);
+  };
+
   if (!isOpen || !localSettings) return null;
 
   return (
@@ -118,15 +135,20 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                   <select
                       id="model-select"
                       value={localSettings.model}
-                      onChange={(e) => setLocalSettings(prev => prev ? { ...prev, model: e.target.value as UserSettings['model'] } : null)}
+                      onChange={handleModelChange}
                       className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                   >
-                      <option value="gemini-2.5-flash">{t('modelFlash')}</option>
-                      <option value="gemini-2.5-pro">{t('modelPro')}</option>
+                      <optgroup label="Google Gemini">
+                        <option value="gemini-2.5-flash">{t('modelGeminiFlash')}</option>
+                        <option value="gemini-2.5-pro">{t('modelGeminiPro')}</option>
+                      </optgroup>
+                      <optgroup label="DeepSeek">
+                        <option value="deepseek-chat">{t('modelDeepSeekChat')}</option>
+                        <option value="deepseek-reasoner">{t('modelDeepSeekReasoner')}</option>
+                      </optgroup>
                   </select>
                 </div>
 
-                {/* ✅ НОВОЕ: Слайдер скорости стриминга */}
                 <div className="p-3 rounded-lg bg-gray-700/50">
                   <div className="flex items-center justify-between mb-2">
                     <label htmlFor="stream-speed" className="block text-sm font-medium text-gray-300">

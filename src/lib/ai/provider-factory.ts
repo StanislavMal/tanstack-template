@@ -1,6 +1,7 @@
 // 📄 src/lib/ai/provider-factory.ts
 
 import { GeminiOpenAIProvider } from './providers/gemini-openai';
+import { DeepSeekOpenAIProvider } from './providers/deepseek-openai';
 import type { AIProvider } from './types';
 
 export class AIProviderFactory {
@@ -9,6 +10,7 @@ export class AIProviderFactory {
   static {
     // Регистрируем доступные провайдеры
     this.registerProvider('gemini', new GeminiOpenAIProvider());
+    this.registerProvider('deepseek', new DeepSeekOpenAIProvider());
   }
 
   static registerProvider(name: string, provider: AIProvider): void {
