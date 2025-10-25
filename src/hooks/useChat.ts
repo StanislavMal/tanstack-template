@@ -149,7 +149,7 @@ export function useChat(options: UseChatOptions = {}) {
       const assistantMessageId = crypto.randomUUID();
 
       try {
-        const provider = settings.model.startsWith('gemini') ? 'gemini' : 'gemini';
+        const provider = settings.model.startsWith('deepseek') ? 'deepseek' : 'gemini';
 
         const response = await streamChat({
           data: {

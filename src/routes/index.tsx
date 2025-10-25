@@ -163,11 +163,19 @@ function Home() {
   );
 
   const handleLogout = useCallback(async () => {
+    // ✅ Очищаем localStorage ДО вызова signOut
+    // Supabase хранит токены по ключу вида: sb-<project-ref>-auth-token
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sb-') && key.includes('-auth-')) {
+        localStorage.removeItem(key);
+      }
+    });
+    
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error('Error on sign out attempt:', error.message);
     }
-  }, []);
+  }, []);;
 
   const handleStartEdit = useCallback((id: string) => { setEditingMessageId(id); }, []);
   const handleCancelEdit = useCallback(() => { setEditingMessageId(null); }, []);

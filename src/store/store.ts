@@ -12,12 +12,12 @@ export interface Prompt {
 
 export interface UserSettings {
   model: string
-  provider: string
+  provider: 'gemini' | 'deepseek' | 'openai' | 'anthropic'
   system_instruction: string
   temperature?: number
   maxTokens?: number
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high'
-  streamSpeed?: number // ✅ НОВОЕ: символов в секунду (5-100)
+  streamSpeed?: number
 }
 
 export interface Conversation {
