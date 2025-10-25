@@ -65,6 +65,22 @@ const ChatAreaComponent = ReactMemo(
         }
       }, [onStartEdit]);
 
+      // Функция для регенерации ответа - находит предыдущее сообщение пользователя
+      const handleRegenerate = useCallback((assistantMessageId: string) => {
+        // Находим индекс сообщения ассистента
+        const assistantIndex = displayMessages.findIndex(m => m.id === assistantMessageId);
+        if (assistantIndex === -1) return;
+        
+        // Ищем предыдущее сообщение пользователя
+        for (let i = assistantIndex - 1; i >= 0; i--) {
+          if (displayMessages[i].role === 'user') {
+            // Вызываем редактирование с тем же содержимым
+            onSaveEdit(displayMessages[i].id, displayMessages[i].content);
+            break;
+          }
+        }
+      }, [displayMessages, onSaveEdit]);
+
       return (
         <div ref={ref} className="w-full h-full p-4" onClick={handleMessageActions}>
           {error && (
@@ -91,6 +107,9 @@ const ChatAreaComponent = ReactMemo(
                     isEditing={editingMessageId === message.id}
                     onSaveEdit={onSaveEdit}
                     onCancelEdit={onCancelEdit}
+                    showRegenerateButton={message.role === 'assistant'} // Просто проверяем что это ассистент
+                    onRegenerate={() => handleRegenerate(message.id)}
+                    isLoading={isLoading}
                   />
                 ))}
                 {showLoading && <LoadingIndicator />}
@@ -103,7 +122,6 @@ const ChatAreaComponent = ReactMemo(
       );
     }
   ),
-  // ✅ ИСПРАВЛЕНО: правильное сравнение pendingMessage
   (prevProps, nextProps) => {
     // Быстрые проверки
     if (
@@ -116,21 +134,17 @@ const ChatAreaComponent = ReactMemo(
       return false;
     }
 
-    // ✅ КРИТИЧНО: сравниваем pendingMessage полностью
     const prevPending = prevProps.pendingMessage;
     const nextPending = nextProps.pendingMessage;
 
-    // ID изменился?
     if (prevPending?.id !== nextPending?.id) {
       return false;
     }
 
-    // ✅ КЛЮЧЕВОЕ: content изменился?
     if (prevPending?.content !== nextPending?.content) {
-      return false; // Нужен ре-рендер!
+      return false;
     }
 
-    // Всё одинаково - можно пропустить
     return true;
   }
 );

@@ -32,8 +32,8 @@ export function validatePromptContent(content: string): ValidationResult {
     return { isValid: false, error: 'Prompt content cannot be empty' };
   }
   
-  if (content.length > 10000) {
-    return { isValid: false, error: 'Prompt content must be less than 10,000 characters' };
+  if (content.length > 300000) {
+    return { isValid: false, error: 'Prompt content must be less than 300,000 characters' };
   }
   
   return { isValid: true };
@@ -47,8 +47,8 @@ export function validateConversationTitle(title: string): ValidationResult {
     return { isValid: false, error: 'Conversation title cannot be empty' };
   }
   
-  if (title.length > 200) {
-    return { isValid: false, error: 'Conversation title must be less than 200 characters' };
+  if (title.length > 100) {
+    return { isValid: false, error: 'Conversation title must be less than 100 characters' };
   }
   
   return { isValid: true };

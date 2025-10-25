@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
-import { Pencil, Copy, Check, X } from 'lucide-react';
+import { Pencil, Copy, Check, X, RefreshCw } from 'lucide-react';
 import type { Message } from '../lib/ai/types';
 import { CodeBlock } from './CodeBlock';
 
@@ -14,14 +14,19 @@ interface ChatMessageProps {
   isEditing: boolean;
   onSaveEdit: (id: string, newContent: string) => void;
   onCancelEdit: () => void;
+  showRegenerateButton?: boolean; // Показывать ли кнопку регенерации
+  onRegenerate?: () => void; // Обработчик регенерации
+  isLoading?: boolean; // Состояние загрузки
 }
 
-// ✅ УБРАЛИ MEMO - пусть рендерится каждый раз
 export function ChatMessage({ 
   message,
   isEditing,
   onSaveEdit,
-  onCancelEdit
+  onCancelEdit,
+  showRegenerateButton = false,
+  onRegenerate,
+  isLoading = false
 }: ChatMessageProps) {
   const isAssistant = message.role === 'assistant';
   const [editedContent, setEditedContent] = useState(message.content);
@@ -38,11 +43,10 @@ export function ChatMessage({
   }, []);
 
   const handleSave = () => {
-    if (editedContent.trim() !== message.content.trim() && editedContent.trim()) {
-      onSaveEdit(message.id, editedContent.trim());
-    } else {
-      onCancelEdit();
-    }
+    // ИЗМЕНЕНИЕ: Убираем проверку на изменение контента
+    // Всегда сохраняем, даже если контент не изменился
+    const contentToSave = editedContent.trim() || message.content;
+    onSaveEdit(message.id, contentToSave);
   };
 
   const handleCopy = () => {
@@ -119,6 +123,17 @@ export function ChatMessage({
             {!isAssistant && (
               <button data-action="start-edit" className="p-1.5 rounded-full text-gray-400 hover:text-white" title="Edit message">
                 <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {/* НОВОЕ: Кнопка регенерации для сообщений ассистента */}
+            {isAssistant && showRegenerateButton && onRegenerate && (
+              <button 
+                onClick={onRegenerate}
+                className="p-1.5 rounded-full text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" 
+                title="Regenerate response"
+                disabled={isLoading}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
             )}
             <button onClick={handleCopy} className="p-1.5 rounded-full text-gray-400 hover:text-white" title="Copy message" data-action="copy">

@@ -150,6 +150,39 @@ export function usePrompts() {
         }
     }, [user, loadPrompts]);
 
+    // ✅ НОВАЯ ФУНКЦИЯ: Обновление промпта
+    const updatePrompt = useCallback(async (id: string, name: string, content: string) => {
+        if (!user) return;
+        
+        try {
+          const result = await retryAsync(
+            async () => {
+              return await supabase
+                .from('prompts')
+                .update({ name, content })
+                .eq('id', id)
+                .eq('user_id', user.id); // Проверка владельца для безопасности
+            },
+            {
+              maxAttempts: 3,
+              onRetry: (attempt, error) => {
+                console.warn(`[Update Prompt] Retry attempt ${attempt}:`, error.message);
+              }
+            }
+          ) as PostgrestResponse<any>;
+          
+          if (result.error) {
+            console.error("Error updating prompt:", result.error);
+            throw result.error;
+          } else {
+            await loadPrompts(); // Перезагружаем для синхронизации
+          }
+        } catch (error) {
+          console.error("Failed to update prompt after all retries:", error);
+          throw error;
+        }
+    }, [user, loadPrompts]);
+
     const deletePrompt = useCallback(async (id: string) => {
         if (!user) return;
         
@@ -193,7 +226,15 @@ export function usePrompts() {
         }
     }, [user, loadPrompts]);
     
-    return { prompts, activePrompt, loadPrompts, createPrompt, deletePrompt, setPromptActive };
+    return { 
+      prompts, 
+      activePrompt, 
+      loadPrompts, 
+      createPrompt, 
+      updatePrompt, // ✅ Экспортируем новую функцию
+      deletePrompt, 
+      setPromptActive 
+    };
 }
 
 export function useAppState() {
@@ -213,7 +254,18 @@ export function useConversations() {
 
   useEffect(() => {
     if (currentConversationId && user) {
+      // ✅ ИСПРАВЛЕНИЕ: Проверяем timestamp вместо флага
+      const lastCreatedAt = selectors.getLastConversationCreatedAt(store.state);
+      const timeSinceCreation = lastCreatedAt ? Date.now() - lastCreatedAt : Infinity;
+      
+      // Если чат создан менее 1 секунды назад - не загружаем сообщения
+      if (timeSinceCreation < 1000) {
+        console.log('[useConversations] Skipping load for fresh conversation (age:', timeSinceCreation, 'ms)');
+        return;
+      }
+
       const loadMessages = async () => {
+        console.log('[useConversations] Loading messages for conversation:', currentConversationId);
         try {
           const result = await retryAsync(
             async () => {
@@ -243,6 +295,7 @@ export function useConversations() {
               content: m.content
             })) as Message[];
             
+            console.log('[useConversations] Loaded messages:', formattedMessages.length);
             actions.setMessages(formattedMessages);
           }
         } catch (error) {
@@ -290,6 +343,8 @@ export function useConversations() {
   const createNewConversation = useCallback(async (title: string = 'New Conversation') => {
       if (!user) return null;
       
+      console.log('[useConversations] Creating new conversation:', title);
+      
       try {
         const result = await retryAsync(
           async () => {
@@ -315,7 +370,11 @@ export function useConversations() {
         }
         
         const newConversation: Conversation = data as Conversation;
+        
+        // ✅ addConversation теперь устанавливает timestamp
         actions.addConversation(newConversation);
+        
+        console.log('[useConversations] New conversation created:', newConversation.id);
         return newConversation.id;
       } catch (error) {
         console.error('Failed to create conversation after all retries:', error);
@@ -362,8 +421,12 @@ export function useConversations() {
   const addMessage = useCallback(async (conversationId: string, message: Message) => {
     if (!user) return;
 
+    console.log('[useConversations] Adding message:', message.role, message.content.substring(0, 50));
+    
+    // ✅ Сначала добавляем в store (синхронно)
     actions.addMessage(message);
 
+    // ✅ Затем сохраняем в Supabase (асинхронно)
     try {
       const result = await retryAsync(
         async () => {
@@ -385,6 +448,8 @@ export function useConversations() {
 
       if (result.error) {
         console.error('Failed to add message to Supabase:', result.error);
+      } else {
+        console.log('[useConversations] Message saved to Supabase:', message.id);
       }
     } catch (error) {
       console.error('Failed to add message after all retries:', error);
