@@ -32,6 +32,7 @@ export function useChat(options: UseChatOptions = {}) {
   const bufferRef = useRef<string>('');
   const activeRequestIdRef = useRef<string | null>(null);
   const isStreamActiveRef = useRef<boolean>(false);
+  const isProcessingQueueRef = useRef<boolean>(false);
 
   useEffect(() => {
     return () => {
@@ -43,6 +44,7 @@ export function useChat(options: UseChatOptions = {}) {
       bufferRef.current = '';
       activeRequestIdRef.current = null;
       isStreamActiveRef.current = false;
+      isProcessingQueueRef.current = false;
     };
   }, [currentConversationId]);
 
@@ -66,8 +68,10 @@ export function useChat(options: UseChatOptions = {}) {
     
     const charsPerTick = Math.max(1, Math.round((streamSpeed * updateIntervalMs) / 1000));
 
-    console.log(`[Animation] Speed: ${streamSpeed} chars/sec, Interval: ${updateIntervalMs}ms, ${charsPerTick} chars/tick`);
-
+    console.log(`[Animation] Started: ${streamSpeed} chars/sec`);
+    
+    isProcessingQueueRef.current = true;
+    
     intervalIdRef.current = setInterval(() => {
       if (textQueueRef.current.length > 0) {
         const charsToAdd = textQueueRef.current.substring(0, charsPerTick);
@@ -82,18 +86,27 @@ export function useChat(options: UseChatOptions = {}) {
         });
       }
       
-      if (!isStreamActiveRef.current && textQueueRef.current.length === 0) {
-        if (intervalIdRef.current) {
-          console.log('[Animation] Stream finished and queue empty, stopping');
-          clearInterval(intervalIdRef.current);
-          intervalIdRef.current = null;
+      if (textQueueRef.current.length === 0) {
+        isProcessingQueueRef.current = false;
+        
+        if (!isStreamActiveRef.current) {
+          console.log('[Animation] Completed');
+          if (intervalIdRef.current) {
+            clearInterval(intervalIdRef.current);
+            intervalIdRef.current = null;
+          }
         }
       }
     }, updateIntervalMs);
   }, [settings?.streamSpeed]);
 
   const stopTypingAnimation = useCallback(() => {
+    if (intervalIdRef.current) {
+      clearInterval(intervalIdRef.current);
+      intervalIdRef.current = null;
+    }
     isStreamActiveRef.current = false;
+    isProcessingQueueRef.current = false;
   }, []);
 
   const parseNDJSON = useCallback((data: string) => {
@@ -134,6 +147,8 @@ export function useChat(options: UseChatOptions = {}) {
       textQueueRef.current = '';
       displayedTextRef.current = '';
       isStreamActiveRef.current = false;
+      isProcessingQueueRef.current = false;
+      
       if (intervalIdRef.current) {
         clearInterval(intervalIdRef.current);
         intervalIdRef.current = null;
@@ -144,6 +159,7 @@ export function useChat(options: UseChatOptions = {}) {
       try {
         const provider = settings.model.startsWith('deepseek') ? 'deepseek' : 'gemini';
 
+        console.log(`[AI] Starting stream with ${provider}/${settings.model}`);
         const response = await streamChat({
           data: {
             messages: messageHistory,
@@ -183,7 +199,7 @@ export function useChat(options: UseChatOptions = {}) {
             
             if (chunk.text) {
               if (!animationStarted) {
-                console.log('[Stream] First chunk received, starting animation');
+                console.log('[AI] Stream started, processing response...');
                 
                 setPendingMessage({ 
                   id: assistantMessageId, 
@@ -202,34 +218,25 @@ export function useChat(options: UseChatOptions = {}) {
           }
         }
 
-        console.log('[Stream] All chunks received, total queue: ', textQueueRef.current.length);
-
+        console.log(`[AI] Stream completed, ${textQueueRef.current.length} chars to process`);
+        
         isStreamActiveRef.current = false;
 
-        await new Promise<void>(resolve => {
-          const checkInterval = setInterval(() => {
+        await new Promise<void>((resolve) => {
+          const checkCompletion = () => {
             const queueEmpty = textQueueRef.current.length === 0;
-            const animationStopped = intervalIdRef.current === null;
+            const notProcessing = !isProcessingQueueRef.current;
             
-            if (queueEmpty && animationStopped) {
-              clearInterval(checkInterval);
-              console.log('[Wait] Animation complete!');
+            if (queueEmpty && notProcessing) {
+              console.log(`[AI] Response ready: ${displayedTextRef.current.length} chars`);
               resolve();
+            } else {
+              setTimeout(checkCompletion, 50);
             }
-          }, 100);
+          };
           
-          setTimeout(() => {
-            clearInterval(checkInterval);
-            if (intervalIdRef.current) {
-              clearInterval(intervalIdRef.current);
-              intervalIdRef.current = null;
-            }
-            console.log('[Wait] Timeout reached');
-            resolve();
-          }, 120000);
+          checkCompletion();
         });
-
-        console.log('[Stream] Final displayed length:', displayedTextRef.current.length);
 
         const finalMessage = { 
           id: assistantMessageId, 
@@ -245,7 +252,7 @@ export function useChat(options: UseChatOptions = {}) {
         }
 
         const errorMsg = error instanceof Error ? error.message : 'An error occurred';
-        console.error('[useChat] Error:', error);
+        console.error('[AI] Error:', error);
         setError(errorMsg);
         options.onError?.(errorMsg);
         return null;
@@ -276,22 +283,19 @@ export function useChat(options: UseChatOptions = {}) {
         
         if (!convId) {
           const title = conversationTitle || content.slice(0, 30) + '...';
-          console.log('[useChat] Creating new conversation:', title);
+          console.log('[Chat] Creating new conversation:', title);
           convId = await createNewConversation(title);
           if (!convId) throw new Error('Failed to create conversation');
         }
 
-        // ✅ Добавляем сообщение в store И Supabase
         await addMessage(convId, userMessage);
         options.onMessageSent?.(userMessage);
 
-        // ✅ ИСПРАВЛЕНИЕ: Даём время на запись в store (React batching)
         await new Promise(resolve => setTimeout(resolve, 50));
 
         const currentMessages = selectors.getCurrentMessages(store.state);
         
-        console.log('[useChat] Current messages before AI call:', currentMessages.length);
-        console.log('[useChat] Messages:', currentMessages.map(m => `${m.role}: ${m.content.substring(0, 30)}...`));
+        console.log(`[Chat] Processing ${currentMessages.length} messages`);
 
         if (currentMessages.length === 0) {
           throw new Error('No messages found in store! This should not happen.');
@@ -300,16 +304,22 @@ export function useChat(options: UseChatOptions = {}) {
         const aiResponse = await processAIResponse(currentMessages);
         
         if (aiResponse && aiResponse.content.trim()) {
+          console.log('[Chat] Saving AI response...');
           await addMessage(convId, aiResponse);
+          console.log('[Chat] AI response saved');
           options.onResponseComplete?.(aiResponse);
+          setPendingMessage(null);
+        } else {
+          console.warn('[Chat] AI response empty, skipping save');
           setPendingMessage(null);
         }
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred';
-        console.error('[useChat] Error in sendMessage:', error);
+        console.error('[Chat] Error:', error);
         setError(errorMsg);
         options.onError?.(errorMsg);
+        setPendingMessage(null);
       } finally {
         setIsLoading(false);
       }
@@ -345,16 +355,20 @@ export function useChat(options: UseChatOptions = {}) {
         const aiResponse = await processAIResponse(updatedHistory);
         
         if (aiResponse && aiResponse.content.trim()) {
+          console.log('[Chat] Saving regenerated response...');
           await addMessage(currentConversationId, aiResponse);
           options.onResponseComplete?.(aiResponse);
+          setPendingMessage(null);
+        } else {
           setPendingMessage(null);
         }
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'An error occurred during edit';
-        console.error('[useChat] Error in editAndRegenerate:', error);
+        console.error('[Chat] Error:', error);
         setError(errorMsg);
         options.onError?.(errorMsg);
+        setPendingMessage(null);
       } finally {
         setIsLoading(false);
       }
