@@ -150,6 +150,39 @@ export function usePrompts() {
         }
     }, [user, loadPrompts]);
 
+    // ✅ НОВАЯ ФУНКЦИЯ: Обновление промпта
+    const updatePrompt = useCallback(async (id: string, name: string, content: string) => {
+        if (!user) return;
+        
+        try {
+          const result = await retryAsync(
+            async () => {
+              return await supabase
+                .from('prompts')
+                .update({ name, content })
+                .eq('id', id)
+                .eq('user_id', user.id); // Проверка владельца для безопасности
+            },
+            {
+              maxAttempts: 3,
+              onRetry: (attempt, error) => {
+                console.warn(`[Update Prompt] Retry attempt ${attempt}:`, error.message);
+              }
+            }
+          ) as PostgrestResponse<any>;
+          
+          if (result.error) {
+            console.error("Error updating prompt:", result.error);
+            throw result.error;
+          } else {
+            await loadPrompts(); // Перезагружаем для синхронизации
+          }
+        } catch (error) {
+          console.error("Failed to update prompt after all retries:", error);
+          throw error;
+        }
+    }, [user, loadPrompts]);
+
     const deletePrompt = useCallback(async (id: string) => {
         if (!user) return;
         
@@ -193,7 +226,15 @@ export function usePrompts() {
         }
     }, [user, loadPrompts]);
     
-    return { prompts, activePrompt, loadPrompts, createPrompt, deletePrompt, setPromptActive };
+    return { 
+      prompts, 
+      activePrompt, 
+      loadPrompts, 
+      createPrompt, 
+      updatePrompt, // ✅ Экспортируем новую функцию
+      deletePrompt, 
+      setPromptActive 
+    };
 }
 
 export function useAppState() {

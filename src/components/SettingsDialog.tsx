@@ -1,6 +1,6 @@
 // 📄 src/components/SettingsDialog.tsx
 import { useState, useEffect } from 'react'
-import { PlusCircle, Trash2 } from 'lucide-react'
+import { PlusCircle, Trash2, Edit2 } from 'lucide-react'
 import { usePrompts, useSettings } from '../store/hooks'
 import { type UserSettings } from '../store'
 import { useTranslation } from 'react-i18next'
@@ -17,7 +17,11 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
 
-  const { prompts, createPrompt, deletePrompt, setPromptActive, loadPrompts } = usePrompts();
+  // ✅ НОВОЕ: Состояние для редактирования промпта
+  const [editingPromptId, setEditingPromptId] = useState<string | null>(null)
+  const [editingPromptForm, setEditingPromptForm] = useState({ name: '', content: '' })
+
+  const { prompts, createPrompt, updatePrompt, deletePrompt, setPromptActive, loadPrompts } = usePrompts();
   const { settings, updateSettings, loadSettings } = useSettings();
 
   const [localSettings, setLocalSettings] = useState<UserSettings | null>(null);
@@ -59,6 +63,51 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     setValidationError(null);
   }
 
+  // ✅ НОВАЯ ФУНКЦИЯ: Начало редактирования промпта
+  const handleStartEditPrompt = (id: string, name: string, content: string) => {
+    setEditingPromptId(id);
+    setEditingPromptForm({ name, content });
+    setValidationError(null);
+  }
+
+  // ✅ НОВАЯ ФУНКЦИЯ: Сохранение отредактированного промпта
+  const handleSaveEditPrompt = async () => {
+    if (!editingPromptId) return;
+
+    setValidationError(null);
+    
+    const nameValidation = validatePromptName(editingPromptForm.name);
+    if (!nameValidation.isValid) {
+      setValidationError(nameValidation.error!);
+      return;
+    }
+    
+    const contentValidation = validatePromptContent(editingPromptForm.content);
+    if (!contentValidation.isValid) {
+      setValidationError(contentValidation.error!);
+      return;
+    }
+    
+    const sanitizedName = sanitizeString(editingPromptForm.name);
+    const sanitizedContent = sanitizeString(editingPromptForm.content);
+    
+    try {
+      await updatePrompt(editingPromptId, sanitizedName, sanitizedContent);
+      setEditingPromptId(null);
+      setEditingPromptForm({ name: '', content: '' });
+      setValidationError(null);
+    } catch (error) {
+      setValidationError('Failed to update prompt. Please try again.');
+    }
+  }
+
+  // ✅ НОВАЯ ФУНКЦИЯ: Отмена редактирования
+  const handleCancelEditPrompt = () => {
+    setEditingPromptId(null);
+    setEditingPromptForm({ name: '', content: '' });
+    setValidationError(null);
+  }
+
   const handleSaveChanges = () => {
     if (localSettings) {
       if (JSON.stringify(localSettings) !== JSON.stringify(settings)) {
@@ -74,6 +123,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     onClose()
     setIsAddingPrompt(false)
     setPromptForm({ name: '', content: '' })
+    // ✅ Сбрасываем состояние редактирования при закрытии
+    setEditingPromptId(null)
+    setEditingPromptForm({ name: '', content: '' })
   }
   
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -214,20 +266,71 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
               <div className="space-y-2">
                 {prompts.map((prompt) => (
-                  <div key={prompt.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-700/50">
-                    <div className="flex-1 min-w-0 mr-4">
-                      <h4 className="text-sm font-medium text-white truncate">{prompt.name}</h4>
-                      <p className="text-xs text-gray-400 truncate">{prompt.content}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" checked={prompt.is_active} onChange={() => setPromptActive(prompt.id, !prompt.is_active)} />
-                        <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
-                      </label>
-                      <button onClick={() => deletePrompt(prompt.id)} className="p-1 text-gray-400 hover:text-red-500">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                  <div key={prompt.id}>
+                    {/* ✅ ИЗМЕНЕНО: Условный рендеринг - либо форма редактирования, либо обычный вид */}
+                    {editingPromptId === prompt.id ? (
+                      // ✅ НОВОЕ: Форма редактирования промпта
+                      <div className="p-3 space-y-3 rounded-lg bg-gray-700/50 border-2 border-orange-500">
+                        <input 
+                          type="text" 
+                          value={editingPromptForm.name} 
+                          onChange={(e) => setEditingPromptForm(prev => ({ ...prev, name: e.target.value }))} 
+                          placeholder={t('promptNamePlaceholder')} 
+                          className="w-full px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" 
+                          autoFocus
+                        />
+                        <textarea 
+                          value={editingPromptForm.content} 
+                          onChange={(e) => setEditingPromptForm(prev => ({ ...prev, content: e.target.value }))} 
+                          placeholder={t('promptContentPlaceholder')} 
+                          className="w-full h-32 px-3 py-2 text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500" 
+                        />
+                        
+                        {validationError && (
+                          <p className="text-sm text-red-400">{validationError}</p>
+                        )}
+                        
+                        <div className="flex justify-end gap-2">
+                          <button 
+                            onClick={handleCancelEditPrompt} 
+                            className="px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-white focus:outline-none"
+                          >
+                            {t('cancel')}
+                          </button>
+                          <button 
+                            onClick={handleSaveEditPrompt} 
+                            className="px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-600 rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          >
+                            {t('savePrompt')}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      // ✅ Обычный вид промпта
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-gray-700/50">
+                        <div className="flex-1 min-w-0 mr-4">
+                          <h4 className="text-sm font-medium text-white truncate">{prompt.name}</h4>
+                          <p className="text-xs text-gray-400 truncate">{prompt.content}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" className="sr-only peer" checked={prompt.is_active} onChange={() => setPromptActive(prompt.id, !prompt.is_active)} />
+                            <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                          </label>
+                          {/* ✅ НОВАЯ КНОПКА: Редактировать */}
+                          <button 
+                            onClick={() => handleStartEditPrompt(prompt.id, prompt.name, prompt.content)} 
+                            className="p-1 text-gray-400 hover:text-orange-500"
+                            title={t('editPrompt')}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => deletePrompt(prompt.id)} className="p-1 text-gray-400 hover:text-red-500" title={t('deletePrompt')}>
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

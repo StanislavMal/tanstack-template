@@ -35,6 +35,8 @@
   "promptNamePlaceholder": "Prompt name...",
   "promptContentPlaceholder": "Enter prompt content...",
   "savePrompt": "Save Prompt",
+  "editPrompt": "Edit Prompt",
+  "deletePrompt": "Delete Prompt",
   "cancel": "Cancel",
   "saveAndClose": "Save & Close",
   "promptsNote": "Manage custom prompts. Activating one will automatically deactivate others.",
