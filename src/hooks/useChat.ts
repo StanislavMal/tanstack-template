@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { streamChat } from '../lib/ai/server';
 import type { Message } from '../lib/ai/types';
 import { useConversations, useSettings, usePrompts } from '../store/hooks';
+import { selectors, store } from '../store/store';
 
 interface UseChatOptions {
   onMessageSent?: (message: Message) => void;
@@ -30,7 +31,7 @@ export function useChat(options: UseChatOptions = {}) {
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
   const bufferRef = useRef<string>('');
   const activeRequestIdRef = useRef<string | null>(null);
-  const isStreamActiveRef = useRef<boolean>(false); // ✅ НОВОЕ
+  const isStreamActiveRef = useRef<boolean>(false);
 
   useEffect(() => {
     return () => {
@@ -45,7 +46,6 @@ export function useChat(options: UseChatOptions = {}) {
     };
   }, [currentConversationId]);
 
-  // ✅ ИСПРАВЛЕНО: interval работает пока стрим активен ИЛИ есть символы
   const startTypingAnimation = useCallback((messageId: string) => {
     if (intervalIdRef.current) {
       clearInterval(intervalIdRef.current);
@@ -53,16 +53,15 @@ export function useChat(options: UseChatOptions = {}) {
 
     const streamSpeed = settings?.streamSpeed || 30;
     
-    // Адаптивный интервал
     let updateIntervalMs: number;
     if (streamSpeed <= 30) {
-      updateIntervalMs = 33;  // 30 FPS
+      updateIntervalMs = 33;
     } else if (streamSpeed <= 60) {
-      updateIntervalMs = 50;  // 20 FPS
+      updateIntervalMs = 50;
     } else if (streamSpeed <= 100) {
-      updateIntervalMs = 75;  // 13 FPS
+      updateIntervalMs = 75;
     } else {
-      updateIntervalMs = 100; // 10 FPS
+      updateIntervalMs = 100;
     }
     
     const charsPerTick = Math.max(1, Math.round((streamSpeed * updateIntervalMs) / 1000));
@@ -70,7 +69,6 @@ export function useChat(options: UseChatOptions = {}) {
     console.log(`[Animation] Speed: ${streamSpeed} chars/sec, Interval: ${updateIntervalMs}ms, ${charsPerTick} chars/tick`);
 
     intervalIdRef.current = setInterval(() => {
-      // ✅ Если есть символы - печатаем
       if (textQueueRef.current.length > 0) {
         const charsToAdd = textQueueRef.current.substring(0, charsPerTick);
         textQueueRef.current = textQueueRef.current.substring(charsPerTick);
@@ -82,11 +80,8 @@ export function useChat(options: UseChatOptions = {}) {
           }
           return prev;
         });
-
-        console.log(`[Animation] Displayed: ${displayedTextRef.current.length}, Queue: ${textQueueRef.current.length}`);
       }
       
-      // ✅ КЛЮЧЕВОЕ: останавливаем ТОЛЬКО если стрим завершён И очередь пуста
       if (!isStreamActiveRef.current && textQueueRef.current.length === 0) {
         if (intervalIdRef.current) {
           console.log('[Animation] Stream finished and queue empty, stopping');
@@ -98,8 +93,7 @@ export function useChat(options: UseChatOptions = {}) {
   }, [settings?.streamSpeed]);
 
   const stopTypingAnimation = useCallback(() => {
-    isStreamActiveRef.current = false; // ✅ Сигнализируем что стрим завершён
-    // НЕ останавливаем interval сразу - он сам остановится когда очередь опустеет
+    isStreamActiveRef.current = false;
   }, []);
 
   const parseNDJSON = useCallback((data: string) => {
@@ -136,7 +130,6 @@ export function useChat(options: UseChatOptions = {}) {
       const requestId = crypto.randomUUID();
       activeRequestIdRef.current = requestId;
 
-      // Очистка
       bufferRef.current = '';
       textQueueRef.current = '';
       displayedTextRef.current = '';
@@ -171,7 +164,6 @@ export function useChat(options: UseChatOptions = {}) {
         const decoder = new TextDecoder();
         let animationStarted = false;
 
-        // ✅ Получаем чанки
         while (true) {
           if (activeRequestIdRef.current !== requestId) {
             reader.cancel();
@@ -193,41 +185,31 @@ export function useChat(options: UseChatOptions = {}) {
               if (!animationStarted) {
                 console.log('[Stream] First chunk received, starting animation');
                 
-                // Инициализируем пустое сообщение
                 setPendingMessage({ 
                   id: assistantMessageId, 
                   role: 'assistant', 
                   content: '' 
                 });
                 
-                // ✅ Отмечаем что стрим активен
                 isStreamActiveRef.current = true;
-                
-                // Запускаем анимацию
                 startTypingAnimation(assistantMessageId);
                 setIsLoading(false);
                 animationStarted = true;
               }
               
-              // Просто добавляем в очередь - анимация сама заберёт
               textQueueRef.current += chunk.text;
-              console.log(`[Stream] Added to queue, total: ${textQueueRef.current.length}`);
             }
           }
         }
 
         console.log('[Stream] All chunks received, total queue: ', textQueueRef.current.length);
 
-        // ✅ Сигнализируем что стрим завершён
         isStreamActiveRef.current = false;
 
-        // ✅ Ждём пока очередь опустеет
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
             const queueEmpty = textQueueRef.current.length === 0;
             const animationStopped = intervalIdRef.current === null;
-            
-            console.log(`[Wait] Queue: ${textQueueRef.current.length}, Animation: ${animationStopped ? 'stopped' : 'running'}`);
             
             if (queueEmpty && animationStopped) {
               clearInterval(checkInterval);
@@ -238,7 +220,6 @@ export function useChat(options: UseChatOptions = {}) {
           
           setTimeout(() => {
             clearInterval(checkInterval);
-            // Форсируем остановку если что-то пошло не так
             if (intervalIdRef.current) {
               clearInterval(intervalIdRef.current);
               intervalIdRef.current = null;
@@ -295,15 +276,26 @@ export function useChat(options: UseChatOptions = {}) {
         
         if (!convId) {
           const title = conversationTitle || content.slice(0, 30) + '...';
+          console.log('[useChat] Creating new conversation:', title);
           convId = await createNewConversation(title);
           if (!convId) throw new Error('Failed to create conversation');
         }
 
+        // ✅ Добавляем сообщение в store И Supabase
         await addMessage(convId, userMessage);
         options.onMessageSent?.(userMessage);
 
-        const { selectors, store } = await import('../store/store');
+        // ✅ ИСПРАВЛЕНИЕ: Даём время на запись в store (React batching)
+        await new Promise(resolve => setTimeout(resolve, 50));
+
         const currentMessages = selectors.getCurrentMessages(store.state);
+        
+        console.log('[useChat] Current messages before AI call:', currentMessages.length);
+        console.log('[useChat] Messages:', currentMessages.map(m => `${m.role}: ${m.content.substring(0, 30)}...`));
+
+        if (currentMessages.length === 0) {
+          throw new Error('No messages found in store! This should not happen.');
+        }
 
         const aiResponse = await processAIResponse(currentMessages);
         
