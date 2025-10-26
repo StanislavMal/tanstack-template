@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
+@import "katex/dist/katex.min.css"; /* ✅ Стили для математики */
 
 html, body {
   overscroll-behavior: none;
@@ -42,23 +43,22 @@ code {
   background-color: rgba(156, 163, 175, 0.7);
 }
 
-/* ✅ ИСПРАВЛЕНИЕ: Улучшенные стили для Markdown контента */
+/* ✅ УЛУЧШЕННЫЕ СТИЛИ ДЛЯ MARKDOWN */
 .prose {
   max-width: none;
   color: #e5e7eb;
-  /* ✅ КРИТИЧНО: Разрешаем выделение текста */
   user-select: text;
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
 }
 
-/* ✅ ИСПРАВЛЕНИЕ: Явно задаем выделение для всех элементов внутри prose */
 .prose * {
   user-select: text;
   -webkit-user-select: text;
 }
 
+/* Код */
 .prose code {
   color: #e5e7eb;
   background-color: rgba(31, 41, 55, 0.5);
@@ -85,6 +85,7 @@ code {
   user-select: text;
 }
 
+/* Заголовки */
 .prose h1, .prose h2, .prose h3, .prose h4 {
   color: #f9fafb;
   margin-top: 1.5em;
@@ -112,13 +113,12 @@ code {
   font-weight: 600;
 }
 
-/* ✅ ИСПРАВЛЕНИЕ: Улучшенные стили для списков */
+/* Списки */
 .prose ul, .prose ol {
   margin-top: 1em;
   margin-bottom: 1em;
   padding-left: 2em;
   user-select: text;
-  /* ✅ Явно задаем display для корректного отображения */
   display: block;
 }
 
@@ -135,14 +135,11 @@ code {
 .prose li {
   margin-top: 0.5em;
   margin-bottom: 0.5em;
-  /* ✅ Явно задаем display: list-item */
   display: list-item;
   user-select: text;
-  /* ✅ Добавляем line-height для читаемости */
   line-height: 1.6;
 }
 
-/* ✅ НОВОЕ: Вложенные списки */
 .prose ul ul,
 .prose ol ol,
 .prose ul ol,
@@ -159,12 +156,19 @@ code {
   list-style-type: square;
 }
 
-/* ✅ НОВОЕ: Параграфы внутри списков */
 .prose li > p {
   margin-top: 0.5em;
   margin-bottom: 0.5em;
 }
 
+/* ✅ GFM: Чекбоксы в списках задач */
+.prose input[type="checkbox"] {
+  margin-right: 0.5em;
+  cursor: pointer;
+  accent-color: #f97316;
+}
+
+/* Цитаты */
 .prose blockquote {
   border-left-color: #f97316;
   border-left-width: 4px;
@@ -176,11 +180,13 @@ code {
   user-select: text;
 }
 
+/* Горизонтальная линия */
 .prose hr {
   border-color: rgba(249, 115, 22, 0.2);
   margin: 2em 0;
 }
 
+/* Ссылки */
 .prose a {
   color: #f97316;
   text-decoration: underline;
@@ -193,24 +199,56 @@ code {
   color: #fb923c;
 }
 
+/* ✅ ТАБЛИЦЫ (GFM) */
 .prose table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1.25em 0;
+  margin: 1.5em 0;
+  user-select: text;
+  overflow-x: auto;
+  display: block;
+}
+
+.prose thead {
+  background-color: rgba(249, 115, 22, 0.15);
+}
+
+.prose th {
+  padding: 0.75em 1em;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  font-weight: 600;
+  text-align: left;
+  color: #f9fafb;
   user-select: text;
 }
 
-.prose th, .prose td {
-  padding: 0.75em;
+.prose td {
+  padding: 0.75em 1em;
   border: 1px solid rgba(249, 115, 22, 0.2);
   user-select: text;
 }
 
-.prose th {
-  background-color: rgba(249, 115, 22, 0.1);
-  font-weight: 600;
+.prose tbody tr:hover {
+  background-color: rgba(249, 115, 22, 0.05);
 }
 
+/* ✅ Выравнивание в таблицах */
+.prose th[align="left"],
+.prose td[align="left"] {
+  text-align: left;
+}
+
+.prose th[align="center"],
+.prose td[align="center"] {
+  text-align: center;
+}
+
+.prose th[align="right"],
+.prose td[align="right"] {
+  text-align: right;
+}
+
+/* Текстовое форматирование */
 .prose strong {
   color: #f9fafb;
   font-weight: 600;
@@ -222,25 +260,74 @@ code {
   user-select: text;
 }
 
-/* ✅ НОВОЕ: Параграфы */
+/* ✅ GFM: Зачёркнутый текст */
+.prose del {
+  text-decoration: line-through;
+  color: #9ca3af;
+  user-select: text;
+}
+
+/* Параграфы */
 .prose p {
   margin-top: 1em;
   margin-bottom: 1em;
   line-height: 1.7;
   user-select: text;
-  /* ✅ Правильная обработка переносов строк */
   white-space: pre-wrap;
   word-wrap: break-word;
 }
 
-/* ✅ НОВОЕ: Первый параграф без верхнего отступа */
 .prose > p:first-child {
   margin-top: 0;
 }
 
-/* ✅ НОВОЕ: Последний параграф без нижнего отступа */
 .prose > p:last-child {
   margin-bottom: 0;
+}
+
+/* ✅ МАТЕМАТИКА (KaTeX) */
+
+/* Inline формулы */
+.prose .katex {
+  font-size: 1.1em;
+  user-select: text;
+}
+
+/* Блочные формулы */
+.prose .katex-display {
+  margin: 1.5em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  user-select: text;
+}
+
+/* Темная тема для формул */
+.prose .katex {
+  color: #e5e7eb;
+}
+
+.prose .katex .mord,
+.prose .katex .mbin,
+.prose .katex .mrel,
+.prose .katex .mop,
+.prose .katex .mpunct {
+  color: #e5e7eb;
+}
+
+/* Скобки и операторы - оранжевый акцент */
+.prose .katex .mopen,
+.prose .katex .mclose {
+  color: #fb923c;
+}
+
+/* Переменные - светло-оранжевый */
+.prose .katex .mord.mathdefault {
+  color: #fbbf24;
+}
+
+/* Функции - белый */
+.prose .katex .mop {
+  color: #f9fafb;
 }
 
 /* Message transition animations */
@@ -264,7 +351,7 @@ code {
   transition: opacity 300ms;
 }
 
-/* ✅ НОВОЕ: Класс для явного разрешения выделения */
+/* Класс для явного разрешения выделения */
 .select-text {
   user-select: text !important;
   -webkit-user-select: text !important;
