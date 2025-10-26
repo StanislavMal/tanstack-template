@@ -13,6 +13,7 @@ import { Pencil, Copy, Check, X, RefreshCw } from 'lucide-react';
 import type { Message } from '../lib/ai/types';
 import { CodeBlock } from './CodeBlock';
 import { TableBlock } from './TableBlock';
+import { InlineCode } from './InlineCode';
 import { useCopyToClipboard } from '../hooks';
 import { 
   htmlToPlainText, 
@@ -211,7 +212,8 @@ export const ChatMessage = memo(function ChatMessage({
               ]}
               components={{ 
                 pre: CodeBlock,
-                table: TableBlock  // ✅ Используем TableBlock для таблиц
+                table: TableBlock,
+                code: InlineCode
               }}
             >
               {message.content}
