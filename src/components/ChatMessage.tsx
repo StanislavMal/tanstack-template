@@ -12,6 +12,7 @@ import { Pencil, Copy, Check, X, RefreshCw } from 'lucide-react';
 
 import type { Message } from '../lib/ai/types';
 import { CodeBlock } from './CodeBlock';
+import { TableBlock } from './TableBlock';
 import { useCopyToClipboard } from '../hooks';
 import { 
   htmlToPlainText, 
@@ -208,7 +209,10 @@ export const ChatMessage = memo(function ChatMessage({
                 rehypeHighlight,
                 rehypeKatex     // ✅ Рендеринг LaTeX формул через KaTeX
               ]}
-              components={{ pre: CodeBlock }}
+              components={{ 
+                pre: CodeBlock,
+                table: TableBlock  // ✅ Используем TableBlock для таблиц
+              }}
             >
               {message.content}
             </ReactMarkdown>

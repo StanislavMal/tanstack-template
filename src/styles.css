@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "highlight.js/styles/github-dark.css";
-@import "katex/dist/katex.min.css"; /* ✅ Стили для математики */
+@import "katex/dist/katex.min.css";
 
 html, body {
   overscroll-behavior: none;
@@ -28,6 +28,7 @@ code {
 /* Custom scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px; /* ✅ Добавили для горизонтальной прокрутки */
 }
 
 ::-webkit-scrollbar-track {
@@ -199,37 +200,46 @@ code {
   color: #fb923c;
 }
 
-/* ✅ ТАБЛИЦЫ (GFM) */
+/* ✅ КОМПАКТНЫЕ ТАБЛИЦЫ С ПРОКРУТКОЙ */
 .prose table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1.5em 0;
+  margin: 0; /* ✅ Убрали отступы - они теперь у TableBlock */
   user-select: text;
-  overflow-x: auto;
-  display: block;
+  font-size: 0.9em; /* ✅ Немного уменьшили размер шрифта */
+  line-height: 1.4; /* ✅ Компактнее межстрочный интервал */
+}
+
+/* ✅ Убираем стандартный display: block для таблиц */
+.prose table {
+  display: table;
 }
 
 .prose thead {
-  background-color: rgba(249, 115, 22, 0.15);
+  background-color: rgba(249, 115, 22, 0.12); /* ✅ Менее яркий фон */
 }
 
 .prose th {
-  padding: 0.75em 1em;
-  border: 1px solid rgba(249, 115, 22, 0.3);
+  padding: 0.5em 0.75em; /* ✅ Уменьшили padding */
+  border: 1px solid rgba(249, 115, 22, 0.25);
   font-weight: 600;
   text-align: left;
-  color: #f9fafb;
+  color: #fbbf24; /* ✅ Золотистый цвет заголовков */
+  font-size: 0.95em; /* ✅ Чуть меньше */
   user-select: text;
+  white-space: nowrap; /* ✅ Не переносим заголовки */
 }
 
 .prose td {
-  padding: 0.75em 1em;
-  border: 1px solid rgba(249, 115, 22, 0.2);
+  padding: 0.5em 0.75em; /* ✅ Уменьшили padding */
+  border: 1px solid rgba(249, 115, 22, 0.15);
   user-select: text;
+  color: #e5e7eb;
 }
 
+/* ✅ Более мягкий hover */
 .prose tbody tr:hover {
-  background-color: rgba(249, 115, 22, 0.05);
+  background-color: rgba(249, 115, 22, 0.03);
 }
 
 /* ✅ Выравнивание в таблицах */
@@ -246,6 +256,11 @@ code {
 .prose th[align="right"],
 .prose td[align="right"] {
   text-align: right;
+}
+
+/* ✅ Чередующиеся строки для лучшей читаемости */
+.prose tbody tr:nth-child(even) {
+  background-color: rgba(31, 41, 55, 0.2);
 }
 
 /* Текстовое форматирование */
