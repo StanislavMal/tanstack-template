@@ -33,18 +33,24 @@ export const CodeBlock = ({ children, ...props }: CodeBlockProps) => {
   };
 
   return (
-    <div className="relative my-4 bg-gray-800/50 rounded-md">
-      <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-1 border-b border-gray-700/50 bg-gray-800 rounded-t-md">
-        <span className="font-sans text-xs font-semibold text-gray-400 uppercase">{language}</span>
+    // -> ИЗМЕНЕНИЕ: Контейнер теперь имеет только отступы, основной стиль у <pre>
+    <div className="relative my-4">
+      {/* -> ИЗМЕНЕНИЕ: Шапка блока стилизована как заголовок таблицы */}
+      <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-1.5 bg-orange-500/10 border-b border-orange-500/25 rounded-t-md">
+        <span className="font-sans text-xs font-semibold text-amber-400 uppercase">
+          {language}
+        </span>
         <button
           onClick={handleCopy}
-          className="p-1 rounded-md text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+          // -> ИЗМЕНЕНИЕ: Кнопка теперь в оранжевой гамме
+          className="p-1.5 rounded-md text-amber-400 hover:bg-orange-500/20 hover:text-amber-300 transition-colors"
           title={isCopied ? 'Copied!' : 'Copy code'}
         >
           {isCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
         </button>
       </div>
-      <pre {...props} className="overflow-x-auto p-4 text-sm">
+      {/* -> ИЗМЕНЕНИЕ: <pre> теперь имеет фон и скруглённые углы снизу */}
+      <pre {...props} className="overflow-x-auto p-4 text-sm bg-gray-900 rounded-b-md">
         <code ref={codeRef}>
           {children}
         </code>
