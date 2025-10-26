@@ -62,19 +62,13 @@ export const InlineCode = ({ children, node, ...props }: InlineCodeProps) => {
     <code
       {...props}
       onClick={handleCopy}
-      className={`
-        inline-flex items-center gap-1
-        font-mono text-[0.85em] 
-        px-1.5 py-0.5 
-        rounded 
-        cursor-pointer 
-        select-none
-        transition-all duration-200
-        ${isCopied 
-          ? 'bg-green-500/20 text-green-300 border border-green-400/40 shadow-sm shadow-green-500/20' 
-          : 'bg-amber-500/10 text-amber-300 border border-amber-400/30 hover:bg-amber-500/20 hover:border-amber-400/50 hover:shadow-sm'
-        }
-      `}
+      // ✅ ИСПРАВЛЕНИЕ: Добавляем маркер-класс для CSS
+      className={`custom-inline-code ${
+        isCopied 
+          ? 'copied' 
+          : ''
+      }`}
+      // ✅ Все стили теперь в CSS для лучшей производительности
     >
       {children}
     </code>
