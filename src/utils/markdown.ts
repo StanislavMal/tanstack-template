@@ -17,7 +17,6 @@ export function extractLanguageFromCode(codeElement: HTMLElement): string {
 export function extractLatexFromKatex(container: HTMLElement): string {
   const annotations: string[] = [];
   
-  // KaTeX хранит LaTeX в элементах <annotation encoding="application/x-tex">
   const annotationElements = container.querySelectorAll('annotation[encoding="application/x-tex"]');
   
   annotationElements.forEach(el => {
@@ -28,12 +27,10 @@ export function extractLatexFromKatex(container: HTMLElement): string {
   });
   
   if (annotations.length > 0) {
-    // Если это блочная формула - оборачиваем в $$
     const katexDisplay = container.querySelector('.katex-display');
     if (katexDisplay) {
       return annotations.map(latex => `$$\n${latex}\n$$`).join('\n\n');
     }
-    // Inline формулы - оборачиваем в $
     return annotations.map(latex => `$${latex}$`).join(' ');
   }
   
@@ -51,7 +48,6 @@ export function extractTableAsPlainText(container: HTMLElement): string {
   const rows: string[][] = [];
   const columnWidths: number[] = [];
   
-  // Собираем данные из таблицы
   const allRows = table.querySelectorAll('tr');
   allRows.forEach(tr => {
     const cells: string[] = [];
@@ -61,7 +57,6 @@ export function extractTableAsPlainText(container: HTMLElement): string {
       const text = (td.textContent || '').trim();
       cells.push(text);
       
-      // Обновляем максимальную ширину колонки
       if (!columnWidths[index] || text.length > columnWidths[index]) {
         columnWidths[index] = text.length;
       }
@@ -74,12 +69,10 @@ export function extractTableAsPlainText(container: HTMLElement): string {
   
   if (rows.length === 0) return '';
   
-  // Функция для выравнивания текста по ширине
   const padCell = (text: string, width: number): string => {
     return text.padEnd(width, ' ');
   };
   
-  // Формируем линии разделителей
   const createSeparator = (char: string): string => {
     return columnWidths.map(width => char.repeat(width + 2)).join('+');
   };
@@ -88,17 +81,14 @@ export function extractTableAsPlainText(container: HTMLElement): string {
   const separator = createSeparator('-');
   
   rows.forEach((row, rowIndex) => {
-    // Добавляем разделитель перед первой строкой и после заголовка
     if (rowIndex === 0 || rowIndex === 1) {
       result += '+' + separator + '+\n';
     }
     
-    // Добавляем строку с данными
     const cells = row.map((cell, i) => ' ' + padCell(cell, columnWidths[i]) + ' ');
     result += '|' + cells.join('|') + '|\n';
   });
   
-  // Добавляем разделитель после последней строки
   result += '+' + separator + '+\n';
   
   return result;
@@ -106,7 +96,7 @@ export function extractTableAsPlainText(container: HTMLElement): string {
 
 /**
  * Конвертирует HTML в чистый Markdown-текст
- * Сохраняет структуру списков, блоков кода, таблиц и т.д.
+ * Сохраняет структуру списков, блоков кода, таблиц, чекбоксов и т.д.
  */
 export function htmlToPlainText(element: HTMLElement): string {
   let result = '';
@@ -116,7 +106,6 @@ export function htmlToPlainText(element: HTMLElement): string {
     depth: number = 0, 
     orderedCounters: Map<number, number> = new Map()
   ): void {
-    // Обработка текстовых узлов
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent || '';
       if (text.trim()) {
@@ -125,7 +114,6 @@ export function htmlToPlainText(element: HTMLElement): string {
       return;
     }
     
-    // Пропускаем не-элементы
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     
     const el = node as HTMLElement;
@@ -133,6 +121,7 @@ export function htmlToPlainText(element: HTMLElement): string {
     
     // === СПИСКИ (UL/OL) ===
     if (tagName === 'ul' || tagName === 'ol') {
+            
       if (tagName === 'ol') {
         const start = parseInt(el.getAttribute('start') || '1');
         orderedCounters.set(depth, start);
@@ -140,6 +129,7 @@ export function htmlToPlainText(element: HTMLElement): string {
       
       Array.from(el.children).forEach((child) => {
         if (child.tagName.toLowerCase() === 'li') {
+          // ✅ Передаем информацию о том, что это список задач
           processNode(child, depth, orderedCounters);
         }
       });
@@ -160,6 +150,38 @@ export function htmlToPlainText(element: HTMLElement): string {
       const parent = el.parentElement;
       const isOrdered = parent?.tagName.toLowerCase() === 'ol';
       
+      // ✅ Проверяем наличие чекбокса
+      const checkbox = el.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+      
+      if (checkbox) {
+        // ✅ Список задач - форматируем как Markdown checkbox
+        const isChecked = checkbox.checked;
+        result += `${indent}- [${isChecked ? 'x' : ' '}] `;
+        
+        // Обрабатываем содержимое без чекбокса
+        Array.from(el.childNodes).forEach((child) => {
+          if (child.nodeType === Node.ELEMENT_NODE) {
+            const childEl = child as HTMLElement;
+            // Пропускаем сам checkbox
+            if (childEl.tagName.toLowerCase() === 'input') return;
+            
+            const childTag = childEl.tagName.toLowerCase();
+            if (childTag === 'ul' || childTag === 'ol') {
+              result += '\n';
+              processNode(child, depth + 1, orderedCounters);
+            } else {
+              processNode(child, depth, orderedCounters);
+            }
+          } else {
+            processNode(child, depth, orderedCounters);
+          }
+        });
+        
+        result += '\n';
+        return;
+      }
+      
+      // Обычный список
       if (isOrdered) {
         const counter = orderedCounters.get(depth) || 1;
         result += `${indent}${counter}. `;
@@ -205,7 +227,6 @@ export function htmlToPlainText(element: HTMLElement): string {
     
     // === БЛОКИ (P, DIV, BLOCKQUOTE) ===
     if (['p', 'div', 'blockquote'].includes(tagName)) {
-      // Специальная обработка для DIV с кодом
       if (tagName === 'div') {
         const directChildren = Array.from(el.children);
         const preChild = directChildren.find(child => child.tagName.toLowerCase() === 'pre');
@@ -213,7 +234,6 @@ export function htmlToPlainText(element: HTMLElement): string {
         if (preChild) {
           let language = '';
           
-          // Ищем язык в соседних элементах
           for (const child of directChildren) {
             if (child !== preChild) {
               const text = (child.textContent || '').trim();
@@ -224,7 +244,6 @@ export function htmlToPlainText(element: HTMLElement): string {
             }
           }
           
-          // Если не нашли - берём из className
           if (!language) {
             const codeElement = preChild.querySelector('code');
             if (codeElement) {
@@ -330,7 +349,12 @@ export function htmlToPlainText(element: HTMLElement): string {
       return;
     }
     
-    // === FALLBACK: обрабатываем дочерние элементы ===
+    // === ЧЕКБОКСЫ (пропускаем, обрабатываются в <li>) ===
+    if (tagName === 'input' && el.getAttribute('type') === 'checkbox') {
+      return;
+    }
+    
+    // === FALLBACK ===
     Array.from(el.childNodes).forEach((child) => {
       processNode(child, depth, orderedCounters);
     });
@@ -338,7 +362,6 @@ export function htmlToPlainText(element: HTMLElement): string {
   
   processNode(element);
   
-  // Очистка: удаляем избыточные переносы строк
   return result
     .replace(/\n{3,}/g, '\n\n')
     .replace(/\n+$/g, '\n')

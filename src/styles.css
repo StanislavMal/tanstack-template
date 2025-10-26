@@ -28,7 +28,7 @@ code {
 /* Custom scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;
-  height: 8px; /* ✅ Добавили для горизонтальной прокрутки */
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -162,11 +162,62 @@ code {
   margin-bottom: 0.5em;
 }
 
-/* ✅ GFM: Чекбоксы в списках задач */
+/* ✅ КОМПАКТНЫЕ КАСТОМНЫЕ ЧЕКБОКСЫ В СПИСКАХ ЗАДАЧ */
 .prose input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 0.9em;
+  height: 0.9em;
   margin-right: 0.5em;
+  margin-top: 0.3em;
+  border: 1.5px solid #fbbf24;
+  border-radius: 0.2em;
+  background-color: transparent;
   cursor: pointer;
-  accent-color: #f97316;
+  position: relative;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.prose input[type="checkbox"]:hover {
+  background-color: rgba(251, 191, 36, 0.1);
+  border-color: #fcd34d;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.1);
+}
+
+.prose input[type="checkbox"]:checked {
+  background-color: #fbbe2400;
+  border-color: #fbbf24;
+}
+
+.prose input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 0.22em;
+  top: 0.05em;
+  width: 0.3em;
+  height: 0.5em;
+  border: solid white;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* ✅ Списки задач - элементы без маркеров */
+.prose ul.contains-task-list {
+  list-style-type: none;
+  padding-left: 1.5em;
+}
+
+.prose ul.contains-task-list > li {
+  display: flex;
+  align-items: flex-start;
+  list-style-type: none;
+}
+
+.prose ul.contains-task-list > li::before {
+  content: none;
 }
 
 /* Цитаты */
@@ -204,45 +255,39 @@ code {
 .prose table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0; /* ✅ Убрали отступы - они теперь у TableBlock */
+  margin: 0;
   user-select: text;
-  font-size: 0.9em; /* ✅ Немного уменьшили размер шрифта */
-  line-height: 1.4; /* ✅ Компактнее межстрочный интервал */
-}
-
-/* ✅ Убираем стандартный display: block для таблиц */
-.prose table {
+  font-size: 0.9em;
+  line-height: 1.4;
   display: table;
 }
 
 .prose thead {
-  background-color: rgba(249, 115, 22, 0.12); /* ✅ Менее яркий фон */
+  background-color: rgba(249, 115, 22, 0.12);
 }
 
 .prose th {
-  padding: 0.5em 0.75em; /* ✅ Уменьшили padding */
+  padding: 0.5em 0.75em;
   border: 1px solid rgba(249, 115, 22, 0.25);
   font-weight: 600;
   text-align: left;
-  color: #fbbf24; /* ✅ Золотистый цвет заголовков */
-  font-size: 0.95em; /* ✅ Чуть меньше */
+  color: #fbbf24;
+  font-size: 0.95em;
   user-select: text;
-  white-space: nowrap; /* ✅ Не переносим заголовки */
+  white-space: nowrap;
 }
 
 .prose td {
-  padding: 0.5em 0.75em; /* ✅ Уменьшили padding */
+  padding: 0.5em 0.75em;
   border: 1px solid rgba(249, 115, 22, 0.15);
   user-select: text;
   color: #e5e7eb;
 }
 
-/* ✅ Более мягкий hover */
 .prose tbody tr:hover {
   background-color: rgba(249, 115, 22, 0.03);
 }
 
-/* ✅ Выравнивание в таблицах */
 .prose th[align="left"],
 .prose td[align="left"] {
   text-align: left;
@@ -258,7 +303,6 @@ code {
   text-align: right;
 }
 
-/* ✅ Чередующиеся строки для лучшей читаемости */
 .prose tbody tr:nth-child(even) {
   background-color: rgba(31, 41, 55, 0.2);
 }
@@ -300,49 +344,71 @@ code {
   margin-bottom: 0;
 }
 
-/* ✅ МАТЕМАТИКА (KaTeX) */
+/* ✅ МАТЕМАТИКА (KaTeX) - ЗОЛОТИСТО-ОРАНЖЕВАЯ ТЕМА */
 
-/* Inline формулы */
+/* Контейнеры формул */
 .prose .katex {
-  font-size: 1.1em;
+  font-size: 1.15em;
   user-select: text;
+  color: #fbbf24; /* ✅ Единый золотисто-оранжевый */
 }
 
-/* Блочные формулы */
 .prose .katex-display {
   margin: 1.5em 0;
   overflow-x: auto;
   overflow-y: hidden;
   user-select: text;
+  padding: 0.5em 0;
 }
 
-/* Темная тема для формул */
-.prose .katex {
-  color: #e5e7eb;
+/* ✅ ВСЕ элементы формул - единый золотисто-оранжевый */
+.prose .katex * {
+  color: #fbbf24 !important;
 }
 
+/* ✅ Основные математические элементы */
 .prose .katex .mord,
 .prose .katex .mbin,
 .prose .katex .mrel,
 .prose .katex .mop,
-.prose .katex .mpunct {
-  color: #e5e7eb;
-}
-
-/* Скобки и операторы - оранжевый акцент */
+.prose .katex .mpunct,
+.prose .katex .minner,
 .prose .katex .mopen,
 .prose .katex .mclose {
-  color: #fb923c;
+  color: #fbbf24 !important;
 }
 
-/* Переменные - светло-оранжевый */
-.prose .katex .mord.mathdefault {
-  color: #fbbf24;
+/* ✅ Большие операторы и разделители */
+.prose .katex .delim-size1,
+.prose .katex .delim-size2,
+.prose .katex .delim-size3,
+.prose .katex .delim-size4 {
+  color: #fbbf24 !important;
 }
 
-/* Функции - белый */
+/* ✅ Переменные и числа */
+.prose .katex .mord.mathdefault,
+.prose .katex .mord.mathnormal {
+  color: #fbbf24 !important;
+}
+
+/* ✅ Функции (sin, cos, log и т.д.) */
 .prose .katex .mop {
-  color: #f9fafb;
+  color: #fbbf24 !important;
+}
+
+/* ✅ Дроби, корни, суммы */
+.prose .katex .vlist-t,
+.prose .katex .sqrt,
+.prose .katex .frac-line {
+  color: #fbbf24 !important;
+}
+
+/* ✅ Подсветка при наведении */
+.prose .katex-display:hover {
+  background-color: rgba(251, 191, 36, 0.08); /* ✅ Обновлен под новый цвет */
+  border-radius: 0.5rem;
+  transition: background-color 0.2s ease;
 }
 
 /* Message transition animations */
