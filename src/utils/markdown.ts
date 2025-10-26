@@ -11,6 +11,100 @@ export function extractLanguageFromCode(codeElement: HTMLElement): string {
 }
 
 /**
+ * Извлекает LaTeX код из KaTeX элемента
+ * KaTeX хранит оригинальную формулу в атрибуте annotation
+ */
+export function extractLatexFromKatex(container: HTMLElement): string {
+  const annotations: string[] = [];
+  
+  // KaTeX хранит LaTeX в элементах <annotation encoding="application/x-tex">
+  const annotationElements = container.querySelectorAll('annotation[encoding="application/x-tex"]');
+  
+  annotationElements.forEach(el => {
+    const latex = el.textContent || '';
+    if (latex) {
+      annotations.push(latex);
+    }
+  });
+  
+  if (annotations.length > 0) {
+    // Если это блочная формула - оборачиваем в $$
+    const katexDisplay = container.querySelector('.katex-display');
+    if (katexDisplay) {
+      return annotations.map(latex => `$$\n${latex}\n$$`).join('\n\n');
+    }
+    // Inline формулы - оборачиваем в $
+    return annotations.map(latex => `$${latex}$`).join(' ');
+  }
+  
+  return '';
+}
+
+/**
+ * Конвертирует HTML таблицу в plain text с сохранением структуры
+ * Использует символы Unicode для рисования границ
+ */
+export function extractTableAsPlainText(container: HTMLElement): string {
+  const table = container.querySelector('table');
+  if (!table) return '';
+  
+  const rows: string[][] = [];
+  const columnWidths: number[] = [];
+  
+  // Собираем данные из таблицы
+  const allRows = table.querySelectorAll('tr');
+  allRows.forEach(tr => {
+    const cells: string[] = [];
+    const tdElements = tr.querySelectorAll('th, td');
+    
+    tdElements.forEach((td, index) => {
+      const text = (td.textContent || '').trim();
+      cells.push(text);
+      
+      // Обновляем максимальную ширину колонки
+      if (!columnWidths[index] || text.length > columnWidths[index]) {
+        columnWidths[index] = text.length;
+      }
+    });
+    
+    if (cells.length > 0) {
+      rows.push(cells);
+    }
+  });
+  
+  if (rows.length === 0) return '';
+  
+  // Функция для выравнивания текста по ширине
+  const padCell = (text: string, width: number): string => {
+    return text.padEnd(width, ' ');
+  };
+  
+  // Формируем линии разделителей
+  const createSeparator = (char: string): string => {
+    return columnWidths.map(width => char.repeat(width + 2)).join('+');
+  };
+  
+  let result = '';
+  const separator = createSeparator('-');
+  
+  rows.forEach((row, rowIndex) => {
+    // Добавляем разделитель перед первой строкой и после заголовка
+    if (rowIndex === 0 || rowIndex === 1) {
+      result += '+' + separator + '+\n';
+    }
+    
+    // Добавляем строку с данными
+    const cells = row.map((cell, i) => ' ' + padCell(cell, columnWidths[i]) + ' ');
+    result += '|' + cells.join('|') + '|\n';
+  });
+  
+  // Добавляем разделитель после последней строки
+  result += '+' + separator + '+\n';
+  
+  return result;
+}
+
+/**
  * Конвертирует HTML в чистый Markdown-текст
  * Сохраняет структуру списков, блоков кода, таблиц и т.д.
  */

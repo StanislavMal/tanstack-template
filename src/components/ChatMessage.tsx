@@ -13,7 +13,11 @@ import { Pencil, Copy, Check, X, RefreshCw } from 'lucide-react';
 import type { Message } from '../lib/ai/types';
 import { CodeBlock } from './CodeBlock';
 import { useCopyToClipboard } from '../hooks';
-import { htmlToPlainText } from '../utils/markdown';
+import { 
+  htmlToPlainText, 
+  extractLatexFromKatex, 
+  extractTableAsPlainText 
+} from '../utils/markdown';
 import { markdownSanitizeSchema } from '../utils/markdown-sanitize';
 
 interface ChatMessageProps {
@@ -52,7 +56,7 @@ export const ChatMessage = memo(function ChatMessage({
     }
   }, [message.content, isEditing]);
 
-  // === Кастомная обработка копирования для Markdown контента ===
+  // === Умная обработка копирования ===
   useEffect(() => {
     const contentElement = messageContentRef.current;
     if (!contentElement) return;
@@ -66,27 +70,59 @@ export const ChatMessage = memo(function ChatMessage({
       // Проверяем, что выделение внутри нашего контента
       if (!contentElement.contains(range.commonAncestorContainer)) return;
       
-      // Проверяем, не внутри ли <pre> (блок кода) или .katex (формула)
-      // В этом случае не трогаем стандартное поведение
+      // Создаём контейнер с выделенным содержимым
+      const container = document.createElement('div');
+      container.appendChild(range.cloneContents());
+      
+      // === ПРИОРИТЕТ 1: ТАБЛИЦЫ ===
+      const hasTable = container.querySelector('table');
+      if (hasTable) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Копируем как HTML для вставки в Word/Google Docs
+        const tableHTML = container.innerHTML;
+        if (e.clipboardData) {
+          e.clipboardData.setData('text/html', tableHTML);
+          
+          // И как plain text с границами для других приложений
+          const plainText = extractTableAsPlainText(container);
+          e.clipboardData.setData('text/plain', plainText);
+        }
+        return;
+      }
+      
+      // === ПРИОРИТЕТ 2: МАТЕМАТИЧЕСКИЕ ФОРМУЛЫ ===
+      const hasFormula = container.querySelector('.katex');
+      if (hasFormula) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Копируем LaTeX код
+        const latex = extractLatexFromKatex(container);
+        if (e.clipboardData && latex) {
+          e.clipboardData.setData('text/plain', latex);
+        }
+        return;
+      }
+      
+      // === ПРИОРИТЕТ 3: БЛОКИ КОДА ===
+      // Для блоков кода оставляем стандартное поведение (plain text)
       let node: Node | null = range.commonAncestorContainer;
       while (node && node !== contentElement) {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const el = node as HTMLElement;
-          const tagName = el.tagName.toLowerCase();
-          // Стандартное копирование для блоков кода и формул
-          if (tagName === 'pre' || el.classList.contains('katex')) {
-            return;
+          if (el.tagName.toLowerCase() === 'pre') {
+            return; // Стандартное копирование
           }
         }
         node = node.parentNode;
       }
       
-      // Копирование вне блока кода - используем нашу обработку
+      // === ПРИОРИТЕТ 4: ОБЫЧНЫЙ ТЕКСТ ===
+      // Конвертируем HTML в Markdown
       e.preventDefault();
       e.stopPropagation();
-      
-      const container = document.createElement('div');
-      container.appendChild(range.cloneContents());
       
       const plainText = htmlToPlainText(container);
       
