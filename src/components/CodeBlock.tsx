@@ -33,25 +33,28 @@ export const CodeBlock = ({ children, ...props }: CodeBlockProps) => {
   };
 
   return (
-    <div className="relative my-4 bg-gray-800/20 rounded-md border border-orange-500/25">
+    <div className="relative my-4 bg-[#0d1117] rounded-md border border-orange-500/25">
+      {/* Sticky заголовок с оригинальной логикой */}
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 rounded-t-md bg-orange-400/[.15] backdrop-blur border-b border-orange-500/25">
-        <span className="font-sans text-sm font-semibold uppercase text-amber-400">{language}</span>
+        <span className="font-sans text-sm font-semibold uppercase text-amber-400">
+          {language}
+        </span>
         <button
           onClick={handleCopy}
           className="p-1 rounded-md text-amber-400 transition-colors hover:bg-gray-700 hover:text-amber-300"
           title={isCopied ? 'Copied!' : 'Copy code'}
         >
-          {isCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+          {isCopied ? (
+            <Check className="w-4 h-4 text-green-500" />
+          ) : (
+            <Copy className="w-4 h-4" />
+          )}
         </button>
       </div>
       
-      {/* 
-        ✅ ИЗМЕНЕНИЯ ЗДЕСЬ: Улучшение читаемости кода 
-      */}
+      {/* Блок кода */}
       <pre 
         {...props} 
-        // 1. text-base: Увеличивает размер шрифта с 14px до комфортных 16px.
-        // 2. leading-relaxed: Увеличивает межстрочный интервал (line-height), делая код "воздушнее".
         className="overflow-x-auto p-4 text-base leading-relaxed"
       >
         <code ref={codeRef}>

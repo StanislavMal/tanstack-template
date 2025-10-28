@@ -533,3 +533,89 @@ code {
     font-size: 0.875em;
     line-height: 1.5;
 }
+
+/* ========================================
+   🎨 DEEP CONTRAST CODE BLOCKS
+   ======================================== */
+
+/* Основной блок кода - глубокий черный фон */
+.prose pre {
+  background: #0d1117 !important;
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.prose pre code {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #e6edf3;
+  background: transparent !important;
+  font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* Кастомный scrollbar для блоков кода */
+.prose pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+.prose pre::-webkit-scrollbar-track {
+  background: rgba(249, 115, 22, 0.05);
+  border-radius: 4px;
+}
+
+.prose pre::-webkit-scrollbar-thumb {
+  background: rgba(249, 115, 22, 0.3);
+  border-radius: 4px;
+}
+
+.prose pre::-webkit-scrollbar-thumb:hover {
+  background: rgba(249, 115, 22, 0.5);
+}
+
+/* Улучшенная подсветка синтаксиса для темного фона */
+.prose .hljs {
+  background: #0d1117 !important;
+  color: #e6edf3;
+}
+
+/* Ключевые слова */
+.prose .hljs-keyword,
+.prose .hljs-selector-tag,
+.prose .hljs-literal {
+  color: #ff9e64;
+}
+
+/* Строки */
+.prose .hljs-string {
+  color: #9ece6a;
+}
+
+/* Функции */
+.prose .hljs-function,
+.prose .hljs-title {
+  color: #7dcfff;
+}
+
+/* Комментарии #565f89;*/
+.prose .hljs-comment {
+  color: #686c83;
+  font-style: italic;
+}
+
+/* Числа */
+.prose .hljs-number {
+  color: #bb9af7;
+}
+
+/* Переменные */
+.prose .hljs-variable,
+.prose .hljs-attr {
+  color: #c0caf5;
+}
+
+/* Типы */
+.prose .hljs-type,
+.prose .hljs-built_in,
+.prose .hljs-class {
+  color: #e0af68;
+}
