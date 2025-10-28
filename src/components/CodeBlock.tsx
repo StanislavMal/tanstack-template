@@ -33,13 +33,7 @@ export const CodeBlock = ({ children, ...props }: CodeBlockProps) => {
   };
 
   return (
-    // ✅ ФИНАЛЬНОЕ ИЗМЕНЕНИЕ: Фон блока кода теперь как у ячеек таблицы
-    // - `bg-gray-800/50` заменен на `bg-gray-800/20`.
     <div className="relative my-4 bg-gray-800/20 rounded-md border border-orange-500/25">
-      {/* 
-        Стеклянная шапка с нижней рамкой, служащей разделителем.
-        Все стили гармонично сочетаются.
-      */}
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 rounded-t-md bg-orange-400/[.15] backdrop-blur border-b border-orange-500/25">
         <span className="font-sans text-sm font-semibold uppercase text-amber-400">{language}</span>
         <button
@@ -50,8 +44,16 @@ export const CodeBlock = ({ children, ...props }: CodeBlockProps) => {
           {isCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
         </button>
       </div>
-      {/* Область для кода теперь имеет нужный фон за счет наследования от родителя */}
-      <pre {...props} className="overflow-x-auto p-4 text-sm">
+      
+      {/* 
+        ✅ ИЗМЕНЕНИЯ ЗДЕСЬ: Улучшение читаемости кода 
+      */}
+      <pre 
+        {...props} 
+        // 1. text-base: Увеличивает размер шрифта с 14px до комфортных 16px.
+        // 2. leading-relaxed: Увеличивает межстрочный интервал (line-height), делая код "воздушнее".
+        className="overflow-x-auto p-4 text-base leading-relaxed"
+      >
         <code ref={codeRef}>
           {children}
         </code>
