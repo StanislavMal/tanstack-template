@@ -322,15 +322,16 @@ code {
   font-size: 0.9em;
   line-height: 1.4;
   display: table;
+  background: #131922; /* ✅ Единый темный фон как у кода #0d1117; */
 }
 
 .prose thead {
-  background-color: rgba(249, 115, 22, 0.12);
+  background-color: rgba(249, 115, 22, 0.15); /* ✅ Немного усилили для контраста */
 }
 
 .prose th {
   padding: 0.5em 0.75em;
-  border: 1px solid rgba(249, 115, 22, 0.25);
+  border: 1px solid rgba(249, 115, 22, 0.3); /* ✅ Усилили границу */
   font-weight: 600;
   text-align: left;
   color: #fbbf24;
@@ -341,13 +342,13 @@ code {
 
 .prose td {
   padding: 0.5em 0.75em;
-  border: 1px solid rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.2); /* ✅ Усилили границу */
   user-select: text;
   color: #e5e7eb;
 }
 
 .prose tbody tr:hover {
-  background-color: rgba(249, 115, 22, 0.03);
+  background-color: rgba(249, 115, 22, 0.08); /* ✅ Усилили hover для видимости */
 }
 
 .prose th[align="left"],
@@ -366,10 +367,10 @@ code {
 }
 
 .prose tbody tr:nth-child(even) {
-  background-color: rgba(31, 41, 55, 0.2);
+  background-color: #141a23; /* ✅ Усилили чередование */
 }
 
-/* Текстовое форматирование */
+/* Текстовое форматирование rgba(31, 41, 55, 0.3)*/
 .prose strong {
   color: #f9fafb;
   font-weight: 600;

@@ -207,7 +207,7 @@ export const TableBlock = ({ children, ...props }: TableBlockProps) => {
         } ${
           isCopied 
             ? 'bg-green-500/20 text-green-400' 
-            : 'bg-gray-800/90 text-gray-400 hover:text-orange-400 hover:bg-gray-700/90'
+            : 'bg-[#0d1117]/90 text-amber-400 hover:text-amber-300 hover:bg-[#0d1117] border border-orange-500/30'
         }`}
         title={isCopied ? 'Copied!' : 'Copy table to clipboard'}
         type="button"
@@ -222,7 +222,7 @@ export const TableBlock = ({ children, ...props }: TableBlockProps) => {
       {/* Контейнер с горизонтальной прокруткой */}
       <div 
         ref={containerRef}
-        className="overflow-x-auto rounded-lg border border-orange-500/20 bg-gray-800/30"
+        className="overflow-x-auto rounded-lg border border-orange-500/25 bg-[#0d1117]"
       >
         {/* ✅ Рендерим <table> элемент напрямую */}
         <table {...props}>
