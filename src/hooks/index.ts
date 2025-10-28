@@ -4,3 +4,4 @@ export { useMediaQuery } from './useMediaQuery';
 export { useChat } from './useChat';
 export { useSidebar } from './useSidebar';
 export { useScrollManagement } from './useScrollManagement';
+export { useCopyToClipboard } from './useCopyToClipboard';

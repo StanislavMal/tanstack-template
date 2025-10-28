@@ -7,9 +7,10 @@ export { Sidebar } from './Sidebar';
 export { WelcomeScreen } from './WelcomeScreen';
 export { SettingsDialog } from './SettingsDialog';
 export { CodeBlock } from './CodeBlock';
+export { TableBlock } from './TableBlock';
 export { ScrollDownButton } from './ScrollDownButton';
 export { Header } from './Header';
 export { ChatArea } from './ChatArea';
 export { Footer } from './Footer';
 export { AuthGuard } from './AuthGuard';
-export { StreamingMessage } from './StreamingMessage'; // ✅ НОВОЕ
+export { StreamingMessage } from './StreamingMessage';

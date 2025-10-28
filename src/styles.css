@@ -1,5 +1,6 @@
 @import "tailwindcss";
-@import "highlight.js/styles/github-dark.css";
+@import "highlight.js/styles/atom-one-dark.css";
+@import "katex/dist/katex.min.css";
 
 html, body {
   overscroll-behavior: none;
@@ -27,6 +28,7 @@ code {
 /* Custom scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -42,88 +44,434 @@ code {
   background-color: rgba(156, 163, 175, 0.7);
 }
 
-/* Markdown content styles */
+/* ✅ УЛУЧШЕННЫЕ СТИЛИ ДЛЯ MARKDOWN */
 .prose {
   max-width: none;
-  color: #e5e7eb; /* text-gray-200 */
+  color: #e5e7eb;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
 }
 
+.prose * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ========================================
+   КОД (Inline & Blocks)
+   ======================================== */
+
+/* ✅ Базовые стили для обычного инлайн кода (обычный Markdown) */
+.prose code {
+  color: #1a1a1a;
+  background: #f6f8fa;
+  padding: 0.4em 0.6em;
+  border-radius: 4px;
+  font-size: 0.875em;
+  font-family: 'SF Mono', 'Monaco', monospace;
+  font-weight: 400;
+  border: 1px solid #d0d7de;
+  line-height: 1.8;
+}
+
+/* ✅ КАСТОМНЫЙ инлайн код (InlineCode компонент) */
+.prose code.custom-inline-code {
+  /* Переопределяем ВСЕ базовые стили */
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.85em;
+  padding: 0.00rem 0.275rem;
+  border-radius: 0.95rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: all 0.2s ease;
+  
+  /* Стандартное состояние - золотисто-оранжевый */
+  background-color: #1E2633;
+  color: #a5d6ff;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.prose code.custom-inline-code:hover {
+  background-color: rgba(251, 191, 36, 0.2);
+  border-color: rgba(251, 191, 36, 0.5);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.1);
+}
+
+/* Состояние "скопировано" - зеленый */
+.prose code.custom-inline-code.copied {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border-color: rgba(34, 197, 94, 0.4);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.1);
+}
+
+/* ✅ Блоки кода (pre) */
 .prose code {
   color: #e5e7eb;
   background-color: rgba(31, 41, 55, 0.5);
   padding: 0.2em 0.4em;
   border-radius: 0.375rem;
   font-size: 0.875em;
-}
-
-.prose pre {
-  background-color: rgba(31, 41, 55, 0.5);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin: 1em 0;
-  overflow-x: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  font-family: 'Courier New', Courier, monospace;
 }
 
 .prose pre code {
-  background-color: transparent;
-  padding: 0;
-  border-radius: 0;
-  color: inherit;
+  /* Внутри <pre> убираем все дополнительные стили */
+  background-color: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: inherit !important;
+  user-select: text;
+  -webkit-user-select: text;
+  border: none !important;
+  box-shadow: none !important;
+  cursor: text !important;
 }
 
+/* ✅ Кастомный инлайн код внутри <pre> - не должен получать кастомные стили */
+.prose pre code.custom-inline-code {
+  display: inline;
+  background-color: transparent !important;
+  color: inherit !important;
+  border: none !important;
+  padding: 0 !important;
+  cursor: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+/* Заголовки */
 .prose h1, .prose h2, .prose h3, .prose h4 {
-  color: #f9fafb; /* text-gray-50 */
+  color: #f9fafb;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  user-select: text;
 }
 
+.prose h1 {
+  font-size: 2em;
+  font-weight: 700;
+}
+
+.prose h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.prose h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.prose h4 {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+/* Списки */
 .prose ul, .prose ol {
-  margin-top: 1.25em;
-  margin-bottom: 1.25em;
-  padding-left: 1.625em;
+  margin-top: 1em;
+  margin-bottom: 1em;
+  padding-left: 2em;
+  user-select: text;
+  display: block;
+}
+
+.prose ul {
+  list-style-type: disc;
+  list-style-position: outside;
+}
+
+.prose ol {
+  list-style-type: decimal;
+  list-style-position: outside;
 }
 
 .prose li {
   margin-top: 0.5em;
   margin-bottom: 0.5em;
+  display: list-item;
+  user-select: text;
+  line-height: 1.6;
 }
 
+.prose ul ul,
+.prose ol ol,
+.prose ul ol,
+.prose ol ul {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose ul ul {
+  list-style-type: circle;
+}
+
+.prose ul ul ul {
+  list-style-type: square;
+}
+
+.prose li > p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+/* ✅ КОМПАКТНЫЕ КАСТОМНЫЕ ЧЕКБОКСЫ В СПИСКАХ ЗАДАЧ */
+.prose input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 0.5em;
+  margin-top: 0.3em;
+  border: 1.5px solid #fbbf24;
+  border-radius: 0.2em;
+  background-color: transparent;
+  cursor: pointer;
+  position: relative;
+  vertical-align: middle;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.prose input[type="checkbox"]:hover {
+  background-color: rgba(251, 191, 36, 0.1);
+  border-color: #fcd34d;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.1);
+}
+
+.prose input[type="checkbox"]:checked {
+  background-color: #fbbe2400;
+  border-color: #fbbf24;
+}
+
+.prose input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 0.22em;
+  top: 0.05em;
+  width: 0.3em;
+  height: 0.5em;
+  border: solid white;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* ✅ Списки задач - элементы без маркеров */
+.prose ul.contains-task-list {
+  list-style-type: none;
+  padding-left: 1.5em;
+}
+
+.prose ul.contains-task-list > li {
+  display: flex;
+  align-items: flex-start;
+  list-style-type: none;
+}
+
+.prose ul.contains-task-list > li::before {
+  content: none;
+}
+
+/* Цитаты */
 .prose blockquote {
-  border-left-color: #f97316; /* orange-500 */
+  border-left-color: #f97316;
+  border-left-width: 4px;
+  border-left-style: solid;
   background-color: rgba(249, 115, 22, 0.1);
   padding: 1em;
   margin: 1.25em 0;
   border-radius: 0.5rem;
+  user-select: text;
 }
 
+/* Горизонтальная линия */
 .prose hr {
   border-color: rgba(249, 115, 22, 0.2);
   margin: 2em 0;
 }
 
+/* Ссылки */
 .prose a {
-  color: #f97316; /* orange-500 */
+  color: #f97316;
   text-decoration: underline;
   text-decoration-thickness: 0.1em;
   text-underline-offset: 0.2em;
+  user-select: text;
 }
 
 .prose a:hover {
-  color: #fb923c; /* orange-400 */
+  color: #fb923c;
 }
 
+/* ✅ КОМПАКТНЫЕ ТАБЛИЦЫ С ПРОКРУТКОЙ */
 .prose table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1.25em 0;
+  margin: 0;
+  user-select: text;
+  font-size: 0.9em;
+  line-height: 1.4;
+  display: table;
+  background: #131922; /* ✅ Единый темный фон как у кода #0d1117; */
 }
 
-.prose th, .prose td {
-  padding: 0.75em;
-  border: 1px solid rgba(249, 115, 22, 0.2);
+.prose thead {
+  background-color: rgba(249, 115, 22, 0.15); /* ✅ Немного усилили для контраста */
 }
 
 .prose th {
-  background-color: rgba(249, 115, 22, 0.1);
+  padding: 0.5em 0.75em;
+  border: 1px solid rgba(249, 115, 22, 0.3); /* ✅ Усилили границу */
   font-weight: 600;
+  text-align: left;
+  color: #fbbf24;
+  font-size: 0.95em;
+  user-select: text;
+  white-space: nowrap;
+}
+
+.prose td {
+  padding: 0.5em 0.75em;
+  border: 1px solid rgba(249, 115, 22, 0.2); /* ✅ Усилили границу */
+  user-select: text;
+  color: #e5e7eb;
+}
+
+.prose tbody tr:hover {
+  background-color: rgba(249, 115, 22, 0.08); /* ✅ Усилили hover для видимости */
+}
+
+.prose th[align="left"],
+.prose td[align="left"] {
+  text-align: left;
+}
+
+.prose th[align="center"],
+.prose td[align="center"] {
+  text-align: center;
+}
+
+.prose th[align="right"],
+.prose td[align="right"] {
+  text-align: right;
+}
+
+.prose tbody tr:nth-child(even) {
+  background-color: #141a23; /* ✅ Усилили чередование */
+}
+
+/* Текстовое форматирование rgba(31, 41, 55, 0.3)*/
+.prose strong {
+  color: #f9fafb;
+  font-weight: 600;
+  user-select: text;
+}
+
+.prose em {
+  font-style: italic;
+  user-select: text;
+}
+
+/* ✅ GFM: Зачёркнутый текст */
+.prose del {
+  text-decoration: line-through;
+  color: #9ca3af;
+  user-select: text;
+}
+
+/* Параграфы */
+.prose p {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  line-height: 1.7;
+  user-select: text;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.prose > p:first-child {
+  margin-top: 0;
+}
+
+.prose > p:last-child {
+  margin-bottom: 0;
+}
+
+/* ✅ МАТЕМАТИКА (KaTeX) - ЗОЛОТИСТО-ОРАНЖЕВАЯ ТЕМА */
+
+/* Контейнеры формул */
+.prose .katex {
+  font-size: 1.15em;
+  user-select: text;
+  color: #fbbf24; /* ✅ Единый золотисто-оранжевый */
+}
+
+.prose .katex-display {
+  margin: 1.5em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  user-select: text;
+  padding: 0.5em 0;
+}
+
+/* ✅ ВСЕ элементы формул - единый золотисто-оранжевый */
+.prose .katex * {
+  color: #fbbf24 !important;
+}
+
+/* ✅ Основные математические элементы */
+.prose .katex .mord,
+.prose .katex .mbin,
+.prose .katex .mrel,
+.prose .katex .mop,
+.prose .katex .mpunct,
+.prose .katex .minner,
+.prose .katex .mopen,
+.prose .katex .mclose {
+  color: #fbbf24 !important;
+}
+
+/* ✅ Большие операторы и разделители */
+.prose .katex .delim-size1,
+.prose .katex .delim-size2,
+.prose .katex .delim-size3,
+.prose .katex .delim-size4 {
+  color: #fbbf24 !important;
+}
+
+/* ✅ Переменные и числа */
+.prose .katex .mord.mathdefault,
+.prose .katex .mord.mathnormal {
+  color: #fbbf24 !important;
+}
+
+/* ✅ Функции (sin, cos, log и т.д.) */
+.prose .katex .mop {
+  color: #fbbf24 !important;
+}
+
+/* ✅ Дроби, корни, суммы */
+.prose .katex .vlist-t,
+.prose .katex .sqrt,
+.prose .katex .frac-line {
+  color: #fbbf24 !important;
+}
+
+/* ✅ Подсветка при наведении */
+.prose .katex-display:hover {
+  background-color: rgba(251, 191, 36, 0.08); /* ✅ Обновлен под новый цвет */
+  border-radius: 0.5rem;
+  transition: background-color 0.2s ease;
 }
 
 /* Message transition animations */
@@ -147,84 +495,128 @@ code {
   transition: opacity 300ms;
 }
 
-/* Add/update these styles to match AI formatting capabilities */
-.prose h1 {
-  font-size: 2em;
-  margin-bottom: 0.5em;
+/* Класс для явного разрешения выделения */
+.select-text {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
 }
 
-.prose h2 {
-  font-size: 1.5em;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
+/* ✅ Анимация для inline code копирования */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.prose h3 {
-  font-size: 1.25em;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
+/* Класс для явного разрешения выделения */
+.select-text {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
 }
 
-.prose ul {
-  list-style-type: disc;
-  padding-left: 1.5em;
-}
-
-.prose ol {
-  list-style-type: decimal;
-  padding-left: 1.5em;
-}
-
-.prose table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1em 0;
-}
-
-.prose th,
-.prose td {
-  border: 1px solid rgba(249, 115, 22, 0.2);
-  padding: 0.5em;
-}
-
-.prose th {
-  background-color: rgba(249, 115, 22, 0.1);
-}
-
-.prose strong {
-  color: #f9fafb; /* text-gray-50 */
-  font-weight: 600;
-}
-
-.prose em {
-  font-style: italic;
-}
-
-.prose blockquote {
-  border-left: 4px solid #f97316; /* orange-500 */
-  padding-left: 1em;
-  margin: 1em 0;
-  color: #d1d5db; /* text-gray-300 */
-}
-
-.prose code {
-  color: #e5e7eb;
-  background-color: rgba(31, 41, 55, 0.5);
-  padding: 0.2em 0.4em;
-  border-radius: 0.375rem;
-  font-size: 0.875em;
-}
-
+/* -> ИЗМЕНЕНИЕ: Убираем лишние стили для .prose pre, так как они теперь задаются темой highlight.js */
 .prose pre {
-  background-color: rgba(31, 41, 55, 0.5);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin: 1em 0;
-  overflow-x: auto;
+    border-radius: 0.375rem; /* 6px */
+    overflow: hidden;
+}
+
+/* -> ИЗМЕНЕНИЕ: Убираем лишние стили для .prose pre code, так как они теперь задаются темой highlight.js */
+.prose pre code {
+    font-size: 0.875em;
+    line-height: 1.5;
+}
+
+/* ========================================
+   🎨 DEEP CONTRAST CODE BLOCKS
+   ======================================== */
+
+/* Основной блок кода - глубокий черный фон */
+.prose pre {
+  background: #0d1117 !important;
+  border-radius: 0.375rem;
+  overflow: hidden;
 }
 
 .prose pre code {
-  background-color: transparent;
-  padding: 0;
-  border-radius: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #e6edf3;
+  background: transparent !important;
+  font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* Кастомный scrollbar для блоков кода */
+.prose pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+.prose pre::-webkit-scrollbar-track {
+  background: rgba(249, 115, 22, 0.05);
+  border-radius: 4px;
+}
+
+.prose pre::-webkit-scrollbar-thumb {
+  background: rgba(249, 115, 22, 0.3);
+  border-radius: 4px;
+}
+
+.prose pre::-webkit-scrollbar-thumb:hover {
+  background: rgba(249, 115, 22, 0.5);
+}
+
+/* Улучшенная подсветка синтаксиса для темного фона */
+.prose .hljs {
+  background: #0d1117 !important;
+  color: #e6edf3;
+}
+
+/* Ключевые слова */
+.prose .hljs-keyword,
+.prose .hljs-selector-tag,
+.prose .hljs-literal {
+  color: #ff9e64;
+}
+
+/* Строки */
+.prose .hljs-string {
+  color: #9ece6a;
+}
+
+/* Функции */
+.prose .hljs-function,
+.prose .hljs-title {
+  color: #7dcfff;
+}
+
+/* Комментарии #565f89;*/
+.prose .hljs-comment {
+  color: #686c83;
+  font-style: italic;
+}
+
+/* Числа */
+.prose .hljs-number {
+  color: #bb9af7;
+}
+
+/* Переменные */
+.prose .hljs-variable,
+.prose .hljs-attr {
+  color: #c0caf5;
+}
+
+/* Типы */
+.prose .hljs-type,
+.prose .hljs-built_in,
+.prose .hljs-class {
+  color: #e0af68;
 }
