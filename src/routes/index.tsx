@@ -1,3 +1,5 @@
+// 📄 src/routes/index.tsx
+
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle, type PanelOnCollapse } from 'react-resizable-panels';
@@ -37,19 +39,18 @@ export const Route = createFileRoute('/')({
 
 function Home() {
   const navigate = useNavigate();
-  const { user, isLoading: authLoading, isInitialized } = useAuth();
+  const { user, isInitialized } = useAuth();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [dataLoaded, setDataLoaded] = useState(false);
-  // ✅ ИСПРАВЛЕНИЕ: Добавляем состояние для отслеживания ошибок загрузки
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const footerRef = useRef<FooterRef>(null);
 
+  const [appState, setAppState] = useState<'authenticating' | 'loading' | 'error' | 'ready'>('authenticating');
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const footerRef = useRef<FooterRef>(null);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   
-  const { messages, currentConversationId } = useConversations();
-  const { loadConversations } = useConversations();
+  const { messages, currentConversationId, loadConversations } = useConversations();
   const { loadSettings } = useSettings();
   const { loadPrompts } = usePrompts();
   
@@ -61,45 +62,50 @@ function Home() {
     lockToBottom,
   } = useScrollManagement(messages.length);
 
-  // ✅ ИСПРАВЛЕНИЕ: Улучшенная обработка загрузки с retry и обработкой ошибок
   useEffect(() => {
-    if (user && isInitialized && !authLoading && !dataLoaded) {
-      const loadUserData = async () => {
-        let attempts = 0;
-        const maxAttempts = 3;
-        
-        while (attempts < maxAttempts && !dataLoaded) {
-          try {
-            await Promise.all([
-              loadConversations(),
-              loadPrompts(),
-              loadSettings()
-            ]);
-            
-            setDataLoaded(true);
-            setLoadError(null);
-            break;
-          } catch (error) {
-            attempts++;
-            console.error(`Error loading user data (attempt ${attempts}/${maxAttempts}):`, error);
-            
-            if (attempts >= maxAttempts) {
-              setLoadError('Failed to load your data. Please refresh the page.');
-              setDataLoaded(true); // ✅ Устанавливаем true даже при ошибке, чтобы не зависнуть
-            } else {
-              // Ждём перед следующей попыткой
-              await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
-            }
-          }
+
+    if (!isInitialized) {
+      setAppState('authenticating');
+      return;
+    }
+
+    if (!user) {
+      navigate({ to: '/login', replace: true });
+      return;
+    }
+
+    if (appState !== 'ready' && appState !== 'error') {
+      const loadInitialData = async () => {
+        setAppState('loading');
+        try {
+
+          await Promise.all([
+            loadConversations(),
+            loadPrompts(),
+            loadSettings()
+          ]);
+
+          setAppState('ready');
+        } catch (error) {
+          console.error("Fatal error during initial data load:", error);
+          setLoadError('Failed to load your data. Please refresh the page.');
+          setAppState('error');
         }
       };
-      
-      loadUserData();
+
+      loadInitialData();
     }
-  }, [user, isInitialized, authLoading, dataLoaded, loadConversations, loadPrompts, loadSettings]);
-  
+
+  }, [user, isInitialized, appState, navigate, loadConversations, loadPrompts, loadSettings]);
+
   useEffect(() => {
-    if (!user || !dataLoaded) return;
+
+    if (appState !== 'ready' || !user) {
+      return;
+    }
+
+    console.log('[Realtime] Subscribing to channels.');
+
     const channels = [
       supabase.channel('conversations-changes').on<Conversation>(
         'postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `user_id=eq.${user.id}` },
@@ -130,17 +136,13 @@ function Home() {
         () => { loadPrompts(); }
       ).subscribe()
     ];
+
     return () => {
       console.log('[Realtime] Unsubscribing from all channels.');
       channels.forEach(channel => supabase.removeChannel(channel));
     };
-  }, [user, dataLoaded, loadPrompts]);
+  }, [appState, user, loadPrompts]);
 
-  useEffect(() => {
-    if (isInitialized && !authLoading && !user) {
-      navigate({ to: '/login', replace: true });
-    }
-  }, [user, authLoading, isInitialized, navigate]);
 
   const sidebar = useSidebar();
   
@@ -163,8 +165,6 @@ function Home() {
   );
 
   const handleLogout = useCallback(async () => {
-    // ✅ Очищаем localStorage ДО вызова signOut
-    // Supabase хранит токены по ключу вида: sb-<project-ref>-auth-token
     Object.keys(localStorage).forEach(key => {
       if (key.startsWith('sb-') && key.includes('-auth-')) {
         localStorage.removeItem(key);
@@ -175,7 +175,7 @@ function Home() {
     if (error) {
       console.error('Error on sign out attempt:', error.message);
     }
-  }, []);;
+  }, []);
 
   const handleStartEdit = useCallback((id: string) => { setEditingMessageId(id); }, []);
   const handleCancelEdit = useCallback(() => { setEditingMessageId(null); }, []);
@@ -208,7 +208,7 @@ function Home() {
     isCollapsed: sidebar.isCollapsed,
   };
   
-  if (!isInitialized || authLoading) {
+  if (appState === 'authenticating') {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
         <div className="text-center">
@@ -219,7 +219,7 @@ function Home() {
     );
   }
 
-  if (!dataLoaded) {
+  if (appState === 'loading') {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
         <div className="text-center">
@@ -230,7 +230,7 @@ function Home() {
     );
   }
 
-  if (loadError) {
+  if (appState === 'error') {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
         <div className="text-center max-w-md px-4">
@@ -252,66 +252,60 @@ function Home() {
     );
   }
 
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          <p className="mt-4 text-gray-400">Redirecting to login...</p>
-        </div>
-      </div>
-    );
-  }
-
   const chatAreaProps = { messages: displayMessages, pendingMessage, isLoading, error, currentConversationId, editingMessageId, onStartEdit: handleStartEdit, onCancelEdit: handleCancelEdit, onSaveEdit: handleSaveEdit };
 
-  if (isDesktop) {
-    return (
-      <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
-        <PanelGroup direction="horizontal">
-          <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={sidebar.toggleCollapse as PanelOnCollapse} className="flex flex-col">
-            <Sidebar {...sidebarProps} isOpen={true} setIsOpen={() => {}} />
-          </Panel>
-          <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
-          <Panel className="flex-1 flex flex-col relative min-h-0">
-            <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} />
-            <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
-              <div ref={contentRef}>
-                <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                  <ChatArea {...chatAreaProps} />
+  if (appState === 'ready') {
+    if (isDesktop) {
+      return (
+        <div className="h-[100dvh] bg-gray-900 text-white overflow-hidden">
+          <PanelGroup direction="horizontal">
+            <Panel defaultSize={20} minSize={15} maxSize={30} collapsible={true} collapsedSize={0} onCollapse={sidebar.toggleCollapse as PanelOnCollapse} className="flex flex-col">
+              <Sidebar {...sidebarProps} isOpen={true} setIsOpen={() => {}} />
+            </Panel>
+            <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
+            <Panel className="flex-1 flex flex-col relative min-h-0">
+              <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} />
+              <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
+                <div ref={contentRef}>
+                  <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
+                    <ChatArea {...chatAreaProps} />
+                  </div>
                 </div>
-              </div>
-            </main>
-            {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-10" />}
-            <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
-          </Panel>
-        </PanelGroup>
+              </main>
+              {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-10" />}
+              <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
+            </Panel>
+          </PanelGroup>
+          <SettingsDialog 
+            isOpen={isSettingsOpen} 
+            onClose={() => setIsSettingsOpen(false)} 
+            onLogout={handleLogout}
+          />
+        </div>
+      );
+    }
+  
+    return (
+      <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
+        {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />}
+        <Sidebar {...sidebarProps} />
+        <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
+        <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
+          <div ref={contentRef}>
+            <ChatArea {...chatAreaProps} />
+          </div>
+        </main>
+        {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
+        <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
         <SettingsDialog 
           isOpen={isSettingsOpen} 
           onClose={() => setIsSettingsOpen(false)} 
-          onLogout={handleLogout}  // ✅ Добавляем проп
+          onLogout={handleLogout}
         />
       </div>
     );
   }
 
-  return (
-    <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
-      {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />}
-      <Sidebar {...sidebarProps} />
-      <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
-      <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
-        <div ref={contentRef}>
-          <ChatArea {...chatAreaProps} />
-        </div>
-      </main>
-      {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
-      <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
-      <SettingsDialog 
-        isOpen={isSettingsOpen} 
-        onClose={() => setIsSettingsOpen(false)} 
-        onLogout={handleLogout}  // ✅ Добавляем проп
-      />
-    </div>
-  );
+  // Fallback, на случай если ни одно состояние не отработало
+  return null;
 }

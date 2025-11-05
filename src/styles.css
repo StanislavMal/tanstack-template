@@ -1,6 +1,7 @@
+/* src/styles.css */
 @import "tailwindcss";
 @import "highlight.js/styles/atom-one-dark.css";
-@import "katex/dist/katex.min.css";
+/*@import "katex/dist/katex.min.css";*/
 
 html, body {
   overscroll-behavior: none;
@@ -52,6 +53,7 @@ code {
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
+  overflow-wrap: break-word; /* ✅ ИЗМЕНЕНИЕ: Глобальное правило для переноса длинных слов */
 }
 
 .prose * {
@@ -395,8 +397,8 @@ code {
   margin-bottom: 1em;
   line-height: 1.7;
   user-select: text;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  white-space: break-spaces;
+  word-wrap: break-word; /* Оставляем для совместимости */
 }
 
 .prose > p:first-child {
@@ -523,18 +525,6 @@ code {
   -ms-user-select: text !important;
 }
 
-/* -> ИЗМЕНЕНИЕ: Убираем лишние стили для .prose pre, так как они теперь задаются темой highlight.js */
-.prose pre {
-    border-radius: 0.375rem; /* 6px */
-    overflow: hidden;
-}
-
-/* -> ИЗМЕНЕНИЕ: Убираем лишние стили для .prose pre code, так как они теперь задаются темой highlight.js */
-.prose pre code {
-    font-size: 0.875em;
-    line-height: 1.5;
-}
-
 /* ========================================
    🎨 DEEP CONTRAST CODE BLOCKS
    ======================================== */
@@ -544,6 +534,10 @@ code {
   background: #0d1117 !important;
   border-radius: 0.375rem;
   overflow: hidden;
+
+  /* ---> ИЗМЕНЕНИЕ: Добавляем правила для переноса строк <--- */
+  white-space: pre-wrap; /* Сохраняет пробелы и переносы, но переносит длинные строки */
+  word-break: break-all; /* Разрывает даже очень длинные слова без пробелов */
 }
 
 .prose pre code {
@@ -552,7 +546,14 @@ code {
   color: #e6edf3;
   background: transparent !important;
   font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+
+  /* ---> ИЗМЕНЕНИЕ: Убираем горизонтальную прокрутку <--- */
+  overflow-x: hidden;
+  
+  /* ---> ИЗМЕНЕНИЕ: Сбрасываем white-space, так как он управляется родительским <pre> <--- */
+  white-space: inherit; 
 }
+
 
 /* Кастомный scrollbar для блоков кода */
 .prose pre::-webkit-scrollbar {

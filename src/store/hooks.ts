@@ -1,6 +1,6 @@
 // 📄 src/store/hooks.ts
 
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { actions, selectors, store, type Conversation, type Prompt, type UserSettings } from './store';
 import type { Message } from '../lib/ai/types';
@@ -8,6 +8,53 @@ import { supabase } from '../utils/supabase';
 import { retryAsync } from '../utils/retry';
 import { useAuth } from '../providers/AuthProvider';
 import type { PostgrestSingleResponse, PostgrestResponse } from '@supabase/supabase-js';
+
+const loadMessagesForConversation = async (conversationId: string) => {
+  if (store.state.currentConversationId === conversationId && store.state.currentMessages.length > 0) {
+    console.log(`[loadMessages] Messages for ${conversationId} already in store. Skipping fetch.`);
+    return;
+  }
+
+  console.log('[loadMessages] Loading messages for conversation:', conversationId);
+  try {
+    const result = await retryAsync(
+      async () => {
+        return await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true });
+      },
+      {
+        maxAttempts: 3,
+        onRetry: (attempt, error) => {
+          console.warn(`[Messages] Retry attempt ${attempt}:`, error.message);
+        }
+      }
+    ) as PostgrestResponse<any>;
+    
+    const { data, error } = result;
+    
+    if (error) {
+      console.error('Error loading messages:', error);
+      actions.setMessages([]);
+    } else {
+      const formattedMessages = data.map((m: any) => ({
+        id: m.id,
+        role: m.role as 'user' | 'assistant' | 'system',
+        content: m.content
+      })) as Message[];
+      
+      console.log('[loadMessages] Loaded messages:', formattedMessages.length);
+      actions.setMessages(formattedMessages);
+    }
+  } catch (error) {
+    console.error('Failed to load messages after all retries:', error);
+    actions.setMessages([]);
+  }
+};
+
 
 export function useSettings() {
     const { user } = useAuth();
@@ -150,7 +197,6 @@ export function usePrompts() {
         }
     }, [user, loadPrompts]);
 
-    // ✅ НОВАЯ ФУНКЦИЯ: Обновление промпта
     const updatePrompt = useCallback(async (id: string, name: string, content: string) => {
         if (!user) return;
         
@@ -161,7 +207,7 @@ export function usePrompts() {
                 .from('prompts')
                 .update({ name, content })
                 .eq('id', id)
-                .eq('user_id', user.id); // Проверка владельца для безопасности
+                .eq('user_id', user.id);
             },
             {
               maxAttempts: 3,
@@ -175,7 +221,7 @@ export function usePrompts() {
             console.error("Error updating prompt:", result.error);
             throw result.error;
           } else {
-            await loadPrompts(); // Перезагружаем для синхронизации
+            await loadPrompts();
           }
         } catch (error) {
           console.error("Failed to update prompt after all retries:", error);
@@ -231,7 +277,7 @@ export function usePrompts() {
       activePrompt, 
       loadPrompts, 
       createPrompt, 
-      updatePrompt, // ✅ Экспортируем новую функцию
+      updatePrompt,
       deletePrompt, 
       setPromptActive 
     };
@@ -252,65 +298,14 @@ export function useConversations() {
   const currentConversation = useStore(store, s => selectors.getCurrentConversation(s));
   const currentMessages = useStore(store, s => selectors.getCurrentMessages(s));
 
-  useEffect(() => {
-    if (currentConversationId && user) {
-      // ✅ ИСПРАВЛЕНИЕ: Проверяем timestamp вместо флага
-      const lastCreatedAt = selectors.getLastConversationCreatedAt(store.state);
-      const timeSinceCreation = lastCreatedAt ? Date.now() - lastCreatedAt : Infinity;
-      
-      // Если чат создан менее 1 секунды назад - не загружаем сообщения
-      if (timeSinceCreation < 1000) {
-        console.log('[useConversations] Skipping load for fresh conversation (age:', timeSinceCreation, 'ms)');
-        return;
-      }
-
-      const loadMessages = async () => {
-        console.log('[useConversations] Loading messages for conversation:', currentConversationId);
-        try {
-          const result = await retryAsync(
-            async () => {
-              return await supabase
-                .from('messages')
-                .select('*')
-                .eq('conversation_id', currentConversationId)
-                .order('created_at', { ascending: true });
-            },
-            {
-              maxAttempts: 3,
-              onRetry: (attempt, error) => {
-                console.warn(`[Messages] Retry attempt ${attempt}:`, error.message);
-              }
-            }
-          ) as PostgrestResponse<any>;
-          
-          const { data, error } = result;
-          
-          if (error) {
-            console.error('Error loading messages:', error);
-            actions.setMessages([]);
-          } else {
-            const formattedMessages = data.map((m: any) => ({
-              id: m.id,
-              role: m.role as 'user' | 'assistant' | 'system',
-              content: m.content
-            })) as Message[];
-            
-            console.log('[useConversations] Loaded messages:', formattedMessages.length);
-            actions.setMessages(formattedMessages);
-          }
-        } catch (error) {
-          console.error('Failed to load messages after all retries:', error);
-          actions.setMessages([]);
-        }
-      };
-      loadMessages();
-    } else if (!currentConversationId) {
-      actions.setMessages([]);
-    }
-  }, [currentConversationId, user]);
+  // ✅ ШАГ 2: Удаляем весь useEffect, который загружал сообщения.
+  // Теперь этот хук просто предоставляет данные из store.
 
   const setCurrentConversationId = useCallback((id: string | null) => {
       actions.setCurrentConversationId(id);
+      if (id) {
+        loadMessagesForConversation(id);
+      }
   }, []);
 
   const loadConversations = useCallback(async () => {
@@ -371,7 +366,6 @@ export function useConversations() {
         
         const newConversation: Conversation = data as Conversation;
         
-        // ✅ addConversation теперь устанавливает timestamp
         actions.addConversation(newConversation);
         
         console.log('[useConversations] New conversation created:', newConversation.id);
@@ -423,10 +417,8 @@ export function useConversations() {
 
     console.log('[useConversations] Adding message:', message.role, message.content.substring(0, 50));
     
-    // ✅ Сначала добавляем в store (синхронно)
     actions.addMessage(message);
 
-    // ✅ Затем сохраняем в Supabase (асинхронно)
     try {
       const result = await retryAsync(
         async () => {
@@ -521,7 +513,8 @@ export function useConversations() {
             .from('messages')
             .select('role, content, user_id')
             .eq('conversation_id', id)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true })
+            .order('id', { ascending: true });
         }
       ) as PostgrestResponse<any>;
 
