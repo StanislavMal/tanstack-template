@@ -1,7 +1,7 @@
 /* src/styles.css */
 @import "tailwindcss";
 @import "highlight.js/styles/atom-one-dark.css";
-@import "katex/dist/katex.min.css";
+/*@import "katex/dist/katex.min.css";*/
 
 html, body {
   overscroll-behavior: none;
