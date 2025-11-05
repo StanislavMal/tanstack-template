@@ -61,7 +61,11 @@ const REASONING_LEVELS = [
   { value: 'high', label: 'High' },
 ];
 
-export function ModelSelector() {
+interface ModelSelectorProps {
+  fullWidth?: boolean;
+}
+
+export function ModelSelector({ fullWidth = false }: ModelSelectorProps) {
   const { t } = useTranslation();
   const { settings, updateSettings } = useSettings();
   const [isOpen, setIsOpen] = useState(false);
@@ -70,7 +74,6 @@ export function ModelSelector() {
 
   const currentModel = MODELS.find(m => m.id === settings?.model) || MODELS[0];
 
-  // Закрытие при клике вне компонента
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -129,23 +132,33 @@ export function ModelSelector() {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Кнопка выбора модели */}
       <button
         ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 transition-colors"
+        className={`flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 transition-colors ${
+          fullWidth ? 'w-full justify-between' : ''
+        }`}
       >
-        <div className="text-orange-400">{currentModel.icon}</div>
-        <div className="hidden sm:block">
-          <span className="text-sm">{currentModel.name}</span>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="text-orange-400 flex-shrink-0">{currentModel.icon}</div>
+
+          {fullWidth ? (
+            <span className="text-sm truncate">{currentModel.name}</span>
+          ) : (
+            <>
+              <div className="hidden sm:block">
+                <span className="text-sm">{currentModel.name}</span>
+              </div>
+              <div className="sm:hidden">
+                <span className="text-sm">{currentModel.name.split(' ')[0]}</span>
+              </div>
+            </>
+          )}
         </div>
-        <div className="sm:hidden">
-          <span className="text-sm">{currentModel.name.split(' ')[0]}</span>
-        </div>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* ✅ ИСПРАВЛЕНО: На мобильных fixed с inset-x-0, на десктопе absolute */}
+      {/* Dropdown меню */}
       {isOpen && (
         <div className="fixed sm:absolute left-0 right-0 sm:left-0 sm:right-auto top-auto sm:top-full mt-2 mx-0 sm:mx-0 w-full sm:w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
           {/* Список моделей */}

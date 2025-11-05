@@ -1,6 +1,6 @@
 // 📄 src/components/SettingsDialog.tsx
 import { useState, useEffect, useRef } from 'react'
-import { PlusCircle, Trash2, Edit2, HelpCircle } from 'lucide-react'
+import { PlusCircle, Trash2, Edit2, HelpCircle, LogOut } from 'lucide-react'
 import { usePrompts, useSettings } from '../store/hooks'
 import { type UserSettings } from '../store'
 import { useTranslation } from 'react-i18next'
@@ -9,6 +9,7 @@ import { validatePromptName, validatePromptContent, sanitizeString } from '../ut
 interface SettingsDialogProps {
   isOpen: boolean
   onClose: () => void
+  onLogout: () => void
 }
 
 function InfoTooltip({ text }: { text: string }) {
@@ -44,7 +45,7 @@ function InfoTooltip({ text }: { text: string }) {
   )
 }
 
-export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
+export function SettingsDialog({ isOpen, onClose, onLogout }: SettingsDialogProps) {
   const { t, i18n } = useTranslation(); 
   const [promptForm, setPromptForm] = useState({ name: '', content: '' })
   const [isAddingPrompt, setIsAddingPrompt] = useState(false)
@@ -161,6 +162,12 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     i18n.changeLanguage(lang);
   };
 
+  // Обработчик logout
+  const handleLogout = () => {
+    onLogout();
+    onClose();
+  };
+
   if (!isOpen || !localSettings) return null;
 
   return (
@@ -177,7 +184,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
           </div>
           
           <div className="space-y-4">
-            {/* ✅ Язык */}
+            {/* Язык */}
             <div className="p-3 rounded-lg bg-gray-700/50">
               <label htmlFor="language-select" className="block text-sm font-medium text-gray-300 mb-2">{t('language')}</label>
               <select
@@ -191,9 +198,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               </select>
             </div>
 
-            {/* ✅ УДАЛЕНО: Блок "Скорость печати" - теперь в ModelSelector */}
-
-            {/* ✅ Системная инструкция */}
+            {/* Системная инструкция */}
             <div className="p-3 rounded-lg bg-gray-700/50">
               <div className="flex items-center mb-2">
                 <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300">
@@ -210,7 +215,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               />
             </div>
 
-            {/* ✅ Кастомные промпты */}
+            {/* Кастомные промпты */}
             <div className="p-3 rounded-lg bg-gray-700/50">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center">
@@ -344,10 +349,30 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               </div>
             </div>
           </div>
-
-          <div className="flex justify-end gap-3 mt-6">
-            <button onClick={handleClose} className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white focus:outline-none">{t('cancel')}</button>
-            <button onClick={handleSaveChanges} className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500">{t('saveAndClose')}</button>
+          
+          <div className="flex items-center justify-between gap-3 mt-6">
+            <button 
+              onClick={handleLogout} 
+              className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white rounded-lg focus:outline-none flex items-center gap-2 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              {t('logout')}
+            </button>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={handleClose} 
+                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white focus:outline-none"
+              >
+                {t('cancel')}
+              </button>
+              <button 
+                onClick={handleSaveChanges} 
+                className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                {t('saveAndClose')}
+              </button>
+            </div>
           </div>
         </div>
       </div>

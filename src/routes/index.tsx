@@ -207,8 +207,7 @@ function Home() {
     setIsOpen: sidebar.setIsOpen,
     isCollapsed: sidebar.isCollapsed,
   };
-
-  // ✅ ИСПРАВЛЕНИЕ: Показываем ошибку загрузки если она произошла
+  
   if (!isInitialized || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
@@ -287,7 +286,11 @@ function Home() {
             <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
           </Panel>
         </PanelGroup>
-        <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+        <SettingsDialog 
+          isOpen={isSettingsOpen} 
+          onClose={() => setIsSettingsOpen(false)} 
+          onLogout={handleLogout}  // ✅ Добавляем проп
+        />
       </div>
     );
   }
@@ -304,7 +307,11 @@ function Home() {
       </main>
       {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
       <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
-      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsDialog 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+        onLogout={handleLogout}  // ✅ Добавляем проп
+      />
     </div>
   );
 }
