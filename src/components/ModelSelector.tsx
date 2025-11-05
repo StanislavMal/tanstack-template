@@ -12,7 +12,7 @@ interface ModelConfig {
   icon: React.ReactNode;
   description: string;
   supportsReasoning?: boolean;
-  requiresReasoning?: boolean; // ✅ Новое: для Gemini Pro
+  requiresReasoning?: boolean;
 }
 
 const MODELS: ModelConfig[] = [
@@ -32,7 +32,7 @@ const MODELS: ModelConfig[] = [
     icon: <Sparkles className="w-4 h-4" />,
     description: 'Most capable',
     supportsReasoning: true,
-    requiresReasoning: true, // ✅ Pro требует reasoning минимум low
+    requiresReasoning: true,
   },
   {
     id: 'deepseek-chat',
@@ -66,6 +66,7 @@ export function ModelSelector() {
   const { settings, updateSettings } = useSettings();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const currentModel = MODELS.find(m => m.id === settings?.model) || MODELS[0];
 
@@ -87,7 +88,6 @@ export function ModelSelector() {
     const model = MODELS.find(m => m.id === modelId);
     if (!model || !settings) return;
 
-    // ✅ Для Gemini Pro устанавливаем минимум low если было none
     const newReasoningEffort = model.requiresReasoning && settings.reasoningEffort === 'none'
       ? 'low'
       : model.supportsReasoning
@@ -106,7 +106,6 @@ export function ModelSelector() {
   const handleReasoningChange = (level: string) => {
     if (!settings) return;
     
-    // ✅ Для Gemini Pro запрещаем выбор 'none'
     if (currentModel.requiresReasoning && level === 'none') {
       return;
     }
@@ -132,6 +131,7 @@ export function ModelSelector() {
     <div className="relative" ref={dropdownRef}>
       {/* Кнопка выбора модели */}
       <button
+        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 transition-colors"
       >
@@ -145,9 +145,9 @@ export function ModelSelector() {
         <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* ✅ ИСПРАВЛЕНО: Dropdown с правильным позиционированием */}
+      {/* ✅ ИСПРАВЛЕНО: На мобильных fixed с inset-x-0, на десктопе absolute */}
       {isOpen && (
-        <div className="absolute left-0 sm:left-0 right-0 sm:right-auto top-full mt-2 w-screen sm:w-80 max-w-[100vw] sm:max-w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+        <div className="fixed sm:absolute left-0 right-0 sm:left-0 sm:right-auto top-auto sm:top-full mt-2 mx-0 sm:mx-0 w-full sm:w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
           {/* Список моделей */}
           <div className="max-h-64 overflow-y-auto">
             {/* Группа Gemini */}
@@ -166,7 +166,6 @@ export function ModelSelector() {
                   {model.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  {/* ✅ Компактный вид: название + описание в одну строку */}
                   <div className="text-sm font-medium text-white">
                     {model.name} <span className="text-xs text-gray-400">• {model.description}</span>
                   </div>
@@ -193,7 +192,6 @@ export function ModelSelector() {
                   {model.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  {/* ✅ Компактный вид */}
                   <div className="text-sm font-medium text-white">
                     {model.name} <span className="text-xs text-gray-400">• {model.description}</span>
                   </div>
@@ -212,13 +210,12 @@ export function ModelSelector() {
           <div className="p-3 bg-gray-900">
             <div className="text-xs font-semibold text-gray-400 mb-3">{t('modelSettings')}</div>
 
-            {/* Reasoning Effort (только для моделей с поддержкой) */}
+            {/* Reasoning Effort */}
             {currentModel.supportsReasoning && currentModel.provider === 'gemini' && (
               <div className="mb-3">
                 <label className="text-xs text-gray-400 block mb-1.5">{t('reasoningEffort')}</label>
                 <div className="grid grid-cols-4 gap-1">
                   {REASONING_LEVELS.map(level => {
-                    // ✅ Для Gemini Pro блокируем кнопку "Off"
                     const isDisabled = currentModel.requiresReasoning && level.value === 'none';
                     
                     return (
@@ -239,7 +236,6 @@ export function ModelSelector() {
                     );
                   })}
                 </div>
-                {/* ✅ Подсказка для Gemini Pro */}
                 {currentModel.requiresReasoning && (
                   <p className="text-xs text-gray-500 mt-1">{t('reasoningRequired')}</p>
                 )}
@@ -269,7 +265,7 @@ export function ModelSelector() {
               </div>
             </div>
 
-            {/* ✅ Stream Speed */}
+            {/* Stream Speed */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs text-gray-400">{t('streamSpeed')}</label>

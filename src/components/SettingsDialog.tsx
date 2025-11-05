@@ -191,34 +191,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               </select>
             </div>
 
-            {/* ✅ Скорость печати */}
-            <div className="p-3 rounded-lg bg-gray-700/50">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center">
-                  <label htmlFor="stream-speed" className="block text-sm font-medium text-gray-300">
-                    {t('streamSpeed')}
-                  </label>
-                  <InfoTooltip text={t('streamSpeedNote')} />
-                </div>
-                <span className="text-sm text-orange-400 font-semibold">
-                  {localSettings.streamSpeed || 30} {t('streamSpeedUnit')}
-                </span>
-              </div>
-              <input
-                id="stream-speed"
-                type="range"
-                min="10"
-                max="500"
-                step="10"
-                value={localSettings.streamSpeed || 30}
-                onChange={(e) => setLocalSettings(prev => prev ? { ...prev, streamSpeed: parseInt(e.target.value) } : null)}
-                className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-orange-500"
-              />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>{t('slow')}</span>
-                <span>{t('fast')}</span>
-              </div>
-            </div>
+            {/* ✅ УДАЛЕНО: Блок "Скорость печати" - теперь в ModelSelector */}
 
             {/* ✅ Системная инструкция */}
             <div className="p-3 rounded-lg bg-gray-700/50">
