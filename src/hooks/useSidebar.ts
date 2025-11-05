@@ -20,12 +20,12 @@ export function useSidebar() {
 
   const handleNewChat = useCallback(() => {
     setCurrentConversationId(null);
-    setIsOpen(false); // Закрываем на мобильных
+    setIsOpen(false);
   }, [setCurrentConversationId]);
 
   const handleSelectChat = useCallback((id: string) => {
     setCurrentConversationId(id);
-    setIsOpen(false); // Закрываем на мобильных
+    setIsOpen(false);
   }, [setCurrentConversationId]);
 
   const handleDeleteChat = useCallback(async (id: string) => {
