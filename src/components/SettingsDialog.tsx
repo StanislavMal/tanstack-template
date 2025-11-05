@@ -161,23 +161,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     i18n.changeLanguage(lang);
   };
 
-  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedModel = e.target.value;
-    let newProvider: 'gemini' | 'deepseek' = 'gemini';
-    
-    if (selectedModel.startsWith('deepseek')) {
-      newProvider = 'deepseek';
-    } else if (selectedModel.startsWith('gemini')) {
-      newProvider = 'gemini';
-    }
-    
-    setLocalSettings(prev => prev ? { 
-      ...prev, 
-      model: selectedModel,
-      provider: newProvider
-    } : null);
-  };
-
   if (!isOpen || !localSettings) return null;
 
   return (
@@ -194,8 +177,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
           </div>
           
           <div className="space-y-4">
-            {/* ✅ УДАЛЕНО: Заголовок "Общие настройки" */}
-            
+            {/* ✅ Язык */}
             <div className="p-3 rounded-lg bg-gray-700/50">
               <label htmlFor="language-select" className="block text-sm font-medium text-gray-300 mb-2">{t('language')}</label>
               <select
@@ -208,26 +190,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                   <option value="ru">Русский</option>
               </select>
             </div>
-            
-            <div className="p-3 rounded-lg bg-gray-700/50">
-              <label htmlFor="model-select" className="block text-sm font-medium text-gray-300 mb-2">{t('aiModel')}</label>
-              <select
-                  id="model-select"
-                  value={localSettings.model}
-                  onChange={handleModelChange}
-                  className="w-full px-3 py-2 text-xs md:text-sm text-white bg-gray-700 border border-gray-600 rounded-lg focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-              >
-                  <optgroup label="Google Gemini">
-                    <option value="gemini-2.5-flash">{t('modelGeminiFlash')}</option>
-                    <option value="gemini-2.5-pro">{t('modelGeminiPro')}</option>
-                  </optgroup>
-                  <optgroup label="DeepSeek">
-                    <option value="deepseek-chat">{t('modelDeepSeekChat')}</option>
-                    <option value="deepseek-reasoner">{t('modelDeepSeekReasoner')}</option>
-                  </optgroup>
-              </select>
-            </div>
 
+            {/* ✅ Скорость печати */}
             <div className="p-3 rounded-lg bg-gray-700/50">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center">
@@ -256,6 +220,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               </div>
             </div>
 
+            {/* ✅ Системная инструкция */}
             <div className="p-3 rounded-lg bg-gray-700/50">
               <div className="flex items-center mb-2">
                 <label htmlFor="system-instruction" className="block text-sm font-medium text-gray-300">
@@ -272,7 +237,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               />
             </div>
 
-            {/* ✅ ИЗМЕНЕНО: Секция промптов теперь в едином стиле с остальными настройками */}
+            {/* ✅ Кастомные промпты */}
             <div className="p-3 rounded-lg bg-gray-700/50">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center">

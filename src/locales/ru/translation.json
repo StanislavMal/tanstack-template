@@ -43,5 +43,11 @@
   "errorOccurred": "Произошла ошибка",
   "pageNotFound": "Страница не найдена",
   "goHome": "На главную",
-  "language": "Язык"
+  "language": "Язык",
+  "modelSettings": "Настройки модели",
+  "reasoningEffort": "Уровень размышления",
+  "reasoningRequired": "Эта модель требует размышления (мин: Low)",
+  "temperature": "Температура",
+  "precise": "Точно",
+  "creative": "Творчески"
 }
