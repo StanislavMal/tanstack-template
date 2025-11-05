@@ -1,6 +1,6 @@
 // 📄 src/components/ChatMessage.tsx
 
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo, useMemo } from 'react'; // -> ИЗМЕНЕНИЕ: Добавлен useMemo
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
@@ -69,38 +69,28 @@ export const ChatMessage = memo(function ChatMessage({
       
       const range = selection.getRangeAt(0);
       
-      // Проверяем, что выделение внутри нашего контента
       if (!contentElement.contains(range.commonAncestorContainer)) return;
       
-      // Создаём контейнер с выделенным содержимым
       const container = document.createElement('div');
       container.appendChild(range.cloneContents());
       
-      // === ПРИОРИТЕТ 1: ТАБЛИЦЫ ===
       const hasTable = container.querySelector('table');
       if (hasTable) {
         e.preventDefault();
         e.stopPropagation();
-        
-        // Копируем как HTML для вставки в Word/Google Docs
         const tableHTML = container.innerHTML;
         if (e.clipboardData) {
           e.clipboardData.setData('text/html', tableHTML);
-          
-          // И как plain text с границами для других приложений
           const plainText = extractTableAsPlainText(container);
           e.clipboardData.setData('text/plain', plainText);
         }
         return;
       }
       
-      // === ПРИОРИТЕТ 2: МАТЕМАТИЧЕСКИЕ ФОРМУЛЫ ===
       const hasFormula = container.querySelector('.katex');
       if (hasFormula) {
         e.preventDefault();
         e.stopPropagation();
-        
-        // Копируем LaTeX код
         const latex = extractLatexFromKatex(container);
         if (e.clipboardData && latex) {
           e.clipboardData.setData('text/plain', latex);
@@ -108,30 +98,24 @@ export const ChatMessage = memo(function ChatMessage({
         return;
       }
       
-      // === ПРИОРИТЕТ 3: БЛОКИ КОДА ===
-      // Для блоков кода оставляем стандартное поведение (plain text)
       let node: Node | null = range.commonAncestorContainer;
       while (node && node !== contentElement) {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const el = node as HTMLElement;
           if (el.tagName.toLowerCase() === 'pre') {
-            return; // Стандартное копирование
+            return; 
           }
         }
         node = node.parentNode;
       }
       
-      // === ПРИОРИТЕТ 4: ОБЫЧНЫЙ ТЕКСТ ===
-      // Конвертируем HTML в Markdown
       e.preventDefault();
       e.stopPropagation();
-      
       const plainText = htmlToPlainText(container);
       
       if (e.clipboardData) {
         e.clipboardData.setData('text/plain', plainText);
       } else {
-        // Fallback для старых браузеров
         try {
           navigator.clipboard.writeText(plainText);
         } catch (err) {
@@ -167,6 +151,36 @@ export const ChatMessage = memo(function ChatMessage({
     }
   };
 
+  // ✅ ИЗМЕНЕНИЕ: Динамический выбор плагинов для безопасности
+  const [remarkPluginsList, rehypePluginsList] = useMemo(() => {
+    const remarkPlugins = [
+      remarkGfm,
+      remarkMath
+    ];
+
+    let rehypePlugins: any[] = [];
+
+    if (isAssistant) {
+      // Для ИИ разрешаем HTML и продвинутый рендеринг
+      rehypePlugins = [
+        rehypeRaw,
+        [rehypeSanitize, markdownSanitizeSchema],
+        rehypeHighlight,
+        rehypeKatex
+      ];
+    } else {
+      // Для пользователя - НИКАКОГО HTML. Только безопасный рендеринг.
+      // rehype-highlight и rehype-katex безопасны без rehype-raw.
+      rehypePlugins = [
+        rehypeHighlight,
+        rehypeKatex
+      ];
+    }
+
+    return [remarkPlugins, rehypePlugins];
+  }, [isAssistant]);
+
+
   return (
     <div 
       className={`group relative flex flex-col w-full ${isAssistant ? 'items-start' : 'items-end'}`}
@@ -200,16 +214,8 @@ export const ChatMessage = memo(function ChatMessage({
           <div ref={messageContentRef}>
             <ReactMarkdown
               className="prose dark:prose-invert max-w-none select-text"
-              remarkPlugins={[
-                remarkGfm,      // ✅ Поддержка таблиц, зачёркивания, списков задач
-                remarkMath      // ✅ Поддержка математики: $inline$ и $$block$$
-              ]}
-              rehypePlugins={[
-                rehypeRaw,
-                [rehypeSanitize, markdownSanitizeSchema],
-                rehypeHighlight,
-                rehypeKatex     // ✅ Рендеринг LaTeX формул через KaTeX
-              ]}
+              remarkPlugins={remarkPluginsList} // ✅ ИЗМЕНЕНИЕ
+              rehypePlugins={rehypePluginsList} // ✅ ИЗМЕНЕНИЕ
               components={{ 
                 pre: CodeBlock,
                 table: TableBlock,
@@ -226,7 +232,6 @@ export const ChatMessage = memo(function ChatMessage({
       <div className="flex items-center justify-end gap-1.5 mt-1.5 px-2 h-6 transition-opacity md:opacity-0 group-hover:opacity-100">
         {isEditing ? (
           <>
-            {/* Кнопки сохранения/отмены редактирования */}
             <button 
               onClick={handleSave} 
               className="p-1.5 rounded-full text-green-400 bg-gray-800/50 hover:bg-gray-700" 
@@ -244,7 +249,6 @@ export const ChatMessage = memo(function ChatMessage({
           </>
         ) : (
           <>
-            {/* Кнопка редактирования (только для пользователя) */}
             {!isAssistant && (
               <button 
                 data-action="start-edit"
@@ -255,7 +259,6 @@ export const ChatMessage = memo(function ChatMessage({
               </button>
             )}
             
-            {/* Кнопка регенерации (только для ассистента) */}
             {isAssistant && showRegenerateButton && onRegenerate && (
               <button 
                 onClick={onRegenerate}
@@ -267,7 +270,6 @@ export const ChatMessage = memo(function ChatMessage({
               </button>
             )}
             
-            {/* Кнопка копирования */}
             <button 
               onClick={handleCopy} 
               className="p-1.5 rounded-full text-gray-400 hover:text-white" 
@@ -285,7 +287,6 @@ export const ChatMessage = memo(function ChatMessage({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Оптимизация ре-рендеров: сравниваем только важные props
   return (
     prevProps.message.id === nextProps.message.id &&
     prevProps.message.content === nextProps.message.content &&

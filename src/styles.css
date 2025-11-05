@@ -52,6 +52,7 @@ code {
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
+  overflow-wrap: break-word; /* ✅ ИЗМЕНЕНИЕ: Глобальное правило для переноса длинных слов */
 }
 
 .prose * {
@@ -395,8 +396,8 @@ code {
   margin-bottom: 1em;
   line-height: 1.7;
   user-select: text;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  white-space: break-spaces;
+  word-wrap: break-word; /* Оставляем для совместимости */
 }
 
 .prose > p:first-child {

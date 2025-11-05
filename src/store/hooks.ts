@@ -150,7 +150,6 @@ export function usePrompts() {
         }
     }, [user, loadPrompts]);
 
-    // ✅ НОВАЯ ФУНКЦИЯ: Обновление промпта
     const updatePrompt = useCallback(async (id: string, name: string, content: string) => {
         if (!user) return;
         
@@ -161,7 +160,7 @@ export function usePrompts() {
                 .from('prompts')
                 .update({ name, content })
                 .eq('id', id)
-                .eq('user_id', user.id); // Проверка владельца для безопасности
+                .eq('user_id', user.id);
             },
             {
               maxAttempts: 3,
@@ -175,7 +174,7 @@ export function usePrompts() {
             console.error("Error updating prompt:", result.error);
             throw result.error;
           } else {
-            await loadPrompts(); // Перезагружаем для синхронизации
+            await loadPrompts();
           }
         } catch (error) {
           console.error("Failed to update prompt after all retries:", error);
@@ -231,7 +230,7 @@ export function usePrompts() {
       activePrompt, 
       loadPrompts, 
       createPrompt, 
-      updatePrompt, // ✅ Экспортируем новую функцию
+      updatePrompt,
       deletePrompt, 
       setPromptActive 
     };
@@ -254,11 +253,9 @@ export function useConversations() {
 
   useEffect(() => {
     if (currentConversationId && user) {
-      // ✅ ИСПРАВЛЕНИЕ: Проверяем timestamp вместо флага
       const lastCreatedAt = selectors.getLastConversationCreatedAt(store.state);
       const timeSinceCreation = lastCreatedAt ? Date.now() - lastCreatedAt : Infinity;
       
-      // Если чат создан менее 1 секунды назад - не загружаем сообщения
       if (timeSinceCreation < 1000) {
         console.log('[useConversations] Skipping load for fresh conversation (age:', timeSinceCreation, 'ms)');
         return;
@@ -273,7 +270,8 @@ export function useConversations() {
                 .from('messages')
                 .select('*')
                 .eq('conversation_id', currentConversationId)
-                .order('created_at', { ascending: true });
+                .order('created_at', { ascending: true })
+                .order('id', { ascending: true }); // ✅ ИЗМЕНЕНИЕ: Добавлена вторичная сортировка
             },
             {
               maxAttempts: 3,
@@ -371,7 +369,6 @@ export function useConversations() {
         
         const newConversation: Conversation = data as Conversation;
         
-        // ✅ addConversation теперь устанавливает timestamp
         actions.addConversation(newConversation);
         
         console.log('[useConversations] New conversation created:', newConversation.id);
@@ -423,10 +420,8 @@ export function useConversations() {
 
     console.log('[useConversations] Adding message:', message.role, message.content.substring(0, 50));
     
-    // ✅ Сначала добавляем в store (синхронно)
     actions.addMessage(message);
 
-    // ✅ Затем сохраняем в Supabase (асинхронно)
     try {
       const result = await retryAsync(
         async () => {
@@ -521,7 +516,8 @@ export function useConversations() {
             .from('messages')
             .select('role, content, user_id')
             .eq('conversation_id', id)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true })
+            .order('id', { ascending: true }); // ✅ ИЗМЕНЕНИЕ: Добавлена вторичная сортировка
         }
       ) as PostgrestResponse<any>;
 
