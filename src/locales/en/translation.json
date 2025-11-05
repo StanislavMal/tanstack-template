@@ -43,5 +43,11 @@
   "errorOccurred": "An error occurred",
   "pageNotFound": "Page Not Found",
   "goHome": "Go Home",
-  "language": "Language"
+  "language": "Language",
+  "modelSettings": "Model Settings",
+  "reasoningEffort": "Reasoning Effort",
+  "reasoningRequired": "This model requires reasoning (min: Low)",
+  "temperature": "Temperature",
+  "precise": "Precise",
+  "creative": "Creative"
 }

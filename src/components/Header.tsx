@@ -1,8 +1,8 @@
 // 📄 src/components/Header.tsx
 
-import { Settings, Menu, LogOut } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { Settings, Menu } from 'lucide-react';
 import { memo } from 'react';
+import { ModelSelector } from './ModelSelector';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -11,51 +11,45 @@ interface HeaderProps {
   isMobile?: boolean;
 }
 
-export const Header = memo(({ onMenuClick, onSettingsClick, onLogout, isMobile }: HeaderProps) => {
-  const { t } = useTranslation();
-
+export const Header = memo(({ onMenuClick, onSettingsClick, isMobile }: HeaderProps) => {
   if (isMobile) {
     return (
-      <header className="flex-shrink-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 border-b border-gray-700">
+      <header className="flex-shrink-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 border-b border-gray-700 gap-3">
+        {/* Кнопка меню */}
         <button 
           onClick={onMenuClick} 
-          className="p-2 text-white rounded-lg hover:bg-gray-700"
+          className="flex-shrink-0 p-2 text-white rounded-lg hover:bg-gray-700"
         >
           <Menu className="w-6 h-6" />
         </button>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={onLogout} 
-            className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600"
-          >
-            {t('logout')}
-          </button>
-          <button 
-            onClick={onSettingsClick} 
-            className="flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
+
+        <div className="flex-1 min-w-0">
+          <ModelSelector fullWidth />
         </div>
+
+        {/* Кнопка настроек */}
+        <button 
+          onClick={onSettingsClick} 
+          className="flex-shrink-0 flex items-center justify-center w-9 h-9 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600"
+        >
+          <Settings className="w-5 h-5" />
+        </button>
       </header>
     );
   }
 
   return (
-    <header className="absolute top-4 right-4 z-10 flex gap-2 items-center">
-      <button 
-        onClick={onLogout} 
-        className="px-3 py-2 text-sm text-white bg-gray-700 rounded-lg hover:bg-gray-600 flex items-center gap-2"
-      >
-        <LogOut className="w-4 h-4" />
-        {t('logout')}
-      </button>
-      <button 
-        onClick={onSettingsClick} 
-        className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 transition-opacity"
-      >
-        <Settings className="w-5 h-5" />
-      </button>
+    <header className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
+      <ModelSelector />
+
+      <div className="flex gap-2 items-center">
+        <button 
+          onClick={onSettingsClick} 
+          className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-r from-orange-500 to-red-600 hover:opacity-90 transition-opacity"
+        >
+          <Settings className="w-5 h-5" />
+        </button>
+      </div>
     </header>
   );
 });
