@@ -38,8 +38,9 @@ export const Header = memo(({ onMenuClick, onSettingsClick, isMobile }: HeaderPr
     );
   }
 
+  // ✅ ИЗМЕНЕНИЕ: Убираем 'absolute' и 'z-10', добавляем отступы и flex-shrink
   return (
-    <header className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
+    <header className="flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-2">
       <ModelSelector />
 
       <div className="flex gap-2 items-center">
