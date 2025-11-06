@@ -53,7 +53,9 @@ code {
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
-  overflow-wrap: break-word; /* ✅ ИЗМЕНЕНИЕ: Глобальное правило для переноса длинных слов */
+  /* ✅ ИЗМЕНЕНИЕ: Глобальные правила для переноса длинных слов и предотвращения переполнения */
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .prose * {

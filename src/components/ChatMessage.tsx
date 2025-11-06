@@ -1,6 +1,6 @@
 // 📄 src/components/ChatMessage.tsx
 
-import { useState, useEffect, useRef, memo, useMemo } from 'react'; // -> ИЗМЕНЕНИЕ: Добавлен useMemo
+import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
@@ -50,13 +50,29 @@ export const ChatMessage = memo(function ChatMessage({
   const { isCopied, copyToClipboard } = useCopyToClipboard({ timeout: 2000 });
   
   const messageContentRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Обновляем editedContent при изменении message.content
   useEffect(() => {
-    if (!isEditing) {
-      setEditedContent(message.content);
+    setEditedContent(message.content);
+  }, [message.content]);
+  
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      const ta = textareaRef.current;
+      
+      const setHeight = () => {
+        ta.style.height = 'auto';
+        ta.style.height = `${ta.scrollHeight}px`; 
+      };
+      
+      setHeight();
+      ta.addEventListener('input', setHeight);
+      
+      return () => {
+        ta.removeEventListener('input', setHeight);
+      };
     }
-  }, [message.content, isEditing]);
+  }, [isEditing]);
 
   // === Умная обработка копирования ===
   useEffect(() => {
@@ -151,7 +167,6 @@ export const ChatMessage = memo(function ChatMessage({
     }
   };
 
-  // ✅ ИЗМЕНЕНИЕ: Динамический выбор плагинов для безопасности
   const [remarkPluginsList, rehypePluginsList] = useMemo(() => {
     const remarkPlugins = [
       remarkGfm,
@@ -161,7 +176,6 @@ export const ChatMessage = memo(function ChatMessage({
     let rehypePlugins: any[] = [];
 
     if (isAssistant) {
-      // Для ИИ разрешаем HTML и продвинутый рендеринг
       rehypePlugins = [
         rehypeRaw,
         [rehypeSanitize, markdownSanitizeSchema],
@@ -169,8 +183,6 @@ export const ChatMessage = memo(function ChatMessage({
         rehypeKatex
       ];
     } else {
-      // Для пользователя - НИКАКОГО HTML. Только безопасный рендеринг.
-      // rehype-highlight и rehype-katex безопасны без rehype-raw.
       rehypePlugins = [
         rehypeHighlight,
         rehypeKatex
@@ -186,36 +198,37 @@ export const ChatMessage = memo(function ChatMessage({
       className={`group relative flex flex-col w-full ${isAssistant ? 'items-start' : 'items-end'}`}
       data-message-id={message.id}
     >
-      {/* === Контейнер сообщения === */}
+      {/* === ✅ ИЗМЕНЕНИЕ: Возвращаем логику классов в один контейнер === */}
       <div
         className={`isolate rounded-lg px-4 py-2 transition-colors duration-200 ${
           isAssistant
             ? 'w-full bg-gradient-to-r from-orange-500/5 to-red-600/5'
             : isEditing
-              ? 'w-full bg-gray-600/50'
+              // В режиме редактирования занимает всю доступную ширину родителя (который items-end)
+              ? 'w-full max-w-2xl bg-gray-600/50'
+              // В обычном режиме - максимальная ширина, что позволяет ему прижиматься вправо
               : 'max-w-2xl bg-gray-700/50'
         }`}
       >
-        {/* === Режим редактирования === */}
         {isEditing && !isAssistant ? (
           <div className="w-full">
             <textarea
+              ref={textareaRef}
               value={editedContent}
               onChange={(e) => setEditedContent(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="w-full p-0 text-sm text-white bg-transparent border-0 resize-none focus:outline-none focus:ring-0"
-              style={{ minHeight: '6rem' }} 
+              className="w-full p-0 text-sm text-white bg-transparent border-0 resize-none focus:outline-none focus:ring-0 overflow-y-auto"
+              style={{ maxHeight: '400px' }} 
               autoFocus
               onFocus={(e) => e.currentTarget.select()}
             />
           </div>
         ) : (
-          /* === Режим просмотра === */
           <div ref={messageContentRef}>
             <ReactMarkdown
               className="prose dark:prose-invert max-w-none select-text"
-              remarkPlugins={remarkPluginsList} // ✅ ИЗМЕНЕНИЕ
-              rehypePlugins={rehypePluginsList} // ✅ ИЗМЕНЕНИЕ
+              remarkPlugins={remarkPluginsList}
+              rehypePlugins={rehypePluginsList}
               components={{ 
                 pre: CodeBlock,
                 table: TableBlock,
@@ -228,7 +241,6 @@ export const ChatMessage = memo(function ChatMessage({
         )}
       </div>
 
-      {/* === Панель действий === */}
       <div className="flex items-center justify-end gap-1.5 mt-1.5 px-2 h-6 transition-opacity md:opacity-0 group-hover:opacity-100">
         {isEditing ? (
           <>
