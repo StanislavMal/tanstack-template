@@ -76,16 +76,22 @@ export const ChatMessage = memo(function ChatMessage({
 
   // === Умная обработка копирования ===
   useEffect(() => {
-    const contentElement = messageContentRef.current;
-    if (!contentElement) return;
+    const componentRoot = messageContentRef.current?.parentElement?.parentElement;
+    if (!componentRoot) return;
 
     const handleCopyEvent = (e: ClipboardEvent) => {
+      // ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Если мы в режиме редактирования, ничего не делаем.
+      // Позволяем браузеру выполнить стандартное копирование из textarea.
+      if (isEditing) {
+        return;
+      }
+
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) return;
       
       const range = selection.getRangeAt(0);
       
-      if (!contentElement.contains(range.commonAncestorContainer)) return;
+      if (!componentRoot.contains(range.commonAncestorContainer)) return;
       
       const container = document.createElement('div');
       container.appendChild(range.cloneContents());
@@ -115,7 +121,7 @@ export const ChatMessage = memo(function ChatMessage({
       }
       
       let node: Node | null = range.commonAncestorContainer;
-      while (node && node !== contentElement) {
+      while (node && node !== componentRoot) {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const el = node as HTMLElement;
           if (el.tagName.toLowerCase() === 'pre') {
@@ -140,12 +146,14 @@ export const ChatMessage = memo(function ChatMessage({
       }
     };
 
-    contentElement.addEventListener('copy', handleCopyEvent);
+    // Вешаем слушатель на более высокий уровень, чтобы он всегда был активен
+    componentRoot.addEventListener('copy', handleCopyEvent);
     
     return () => {
-      contentElement.removeEventListener('copy', handleCopyEvent);
+      componentRoot.removeEventListener('copy', handleCopyEvent);
     };
-  }, []);
+    // ✅ Добавляем isEditing в зависимости, чтобы useEffect мог "видеть" актуальное состояние
+  }, [isEditing]);
 
   // === Обработчики событий ===
   const handleSave = () => {
@@ -198,15 +206,12 @@ export const ChatMessage = memo(function ChatMessage({
       className={`group relative flex flex-col w-full ${isAssistant ? 'items-start' : 'items-end'}`}
       data-message-id={message.id}
     >
-      {/* === ✅ ИЗМЕНЕНИЕ: Возвращаем логику классов в один контейнер === */}
       <div
         className={`isolate rounded-lg px-4 py-2 transition-colors duration-200 ${
           isAssistant
             ? 'w-full bg-gradient-to-r from-orange-500/5 to-red-600/5'
             : isEditing
-              // В режиме редактирования занимает всю доступную ширину родителя (который items-end)
               ? 'w-full max-w-2xl bg-gray-600/50'
-              // В обычном режиме - максимальная ширина, что позволяет ему прижиматься вправо
               : 'max-w-2xl bg-gray-700/50'
         }`}
       >
