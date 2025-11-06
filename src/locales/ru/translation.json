@@ -49,5 +49,6 @@
   "reasoningRequired": "Эта модель требует размышления (мин: Low)",
   "temperature": "Температура",
   "precise": "Точно",
-  "creative": "Творчески"
+  "creative": "Творчески",
+  "sendMessage": "Отправить сообщение" 
 }

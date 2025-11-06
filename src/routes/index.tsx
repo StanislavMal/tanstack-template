@@ -263,11 +263,13 @@ function Home() {
               <Sidebar {...sidebarProps} isOpen={true} setIsOpen={() => {}} />
             </Panel>
             <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
-            <Panel className="flex-1 flex flex-col relative min-h-0">
+            {/* ✅ ИЗМЕНЕНИЕ: Убираем 'relative', он больше не нужен */}
+            <Panel className="flex-1 flex flex-col min-h-0">
               <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} />
               <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
                 <div ref={contentRef}>
-                  <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
+                  {/* ✅ ИЗМЕНЕНИЕ: Добавляем pt-12 для отступа от верха */}
+                  <div className={`w-full max-w-5xl mx-auto pt-12 ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
                     <ChatArea {...chatAreaProps} />
                   </div>
                 </div>

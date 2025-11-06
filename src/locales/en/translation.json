@@ -49,5 +49,6 @@
   "reasoningRequired": "This model requires reasoning (min: Low)",
   "temperature": "Temperature",
   "precise": "Precise",
-  "creative": "Creative"
+  "creative": "Creative",
+  "sendMessage": "Send message"  
 }
