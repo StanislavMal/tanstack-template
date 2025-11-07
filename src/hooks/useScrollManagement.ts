@@ -10,20 +10,19 @@ export function useScrollManagement(messageCount: number = 0) {
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
   
   const prevMessageCountRef = useRef(messageCount);
-  const isProgrammaticScrollRef = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScrollTopRef = useRef(0);
+  
+  // 🔥 Отслеживаем намерение вернуться вниз
+  const isScrollingDownRef = useRef(false);
 
   const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'auto') => {
     const container = scrollContainerRef.current;
     if (container) {
-      isProgrammaticScrollRef.current = true;
       container.scrollTo({
         top: container.scrollHeight,
         behavior,
       });
-      setTimeout(() => {
-        isProgrammaticScrollRef.current = false;
-      }, 200); // ✅ Увеличим задержку для большей надежности
     }
   }, []);
 
@@ -33,24 +32,53 @@ export function useScrollManagement(messageCount: number = 0) {
     if (!container || !content) return;
 
     const handleScroll = () => {
-      if (isProgrammaticScrollRef.current) {
-        return;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      
+      // Определяем направление скролла
+      const scrollDelta = scrollTop - lastScrollTopRef.current;
+      lastScrollTopRef.current = scrollTop;
+      
+      // 🔥 Отслеживаем направление движения
+      if (scrollDelta < -5) {  
+        // Скроллим вверх - разблокируем
+        isLockedToBottomRef.current = false;
+        isScrollingDownRef.current = false;
+      } else if (scrollDelta > 5) {
+        // Скроллим вниз - запоминаем намерение
+        isScrollingDownRef.current = true;
       }
       
+      // 🔥 Адаптивный порог для захвата
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      
+      // Разные пороги для разных ситуаций:
+      // - Если скроллим вниз намеренно - большой порог (150px)
+      // - Если просто находимся внизу - маленький порог (30px)
+      const captureThreshold = isScrollingDownRef.current ? 150 : 30;
+      const isAtBottom = distanceFromBottom < captureThreshold;
+      
+      // 🔥 Дополнительная проверка: если почти внизу И скроллим вниз - захватываем
+      if (isAtBottom && isScrollingDownRef.current) {
+        isLockedToBottomRef.current = true;
+        isScrollingDownRef.current = false; // Сбрасываем флаг
+        // Сразу доскролливаем до конца для лучшего UX
+        if (distanceFromBottom > 30) {
+          forceScrollToBottom('smooth');
+        }
+      } else if (distanceFromBottom < 30) {
+        // Очень близко к низу - всегда блокируем
+        isLockedToBottomRef.current = true;
+      }
+      
+      // Debounce только для кнопки
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
       
       scrollTimeoutRef.current = setTimeout(() => {
-        const { scrollTop, scrollHeight, clientHeight } = container;
-        const threshold = 20;
-        const isAtBottom = scrollHeight - scrollTop - clientHeight < threshold;
-        
-        isLockedToBottomRef.current = isAtBottom;
-        
-        const shouldShowButton = scrollHeight - scrollTop - clientHeight > 150;
-        setShowScrollDownButton(shouldShowButton && !isAtBottom);
-        
+        // 🔥 Показываем кнопку только если далеко от низа
+        const shouldShowButton = distanceFromBottom > 200;
+        setShowScrollDownButton(shouldShowButton && !isLockedToBottomRef.current);
         scrollTimeoutRef.current = null;
       }, 50);
     };
@@ -64,9 +92,9 @@ export function useScrollManagement(messageCount: number = 0) {
     resizeObserver.observe(content);
     container.addEventListener('scroll', handleScroll, { passive: true });
 
-    // ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Мы проверяем не только `messageCount`,
-    // но и текущее состояние блокировки. Если пользователь уже отскроллил,
-    // новое сообщение не должно принудительно тянуть его вниз.
+    // Инициализация последней позиции
+    lastScrollTopRef.current = container.scrollTop;
+
     if (messageCount > prevMessageCountRef.current && isLockedToBottomRef.current) {
       forceScrollToBottom('auto');
     }
@@ -79,17 +107,18 @@ export function useScrollManagement(messageCount: number = 0) {
         clearTimeout(scrollTimeoutRef.current);
       }
     };
-    // ✅ Убираем `forceScrollToBottom` из зависимостей.
-    // Это гарантирует, что `handleScroll` не будет пересоздаваться без необходимости.
-  }, [messageCount]);
+    
+  }, [messageCount, forceScrollToBottom]);
 
   const scrollToBottom = useCallback(() => {
     isLockedToBottomRef.current = true;
+    isScrollingDownRef.current = false;
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
   const lockToBottom = useCallback(() => {
     isLockedToBottomRef.current = true;
+    isScrollingDownRef.current = false;
     forceScrollToBottom('auto');
   }, [forceScrollToBottom]);
 
