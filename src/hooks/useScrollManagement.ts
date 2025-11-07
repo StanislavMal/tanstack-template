@@ -23,7 +23,7 @@ export function useScrollManagement(messageCount: number = 0) {
       });
       setTimeout(() => {
         isProgrammaticScrollRef.current = false;
-      }, 150);
+      }, 200); // ✅ Увеличим задержку для большей надежности
     }
   }, []);
 
@@ -33,9 +33,13 @@ export function useScrollManagement(messageCount: number = 0) {
     if (!container || !content) return;
 
     const handleScroll = () => {
-      if (isProgrammaticScrollRef.current) return;
+      if (isProgrammaticScrollRef.current) {
+        return;
+      }
       
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
       
       scrollTimeoutRef.current = setTimeout(() => {
         const { scrollTop, scrollHeight, clientHeight } = container;
@@ -60,25 +64,30 @@ export function useScrollManagement(messageCount: number = 0) {
     resizeObserver.observe(content);
     container.addEventListener('scroll', handleScroll, { passive: true });
 
-    if (messageCount > prevMessageCountRef.current) {
-      isLockedToBottomRef.current = true;
+    // ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Мы проверяем не только `messageCount`,
+    // но и текущее состояние блокировки. Если пользователь уже отскроллил,
+    // новое сообщение не должно принудительно тянуть его вниз.
+    if (messageCount > prevMessageCountRef.current && isLockedToBottomRef.current) {
       forceScrollToBottom('auto');
-      prevMessageCountRef.current = messageCount;
     }
+    prevMessageCountRef.current = messageCount;
 
     return () => {
       container.removeEventListener('scroll', handleScroll);
       resizeObserver.disconnect();
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
     };
-  }, [messageCount, forceScrollToBottom]);
+    // ✅ Убираем `forceScrollToBottom` из зависимостей.
+    // Это гарантирует, что `handleScroll` не будет пересоздаваться без необходимости.
+  }, [messageCount]);
 
   const scrollToBottom = useCallback(() => {
     isLockedToBottomRef.current = true;
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
-  // ✅ НОВАЯ ФУНКЦИЯ: Принудительно блокируем скролл
   const lockToBottom = useCallback(() => {
     isLockedToBottomRef.current = true;
     forceScrollToBottom('auto');
@@ -89,6 +98,6 @@ export function useScrollManagement(messageCount: number = 0) {
     contentRef,
     showScrollDownButton,
     scrollToBottom,
-    lockToBottom, // ✅ Экспортируем ее
+    lockToBottom,
   };
 }
