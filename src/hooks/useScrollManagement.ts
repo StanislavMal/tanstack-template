@@ -12,9 +12,7 @@ export function useScrollManagement(messageCount: number = 0) {
   const prevMessageCountRef = useRef(messageCount);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastScrollTopRef = useRef(0);
-  
-  // 🔥 Отслеживаем намерение вернуться вниз
-  const isScrollingDownRef = useRef(false);
+  const consecutiveDownScrollsRef = useRef(0);
 
   const forceScrollToBottom = useCallback((behavior: 'smooth' | 'auto' = 'auto') => {
     const container = scrollContainerRef.current;
@@ -38,45 +36,31 @@ export function useScrollManagement(messageCount: number = 0) {
       const scrollDelta = scrollTop - lastScrollTopRef.current;
       lastScrollTopRef.current = scrollTop;
       
-      // 🔥 Отслеживаем направление движения
-      if (scrollDelta < -5) {  
-        // Скроллим вверх - разблокируем
-        isLockedToBottomRef.current = false;
-        isScrollingDownRef.current = false;
-      } else if (scrollDelta > 5) {
-        // Скроллим вниз - запоминаем намерение
-        isScrollingDownRef.current = true;
-      }
-      
-      // 🔥 Адаптивный порог для захвата
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       
-      // Разные пороги для разных ситуаций:
-      // - Если скроллим вниз намеренно - большой порог (150px)
-      // - Если просто находимся внизу - маленький порог (30px)
-      const captureThreshold = isScrollingDownRef.current ? 150 : 30;
-      const isAtBottom = distanceFromBottom < captureThreshold;
-      
-      // 🔥 Дополнительная проверка: если почти внизу И скроллим вниз - захватываем
-      if (isAtBottom && isScrollingDownRef.current) {
-        isLockedToBottomRef.current = true;
-        isScrollingDownRef.current = false; // Сбрасываем флаг
-        // Сразу доскролливаем до конца для лучшего UX
-        if (distanceFromBottom > 30) {
-          forceScrollToBottom('smooth');
+      if (scrollDelta < -5) {  
+        isLockedToBottomRef.current = false;
+        consecutiveDownScrollsRef.current = 0;
+      }
+
+      else if (scrollDelta > 10) {
+        consecutiveDownScrollsRef.current++;
+
+        if (distanceFromBottom < 150) {
+          isLockedToBottomRef.current = true;
+          consecutiveDownScrollsRef.current = 0;
+
+          if (distanceFromBottom > 30) {
+            forceScrollToBottom('smooth');
+          }
         }
-      } else if (distanceFromBottom < 30) {
-        // Очень близко к низу - всегда блокируем
-        isLockedToBottomRef.current = true;
       }
       
-      // Debounce только для кнопки
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
       
       scrollTimeoutRef.current = setTimeout(() => {
-        // 🔥 Показываем кнопку только если далеко от низа
         const shouldShowButton = distanceFromBottom > 200;
         setShowScrollDownButton(shouldShowButton && !isLockedToBottomRef.current);
         scrollTimeoutRef.current = null;
@@ -112,13 +96,13 @@ export function useScrollManagement(messageCount: number = 0) {
 
   const scrollToBottom = useCallback(() => {
     isLockedToBottomRef.current = true;
-    isScrollingDownRef.current = false;
+    consecutiveDownScrollsRef.current = 0;
     forceScrollToBottom('smooth');
   }, [forceScrollToBottom]);
 
   const lockToBottom = useCallback(() => {
     isLockedToBottomRef.current = true;
-    isScrollingDownRef.current = false;
+    consecutiveDownScrollsRef.current = 0;
     forceScrollToBottom('auto');
   }, [forceScrollToBottom]);
 
