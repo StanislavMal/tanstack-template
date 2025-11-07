@@ -15,7 +15,6 @@ interface UseChatOptions {
 export function useChat(options: UseChatOptions = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // ✅ ВОЗВРАЩАЕМ `pendingMessage` для поддержки "живого" форматирования
   const [pendingMessage, setPendingMessage] = useState<Message | null>(null);
   
   const { settings } = useSettings();
@@ -28,7 +27,7 @@ export function useChat(options: UseChatOptions = {}) {
   } = useConversations();
 
   const textQueueRef = useRef<string>('');
-  const displayedTextRef = useRef<string>(''); // ✅ Будем хранить полный текст здесь
+  const displayedTextRef = useRef<string>('');
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
   const bufferRef = useRef<string>('');
   const activeRequestIdRef = useRef<string | null>(null);
@@ -40,8 +39,7 @@ export function useChat(options: UseChatOptions = {}) {
     };
   }, []);
 
-  // ✅ Анимация теперь обновляет `pendingMessage`
-  const startTypingAnimation = useCallback((messageId: string) => {
+  const startTypingAnimation = useCallback(() => {
     if (intervalIdRef.current) clearInterval(intervalIdRef.current);
 
     const streamSpeed = settings?.streamSpeed || 30;
@@ -54,10 +52,9 @@ export function useChat(options: UseChatOptions = {}) {
         textQueueRef.current = textQueueRef.current.substring(charsPerTick);
         displayedTextRef.current += charsToAdd;
         
+        // ✅ Используем `functional update` для большей надежности
         setPendingMessage(prev => 
-          prev && prev.id === messageId 
-            ? { ...prev, content: displayedTextRef.current } 
-            : prev
+          prev ? { ...prev, content: displayedTextRef.current } : prev
         );
 
       } else if (!isStreamActiveRef.current) {
@@ -108,12 +105,10 @@ export function useChat(options: UseChatOptions = {}) {
 
       bufferRef.current = '';
       textQueueRef.current = '';
-      displayedTextRef.current = ''; // ✅ Сброс
+      displayedTextRef.current = '';
       setPendingMessage(null);
       stopTypingAnimation();
       
-      const assistantMessageId = crypto.randomUUID();
-
       try {
         const provider = settings.model.startsWith('deepseek') ? 'deepseek' : 'gemini';
         const response = await streamChat({
@@ -153,14 +148,14 @@ export function useChat(options: UseChatOptions = {}) {
             if (chunk.error) throw new Error(chunk.error);
             if (chunk.text) {
               if (!animationStarted) {
-                // ✅ Создаем `pendingMessage` при первом чанке
+                // ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Используем временный, предсказуемый ID
                 setPendingMessage({ 
-                  id: assistantMessageId, 
+                  id: 'pending-assistant-message', 
                   role: 'assistant', 
                   content: '' 
                 });
                 isStreamActiveRef.current = true;
-                startTypingAnimation(assistantMessageId);
+                startTypingAnimation();
                 setIsLoading(false);
                 options.onResponseStart?.();
                 animationStarted = true;
@@ -181,8 +176,9 @@ export function useChat(options: UseChatOptions = {}) {
           checkCompletion();
         });
         
+        // ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Создаем финальный объект с НОВЫМ, уникальным ID
         return { 
-          id: assistantMessageId, 
+          id: crypto.randomUUID(), 
           role: 'assistant' as const, 
           content: displayedTextRef.current 
         };
@@ -224,11 +220,12 @@ export function useChat(options: UseChatOptions = {}) {
         
         const aiResponse = await processAIResponse(currentMessages);
         
+        // ✅ Сначала очищаем pendingMessage, потом добавляем финальное
+        setPendingMessage(null);
         if (aiResponse && aiResponse.content.trim()) {
           await addMessage(convId, aiResponse);
           options.onResponseComplete?.(aiResponse);
         }
-        setPendingMessage(null); // ✅ Финальная очистка
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred';
@@ -256,11 +253,11 @@ export function useChat(options: UseChatOptions = {}) {
 
         const aiResponse = await processAIResponse(updatedHistory);
         
+        setPendingMessage(null);
         if (aiResponse && aiResponse.content.trim()) {
           await addMessage(currentConversationId, aiResponse);
           options.onResponseComplete?.(aiResponse);
         }
-        setPendingMessage(null);
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'An error occurred during edit';
@@ -282,6 +279,6 @@ export function useChat(options: UseChatOptions = {}) {
     isLoading,
     error,
     clearError,
-    pendingMessage, // ✅ Возвращаем `pendingMessage`
+    pendingMessage,
   };
 }
