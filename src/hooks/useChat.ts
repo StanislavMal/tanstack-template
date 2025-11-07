@@ -7,7 +7,7 @@ import { useConversations, useSettings, usePrompts } from '../store/hooks';
 import { selectors, store } from '../store/store';
 
 interface UseChatOptions {
-  onResponseStart?: () => void;
+  onResponseStart?: () => void; // ✅ Убедимся, что опция есть
   onResponseComplete?: (message: Message) => void;
   onError?: (error: string) => void;
 }
@@ -52,7 +52,6 @@ export function useChat(options: UseChatOptions = {}) {
         textQueueRef.current = textQueueRef.current.substring(charsPerTick);
         displayedTextRef.current += charsToAdd;
         
-        // ✅ Используем `functional update` для большей надежности
         setPendingMessage(prev => 
           prev ? { ...prev, content: displayedTextRef.current } : prev
         );
@@ -148,7 +147,6 @@ export function useChat(options: UseChatOptions = {}) {
             if (chunk.error) throw new Error(chunk.error);
             if (chunk.text) {
               if (!animationStarted) {
-                // ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Используем временный, предсказуемый ID
                 setPendingMessage({ 
                   id: 'pending-assistant-message', 
                   role: 'assistant', 
@@ -157,7 +155,7 @@ export function useChat(options: UseChatOptions = {}) {
                 isStreamActiveRef.current = true;
                 startTypingAnimation();
                 setIsLoading(false);
-                options.onResponseStart?.();
+                options.onResponseStart?.(); // ✅ ВЫЗЫВАЕМ КОЛБЭК ЗДЕСЬ
                 animationStarted = true;
               }
               textQueueRef.current += chunk.text;
@@ -176,7 +174,6 @@ export function useChat(options: UseChatOptions = {}) {
           checkCompletion();
         });
         
-        // ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Создаем финальный объект с НОВЫМ, уникальным ID
         return { 
           id: crypto.randomUUID(), 
           role: 'assistant' as const, 
@@ -220,7 +217,6 @@ export function useChat(options: UseChatOptions = {}) {
         
         const aiResponse = await processAIResponse(currentMessages);
         
-        // ✅ Сначала очищаем pendingMessage, потом добавляем финальное
         setPendingMessage(null);
         if (aiResponse && aiResponse.content.trim()) {
           await addMessage(convId, aiResponse);

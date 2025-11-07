@@ -54,13 +54,20 @@ function Home() {
   const { loadSettings } = useSettings();
   const { loadPrompts } = usePrompts();
   
-  const { sendMessage, editAndRegenerate, isLoading, error, pendingMessage } = useChat(); // ✅ Получаем `pendingMessage`
+  // ✅ Получаем `pendingMessage` напрямую, чтобы передать в `useScrollManagement`
+  const { sendMessage, editAndRegenerate, isLoading, error, pendingMessage } = useChat({
+    // ✅ Передаем колбэк для принудительной блокировки скролла
+    onResponseStart: () => {
+      lockToBottom();
+    },
+  });
   
   const {
     messagesContainerRef,
     contentRef,
     showScrollDownButton,
     scrollToBottom,
+    lockToBottom, // ✅ Получаем функцию lockToBottom
   } = useScrollManagement(messages.length + (pendingMessage ? 1 : 0));
 
   useEffect(() => {
@@ -196,7 +203,7 @@ function Home() {
 
   const chatAreaProps = {
     messages,
-    pendingMessage, // ✅ Передаем `pendingMessage`
+    pendingMessage,
     isThinking: isLoading && !pendingMessage,
     error,
     currentConversationId,
