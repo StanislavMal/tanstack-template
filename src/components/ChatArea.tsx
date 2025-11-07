@@ -1,15 +1,15 @@
 // 📄 src/components/ChatArea.tsx
 
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { ChatMessage, LoadingIndicator, WelcomeScreen, StreamingMessage } from '../components';
+import { ChatMessage, LoadingIndicator, WelcomeScreen } from '../components';
 import type { Message } from '../lib/ai/types';
 
 interface ChatAreaProps {
   messages: Message[];
-  streamingContent: string; // ✅ ИЗМЕНЕНИЕ: Вместо pendingMessage
-  isThinking: boolean; // ✅ ИЗМЕНЕНИЕ: Отдельный флаг для "Думаю..."
+  pendingMessage: Message | null; // ✅ Возвращаем `pendingMessage`
+  isThinking: boolean;
   error: string | null;
   currentConversationId: string | null;
   editingMessageId: string | null;
@@ -22,7 +22,7 @@ interface ChatAreaProps {
 const ChatAreaComponent = memo(
   ({
     messages,
-    streamingContent,
+    pendingMessage,
     isThinking,
     error,
     currentConversationId,
@@ -32,6 +32,15 @@ const ChatAreaComponent = memo(
     onSaveEdit,
   }: ChatAreaProps) => {
     const { t } = useTranslation();
+
+    // ✅ Объединяем основной список и "живое" сообщение
+    const displayMessages = useMemo(() => {
+      const combined = [...messages];
+      if (pendingMessage) {
+        combined.push(pendingMessage);
+      }
+      return combined;
+    }, [messages, pendingMessage]);
 
     const handleMessageActions = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
@@ -47,6 +56,7 @@ const ChatAreaComponent = memo(
     }, [onStartEdit]);
 
     const handleRegenerate = useCallback((assistantMessageId: string) => {
+      // Ищем в основном списке, чтобы не регенерировать стримящееся сообщение
       const assistantIndex = messages.findIndex(m => m.id === assistantMessageId);
       if (assistantIndex === -1) return;
       
@@ -75,22 +85,20 @@ const ChatAreaComponent = memo(
         <div className="space-y-4">
           {currentConversationId ? (
             <>
-              {messages.map((message) => (
+              {displayMessages.map((message) => (
                 <ChatMessage
                   key={message.id}
                   message={message}
                   isEditing={editingMessageId === message.id}
                   onSaveEdit={onSaveEdit}
                   onCancelEdit={onCancelEdit}
-                  showRegenerateButton={message.role === 'assistant'}
+                  // ✅ Не показываем кнопку регенерации для стримящегося сообщения
+                  showRegenerateButton={message.role === 'assistant' && message.id !== pendingMessage?.id}
                   onRegenerate={() => handleRegenerate(message.id)}
                   isLoading={isThinking}
                 />
               ))}
-              {/* ✅ Рендерим индикатор "Думаю..." только ДО начала стриминга */}
               {isThinking && <LoadingIndicator />}
-              {/* ✅ Рендерим стриминг ОТДЕЛЬНО, когда он начался */}
-              {streamingContent && <StreamingMessage content={streamingContent} />}
             </>
           ) : (
             <WelcomeScreen />
@@ -99,10 +107,9 @@ const ChatAreaComponent = memo(
       </div>
     );
   },
-  // ✅ Упрощенная и более надежная мемоизация
   (prev, next) => (
     prev.messages === next.messages &&
-    prev.streamingContent === next.streamingContent &&
+    prev.pendingMessage === next.pendingMessage && // ✅ Сравниваем `pendingMessage`
     prev.isThinking === next.isThinking &&
     prev.error === next.error &&
     prev.currentConversationId === next.currentConversationId &&
@@ -112,7 +119,6 @@ const ChatAreaComponent = memo(
 
 ChatAreaComponent.displayName = 'ChatArea';
 
-// ✅ Экспортируем типизированный forwardRef для использования в `useScrollManagement`
 import { forwardRef, type ForwardedRef } from 'react';
 export const ChatArea = forwardRef((props: ChatAreaProps, ref: ForwardedRef<HTMLDivElement>) => (
   <div ref={ref} className="w-full">

@@ -15,8 +15,8 @@ interface UseChatOptions {
 export function useChat(options: UseChatOptions = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // ✅ ИЗМЕНЕНИЕ: Заменяем сложный `pendingMessage` на простую строку
-  const [streamingContent, setStreamingContent] = useState<string>('');
+  // ✅ ВОЗВРАЩАЕМ `pendingMessage` для поддержки "живого" форматирования
+  const [pendingMessage, setPendingMessage] = useState<Message | null>(null);
   
   const { settings } = useSettings();
   const { activePrompt } = usePrompts();
@@ -28,35 +28,39 @@ export function useChat(options: UseChatOptions = {}) {
   } = useConversations();
 
   const textQueueRef = useRef<string>('');
+  const displayedTextRef = useRef<string>(''); // ✅ Будем хранить полный текст здесь
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
   const bufferRef = useRef<string>('');
   const activeRequestIdRef = useRef<string | null>(null);
   const isStreamActiveRef = useRef<boolean>(false);
 
-  // ✅ Упрощенный useEffect для очистки
   useEffect(() => {
     return () => {
       if (intervalIdRef.current) clearInterval(intervalIdRef.current);
     };
   }, []);
 
-  const startTypingAnimation = useCallback(() => {
+  // ✅ Анимация теперь обновляет `pendingMessage`
+  const startTypingAnimation = useCallback((messageId: string) => {
     if (intervalIdRef.current) clearInterval(intervalIdRef.current);
 
     const streamSpeed = settings?.streamSpeed || 30;
-    const updateIntervalMs = 33; // ~30 FPS, достаточно плавно
+    const updateIntervalMs = 33;
     const charsPerTick = Math.max(1, Math.round((streamSpeed * updateIntervalMs) / 1000));
 
     intervalIdRef.current = setInterval(() => {
       if (textQueueRef.current.length > 0) {
         const charsToAdd = textQueueRef.current.substring(0, charsPerTick);
         textQueueRef.current = textQueueRef.current.substring(charsPerTick);
+        displayedTextRef.current += charsToAdd;
         
-        // ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Обновляем только строку, а не весь объект
-        setStreamingContent(prev => prev + charsToAdd);
+        setPendingMessage(prev => 
+          prev && prev.id === messageId 
+            ? { ...prev, content: displayedTextRef.current } 
+            : prev
+        );
 
       } else if (!isStreamActiveRef.current) {
-        // ✅ Стрим закончился и очередь пуста - останавливаем анимацию
         if (intervalIdRef.current) {
           clearInterval(intervalIdRef.current);
           intervalIdRef.current = null;
@@ -102,12 +106,14 @@ export function useChat(options: UseChatOptions = {}) {
       const requestId = crypto.randomUUID();
       activeRequestIdRef.current = requestId;
 
-      // ✅ Сброс состояния перед новым запросом
       bufferRef.current = '';
       textQueueRef.current = '';
-      setStreamingContent('');
+      displayedTextRef.current = ''; // ✅ Сброс
+      setPendingMessage(null);
       stopTypingAnimation();
       
+      const assistantMessageId = crypto.randomUUID();
+
       try {
         const provider = settings.model.startsWith('deepseek') ? 'deepseek' : 'gemini';
         const response = await streamChat({
@@ -147,10 +153,15 @@ export function useChat(options: UseChatOptions = {}) {
             if (chunk.error) throw new Error(chunk.error);
             if (chunk.text) {
               if (!animationStarted) {
-                // ✅ Запускаем анимацию при получении первого чанка
+                // ✅ Создаем `pendingMessage` при первом чанке
+                setPendingMessage({ 
+                  id: assistantMessageId, 
+                  role: 'assistant', 
+                  content: '' 
+                });
                 isStreamActiveRef.current = true;
-                startTypingAnimation();
-                setIsLoading(false); // Убираем индикатор "Thinking..."
+                startTypingAnimation(assistantMessageId);
+                setIsLoading(false);
                 options.onResponseStart?.();
                 animationStarted = true;
               }
@@ -159,7 +170,6 @@ export function useChat(options: UseChatOptions = {}) {
           }
         }
         
-        // ✅ Ожидаем завершения анимации
         await new Promise<void>((resolve) => {
           const checkCompletion = () => {
             if (textQueueRef.current.length === 0 && !intervalIdRef.current) {
@@ -171,12 +181,10 @@ export function useChat(options: UseChatOptions = {}) {
           checkCompletion();
         });
         
-        // ✅ Возвращаем финальное сообщение
-        const finalContent = store.state.streamingContent; // Используем состояние из store
         return { 
-          id: crypto.randomUUID(), 
+          id: assistantMessageId, 
           role: 'assistant' as const, 
-          content: finalContent
+          content: displayedTextRef.current 
         };
 
       } catch (error) {
@@ -187,23 +195,18 @@ export function useChat(options: UseChatOptions = {}) {
         return null;
       } finally {
         stopTypingAnimation();
-        setStreamingContent(''); // ✅ Финальная очистка
       }
     },
     [settings, activePrompt, startTypingAnimation, stopTypingAnimation, options, parseNDJSON]
   );
   
-  // ✅ Привязываем `streamingContent` к store, чтобы получить к нему доступ в `processAIResponse`
-  useEffect(() => {
-    store.setState(s => ({ ...s, streamingContent }));
-  }, [streamingContent]);
-
   const sendMessage = useCallback(
     async (content: string, conversationTitle?: string) => {
       if (!content.trim() || isLoading) return;
 
       setIsLoading(true);
       setError(null);
+      setPendingMessage(null);
       
       const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content: content.trim() };
 
@@ -215,9 +218,8 @@ export function useChat(options: UseChatOptions = {}) {
           if (!convId) throw new Error('Failed to create conversation');
         }
         
-        // ✅ Сначала добавляем сообщение пользователя, потом получаем историю
         await addMessage(convId, userMessage);
-        await new Promise(resolve => setTimeout(resolve, 10)); // Даем store обновиться
+        await new Promise(resolve => setTimeout(resolve, 10));
         const currentMessages = selectors.getCurrentMessages(store.state);
         
         const aiResponse = await processAIResponse(currentMessages);
@@ -226,11 +228,13 @@ export function useChat(options: UseChatOptions = {}) {
           await addMessage(convId, aiResponse);
           options.onResponseComplete?.(aiResponse);
         }
+        setPendingMessage(null); // ✅ Финальная очистка
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred';
         setError(errorMsg);
         options.onError?.(errorMsg);
+        setPendingMessage(null);
       } finally {
         setIsLoading(false);
       }
@@ -244,6 +248,7 @@ export function useChat(options: UseChatOptions = {}) {
 
       setIsLoading(true);
       setError(null);
+      setPendingMessage(null);
 
       try {
         const updatedHistory = await editMessageAndUpdate(messageId, newContent);
@@ -255,11 +260,13 @@ export function useChat(options: UseChatOptions = {}) {
           await addMessage(currentConversationId, aiResponse);
           options.onResponseComplete?.(aiResponse);
         }
+        setPendingMessage(null);
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'An error occurred during edit';
         setError(errorMsg);
         options.onError?.(errorMsg);
+        setPendingMessage(null);
       } finally {
         setIsLoading(false);
       }
@@ -275,6 +282,6 @@ export function useChat(options: UseChatOptions = {}) {
     isLoading,
     error,
     clearError,
-    streamingContent, // ✅ Возвращаем новую строку
+    pendingMessage, // ✅ Возвращаем `pendingMessage`
   };
 }

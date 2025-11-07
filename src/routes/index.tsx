@@ -54,14 +54,14 @@ function Home() {
   const { loadSettings } = useSettings();
   const { loadPrompts } = usePrompts();
   
-  const { streamingContent: currentStreamingContent } = useChat();
+  const { sendMessage, editAndRegenerate, isLoading, error, pendingMessage } = useChat(); // ✅ Получаем `pendingMessage`
   
   const {
     messagesContainerRef,
     contentRef,
     showScrollDownButton,
     scrollToBottom,
-  } = useScrollManagement(messages.length + (currentStreamingContent ? 1 : 0));
+  } = useScrollManagement(messages.length + (pendingMessage ? 1 : 0));
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -118,8 +118,6 @@ function Home() {
 
   const sidebar = useSidebar();
   
-  const { sendMessage, editAndRegenerate, isLoading, error, streamingContent } = useChat();
-
   const handleSend = useCallback(
     async (message: string) => {
       if (!message.trim() || isLoading) return;
@@ -198,8 +196,8 @@ function Home() {
 
   const chatAreaProps = {
     messages,
-    streamingContent,
-    isThinking: isLoading && !streamingContent, // "Думаю" только если isLoading и стриминг еще не начался
+    pendingMessage, // ✅ Передаем `pendingMessage`
+    isThinking: isLoading && !pendingMessage,
     error,
     currentConversationId,
     editingMessageId,
