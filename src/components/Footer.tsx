@@ -1,6 +1,5 @@
 // 📄 src/components/Footer.tsx
 
-// ИЗМЕНЕНИЕ: Добавляем useRef
 import { useState, memo, forwardRef, useImperativeHandle, useRef } from 'react';
 import { ChatInput } from './ChatInput';
 
@@ -18,11 +17,13 @@ export const Footer = memo(forwardRef<FooterRef, FooterProps>(
     const [input, setInput] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+    // ✅ Этот хук "пробрасывает" функцию resetInput наружу,
+    // чтобы родительский компонент (Home) мог ее вызвать.
     useImperativeHandle(ref, () => ({
       resetInput: () => {
         setInput('');
         if (textareaRef.current) {
-          textareaRef.current.style.height = 'auto';
+          textareaRef.current.style.height = 'auto'; // Сбрасываем высоту textarea
         }
       }
     }));
@@ -31,12 +32,9 @@ export const Footer = memo(forwardRef<FooterRef, FooterProps>(
       e.preventDefault();
       const messageToSend = input.trim();
       if (!messageToSend || isLoading) return;
-
-      setInput(''); 
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
       
+      // Мы не сбрасываем инпут здесь, так как родительский компонент
+      // вызовет `resetInput` сразу после клика. Это дает лучший UX.
       await onSend(messageToSend);
     };
 
