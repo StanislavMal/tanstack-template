@@ -54,21 +54,24 @@ function Home() {
   const { loadSettings } = useSettings();
   const { loadPrompts } = usePrompts();
   
+  // ✅ Получаем `pendingMessage` напрямую, чтобы передать в `useScrollManagement`
+  const { sendMessage, editAndRegenerate, isLoading, error, pendingMessage } = useChat({
+    // ✅ Передаем колбэк для принудительной блокировки скролла
+    onResponseStart: () => {
+      lockToBottom();
+    },
+  });
+  
   const {
     messagesContainerRef,
     contentRef,
     showScrollDownButton,
     scrollToBottom,
-    lockToBottom,
-  } = useScrollManagement(messages.length);
+    lockToBottom, // ✅ Получаем функцию lockToBottom
+  } = useScrollManagement(messages.length + (pendingMessage ? 1 : 0));
 
   useEffect(() => {
-
-    if (!isInitialized) {
-      setAppState('authenticating');
-      return;
-    }
-
+    if (!isInitialized) return;
     if (!user) {
       navigate({ to: '/login', replace: true });
       return;
@@ -78,52 +81,30 @@ function Home() {
       const loadInitialData = async () => {
         setAppState('loading');
         try {
-
-          await Promise.all([
-            loadConversations(),
-            loadPrompts(),
-            loadSettings()
-          ]);
-
+          await Promise.all([loadConversations(), loadPrompts(), loadSettings()]);
           setAppState('ready');
         } catch (error) {
-          console.error("Fatal error during initial data load:", error);
           setLoadError('Failed to load your data. Please refresh the page.');
           setAppState('error');
         }
       };
-
       loadInitialData();
     }
-
   }, [user, isInitialized, appState, navigate, loadConversations, loadPrompts, loadSettings]);
 
   useEffect(() => {
-
-    if (appState !== 'ready' || !user) {
-      return;
-    }
-
-    console.log('[Realtime] Subscribing to channels.');
+    if (appState !== 'ready' || !user) return;
 
     const channels = [
       supabase.channel('conversations-changes').on<Conversation>(
         'postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `user_id=eq.${user.id}` },
-        (payload) => {
-          switch (payload.eventType) {
-            case 'INSERT': actions.addConversation(payload.new); break;
-            case 'UPDATE': actions.updateConversationTitle(payload.new.id, payload.new.title); break;
-            case 'DELETE': actions.deleteConversation((payload.old as Conversation).id); break;
-          }
-        }
+        () => { loadConversations(); }
       ).subscribe(),
       supabase.channel('messages-changes').on<MessageWithConversationId>(
         'postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `user_id=eq.${user.id}`},
         (payload) => {
-          if (store.state.currentConversationId === payload.new.conversation_id) {
-            if (!store.state.currentMessages.some(m => m.id === payload.new.id)) {
-              actions.addMessage(payload.new);
-            }
+          if (store.state.currentConversationId === payload.new.conversation_id && !store.state.currentMessages.some(m => m.id === payload.new.id)) {
+            actions.addMessage(payload.new);
           }
         }
       ).subscribe(),
@@ -138,25 +119,16 @@ function Home() {
     ];
 
     return () => {
-      console.log('[Realtime] Unsubscribing from all channels.');
       channels.forEach(channel => supabase.removeChannel(channel));
     };
-  }, [appState, user, loadPrompts]);
-
+  }, [appState, user, loadPrompts, loadConversations]);
 
   const sidebar = useSidebar();
   
-  const { sendMessage, editAndRegenerate, isLoading, error, pendingMessage } = useChat({
-    onMessageSent: () => { lockToBottom(); },
-    onResponseComplete: () => {},
-    onError: (error) => { console.error('Chat error:', error); },
-  });
-
-  const displayMessages = messages;
-
   const handleSend = useCallback(
     async (message: string) => {
       if (!message.trim() || isLoading) return;
+      footerRef.current?.resetInput();
       const words = message.trim().split(/\s+/);
       const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
       await sendMessage(message, title);
@@ -165,20 +137,12 @@ function Home() {
   );
 
   const handleLogout = useCallback(async () => {
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('sb-') && key.includes('-auth-')) {
-        localStorage.removeItem(key);
-      }
-    });
-    
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error('Error on sign out attempt:', error.message);
-    }
-  }, []);
+    await supabase.auth.signOut();
+    navigate({ to: '/login', replace: true });
+  }, [navigate]);
 
-  const handleStartEdit = useCallback((id: string) => { setEditingMessageId(id); }, []);
-  const handleCancelEdit = useCallback(() => { setEditingMessageId(null); }, []);
+  const handleStartEdit = useCallback((id: string) => setEditingMessageId(id), []);
+  const handleCancelEdit = useCallback(() => setEditingMessageId(null), []);
 
   const handleSaveEdit = useCallback(
     async (id: string, newContent: string) => {
@@ -198,7 +162,11 @@ function Home() {
     editingChatId: sidebar.editingChatId,
     setEditingChatId: (id: string | null) => {
       const conversation = sidebar.conversations.find((c) => c.id === id);
-      if (id && conversation) { sidebar.handleStartEdit(id, conversation.title); } else { sidebar.handleCancelEdit(); }
+      if (id && conversation) {
+        sidebar.handleStartEdit(id, conversation.title);
+      } else {
+        sidebar.handleCancelEdit();
+      }
     },
     editingTitle: sidebar.editingTitle,
     setEditingTitle: sidebar.setEditingTitle,
@@ -208,23 +176,12 @@ function Home() {
     isCollapsed: sidebar.isCollapsed,
   };
   
-  if (appState === 'authenticating') {
+  if (appState === 'authenticating' || appState === 'loading') {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          <p className="mt-4 text-gray-400">Authenticating...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (appState === 'loading') {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          <p className="mt-4 text-gray-400">Loading your data...</p>
+          <p className="mt-4 text-gray-400">{appState === 'authenticating' ? 'Authenticating...' : 'Loading your data...'}</p>
         </div>
       </div>
     );
@@ -234,17 +191,9 @@ function Home() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
         <div className="text-center max-w-md px-4">
-          <div className="text-red-500 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
           <h2 className="text-xl font-semibold text-white mb-2">Loading Error</h2>
           <p className="text-gray-400 mb-6">{loadError}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
-          >
+          <button onClick={() => window.location.reload()} className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
             Reload Page
           </button>
         </div>
@@ -252,7 +201,17 @@ function Home() {
     );
   }
 
-  const chatAreaProps = { messages: displayMessages, pendingMessage, isLoading, error, currentConversationId, editingMessageId, onStartEdit: handleStartEdit, onCancelEdit: handleCancelEdit, onSaveEdit: handleSaveEdit };
+  const chatAreaProps = {
+    messages,
+    pendingMessage,
+    isThinking: isLoading && !pendingMessage,
+    error,
+    currentConversationId,
+    editingMessageId,
+    onStartEdit: handleStartEdit,
+    onCancelEdit: handleCancelEdit,
+    onSaveEdit: handleSaveEdit,
+  };
 
   if (appState === 'ready') {
     if (isDesktop) {
@@ -263,26 +222,18 @@ function Home() {
               <Sidebar {...sidebarProps} isOpen={true} setIsOpen={() => {}} />
             </Panel>
             <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
-            {/* ✅ ИЗМЕНЕНИЕ: Убираем 'relative', он больше не нужен */}
             <Panel className="flex-1 flex flex-col min-h-0">
               <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} />
               <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
-                <div ref={contentRef}>
-                  {/* ✅ ИЗМЕНЕНИЕ: Добавляем pt-12 для отступа от верха */}
-                  <div className={`w-full max-w-5xl mx-auto pt-12 ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
-                    <ChatArea {...chatAreaProps} />
-                  </div>
+                <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
+                  <ChatArea {...chatAreaProps} ref={contentRef} />
                 </div>
               </main>
               {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-10" />}
               <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
             </Panel>
           </PanelGroup>
-          <SettingsDialog 
-            isOpen={isSettingsOpen} 
-            onClose={() => setIsSettingsOpen(false)} 
-            onLogout={handleLogout}
-          />
+          <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onLogout={handleLogout} />
         </div>
       );
     }
@@ -293,21 +244,16 @@ function Home() {
         <Sidebar {...sidebarProps} />
         <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
         <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
-          <div ref={contentRef}>
-            <ChatArea {...chatAreaProps} />
+          <div className="w-full">
+            <ChatArea {...chatAreaProps} ref={contentRef} />
           </div>
         </main>
         {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
         <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
-        <SettingsDialog 
-          isOpen={isSettingsOpen} 
-          onClose={() => setIsSettingsOpen(false)} 
-          onLogout={handleLogout}
-        />
+        <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onLogout={handleLogout} />
       </div>
     );
   }
 
-  // Fallback, на случай если ни одно состояние не отработало
   return null;
 }

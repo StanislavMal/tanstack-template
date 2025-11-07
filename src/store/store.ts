@@ -34,8 +34,8 @@ export interface State {
   currentMessages: Message[] 
   currentConversationId: string | null
   isLoading: boolean
-  // ✅ НОВОЕ: Timestamp последнего созданного чата для предотвращения race condition
-  lastConversationCreatedAt: number | null
+  // ✅ НОВОЕ: Добавляем поле для хранения текущего стриминга
+  streamingContent: string
 }
 
 const initialState: State = {
@@ -45,11 +45,12 @@ const initialState: State = {
   currentMessages: [],
   currentConversationId: null,
   isLoading: false,
-  lastConversationCreatedAt: null,
+  streamingContent: '', // ✅ Начальное значение
 }
 
 export const store = new Store<State>(initialState)
 
+// ... (остальной код actions и selectors остается без изменений)
 export const actions = {
   resetStore: () => {
     store.setState(() => initialState);
@@ -100,13 +101,11 @@ export const actions = {
     });
   },
 
-  // ✅ ИСПРАВЛЕНО: НЕ очищаем currentMessages - это затирает только что добавленное сообщение
   addConversation: (conversation: Conversation) => {
     store.setState(state => ({
       ...state,
       conversations: [conversation, ...state.conversations],
       currentConversationId: conversation.id,
-      lastConversationCreatedAt: Date.now(), // ✅ Запоминаем время создания
     }));
   },
 
@@ -143,5 +142,4 @@ export const selectors = {
   getCurrentConversationId: (state: State) => state.currentConversationId,
   getIsLoading: (state: State) => state.isLoading,
   getCurrentMessages: (state: State) => state.currentMessages,
-  getLastConversationCreatedAt: (state: State) => state.lastConversationCreatedAt,
 }
