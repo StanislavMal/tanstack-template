@@ -62,10 +62,11 @@ const REASONING_LEVELS = [
 ];
 
 interface ModelSelectorProps {
-  fullWidth?: boolean;
+  fullWidth?: boolean;  
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
-export function ModelSelector({ fullWidth = false }: ModelSelectorProps) {
+export function ModelSelector({ fullWidth = false, onOpenChange }: ModelSelectorProps) {
   const { t } = useTranslation();
   const { settings, updateSettings } = useSettings();
   const [isOpen, setIsOpen] = useState(false);
@@ -74,10 +75,15 @@ export function ModelSelector({ fullWidth = false }: ModelSelectorProps) {
 
   const currentModel = MODELS.find(m => m.id === settings?.model) || MODELS[0];
 
+  const handleSetIsOpen = (value: boolean) => {
+    setIsOpen(value);
+    onOpenChange?.(value);
+  };
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        handleSetIsOpen(false);
       }
     }
 
@@ -85,7 +91,7 @@ export function ModelSelector({ fullWidth = false }: ModelSelectorProps) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [isOpen]);
+  }, [isOpen, onOpenChange]);
 
   const handleModelChange = (modelId: string) => {
     const model = MODELS.find(m => m.id === modelId);
@@ -103,7 +109,6 @@ export function ModelSelector({ fullWidth = false }: ModelSelectorProps) {
       reasoningEffort: newReasoningEffort,
     });
 
-    setIsOpen(false);
   };
 
   const handleReasoningChange = (level: string) => {
@@ -134,7 +139,7 @@ export function ModelSelector({ fullWidth = false }: ModelSelectorProps) {
     <div className="relative" ref={dropdownRef}>
       <button
         ref={buttonRef}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => handleSetIsOpen(!isOpen)}
         className={`flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 transition-colors ${
           fullWidth ? 'w-full justify-between' : ''
         }`}

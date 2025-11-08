@@ -50,7 +50,7 @@ export function useScrollManagement(messageCount: number = 0) {
           isLockedToBottomRef.current = true;
           consecutiveDownScrollsRef.current = 0;
 
-          if (distanceFromBottom > 30) {
+          if (distanceFromBottom > 140) {
             forceScrollToBottom('smooth');
           }
         }

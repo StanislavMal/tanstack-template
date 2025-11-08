@@ -43,6 +43,8 @@ function Home() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
 
   const [appState, setAppState] = useState<'authenticating' | 'loading' | 'error' | 'ready'>('authenticating');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -54,9 +56,7 @@ function Home() {
   const { loadSettings } = useSettings();
   const { loadPrompts } = usePrompts();
   
-  // ✅ Получаем `pendingMessage` напрямую, чтобы передать в `useScrollManagement`
   const { sendMessage, editAndRegenerate, isLoading, error, pendingMessage } = useChat({
-    // ✅ Передаем колбэк для принудительной блокировки скролла
     onResponseStart: () => {
       lockToBottom();
     },
@@ -67,8 +67,9 @@ function Home() {
     contentRef,
     showScrollDownButton,
     scrollToBottom,
-    lockToBottom, // ✅ Получаем функцию lockToBottom
+    lockToBottom,
   } = useScrollManagement(messages.length + (pendingMessage ? 1 : 0));
+  const shouldShowScrollDownButton = showScrollDownButton && !isInputFocused && !isModelSelectorOpen;
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -128,12 +129,13 @@ function Home() {
   const handleSend = useCallback(
     async (message: string) => {
       if (!message.trim() || isLoading) return;
+      lockToBottom();      
       footerRef.current?.resetInput();
       const words = message.trim().split(/\s+/);
       const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
       await sendMessage(message, title);
     },
-    [isLoading, sendMessage]
+    [isLoading, sendMessage, lockToBottom]
   );
 
   const handleLogout = useCallback(async () => {
@@ -223,14 +225,26 @@ function Home() {
             </Panel>
             <PanelResizeHandle className="w-2 bg-gray-800 hover:bg-orange-500/50 transition-colors duration-200 cursor-col-resize" />
             <Panel className="flex-1 flex flex-col min-h-0">
-              <Header onMenuClick={() => {}} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={false} />
+              <Header 
+                onMenuClick={() => {}} 
+                onSettingsClick={() => setIsSettingsOpen(true)} 
+                onLogout={handleLogout} 
+                isMobile={false} 
+                onModelSelectorOpenChange={setIsModelSelectorOpen}
+              />
               <main ref={messagesContainerRef} className="flex-1 overflow-y-auto">
                 <div className={`w-full max-w-5xl mx-auto ${!currentConversationId ? 'h-full flex items-center justify-center' : ''}`}>
                   <ChatArea {...chatAreaProps} ref={contentRef} />
                 </div>
               </main>
-              {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-10" />}
-              <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
+              {shouldShowScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-28 right-10" />}
+              <Footer 
+                ref={footerRef} 
+                onSend={handleSend} 
+                isLoading={isLoading} 
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => setIsInputFocused(false)}
+              />
             </Panel>
           </PanelGroup>
           <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onLogout={handleLogout} />
@@ -242,14 +256,26 @@ function Home() {
       <div className="h-[100dvh] bg-gray-900 text-white flex flex-col relative overflow-hidden">
         {sidebar.isOpen && <div className="fixed inset-0 z-20 bg-black/50" onClick={() => sidebar.setIsOpen(false)} />}
         <Sidebar {...sidebarProps} />
-        <Header onMenuClick={sidebar.toggleSidebar} onSettingsClick={() => setIsSettingsOpen(true)} onLogout={handleLogout} isMobile={true} />
+        <Header 
+          onMenuClick={sidebar.toggleSidebar} 
+          onSettingsClick={() => setIsSettingsOpen(true)} 
+          onLogout={handleLogout} 
+          isMobile={true} 
+          onModelSelectorOpenChange={setIsModelSelectorOpen}
+        />
         <main ref={messagesContainerRef} className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 ${!currentConversationId ? 'flex items-center justify-center' : ''}`}>
           <div className="w-full">
             <ChatArea {...chatAreaProps} ref={contentRef} />
           </div>
         </main>
-        {showScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
-        <Footer ref={footerRef} onSend={handleSend} isLoading={isLoading} />
+        {shouldShowScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
+        <Footer 
+          ref={footerRef} 
+          onSend={handleSend} 
+          isLoading={isLoading} 
+          onFocus={() => setIsInputFocused(true)}
+          onBlur={() => setIsInputFocused(false)}
+        />
         <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} onLogout={handleLogout} />
       </div>
     );

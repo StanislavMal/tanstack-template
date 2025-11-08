@@ -6,6 +6,8 @@ import { ChatInput } from './ChatInput';
 interface FooterProps {
   onSend: (message: string) => Promise<void>;
   isLoading: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 export interface FooterRef {
@@ -13,17 +15,15 @@ export interface FooterRef {
 }
 
 export const Footer = memo(forwardRef<FooterRef, FooterProps>(
-  ({ onSend, isLoading }, ref) => {
+  ({ onSend, isLoading, onFocus, onBlur }, ref) => {
     const [input, setInput] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // ✅ Этот хук "пробрасывает" функцию resetInput наружу,
-    // чтобы родительский компонент (Home) мог ее вызвать.
     useImperativeHandle(ref, () => ({
       resetInput: () => {
         setInput('');
         if (textareaRef.current) {
-          textareaRef.current.style.height = 'auto'; // Сбрасываем высоту textarea
+          textareaRef.current.style.height = 'auto';
         }
       }
     }));
@@ -33,8 +33,6 @@ export const Footer = memo(forwardRef<FooterRef, FooterProps>(
       const messageToSend = input.trim();
       if (!messageToSend || isLoading) return;
       
-      // Мы не сбрасываем инпут здесь, так как родительский компонент
-      // вызовет `resetInput` сразу после клика. Это дает лучший UX.
       await onSend(messageToSend);
     };
 
@@ -46,6 +44,8 @@ export const Footer = memo(forwardRef<FooterRef, FooterProps>(
           setInput={setInput}
           handleSubmit={handleSubmit}
           isLoading={isLoading}
+          onFocus={onFocus}
+          onBlur={onBlur}
         />
       </footer>
     );
