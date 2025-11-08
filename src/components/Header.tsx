@@ -8,10 +8,11 @@ interface HeaderProps {
   onMenuClick: () => void;
   onSettingsClick: () => void;
   onLogout: () => void;
-  isMobile?: boolean;
+  isMobile?: boolean;  
+  onModelSelectorOpenChange?: (isOpen: boolean) => void;
 }
 
-export const Header = memo(({ onMenuClick, onSettingsClick, isMobile }: HeaderProps) => {
+export const Header = memo(({ onMenuClick, onSettingsClick, isMobile, onModelSelectorOpenChange }: HeaderProps) => {
   if (isMobile) {
     return (
       <header className="flex-shrink-0 h-16 bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-between px-4 border-b border-gray-700 gap-3">
@@ -24,7 +25,7 @@ export const Header = memo(({ onMenuClick, onSettingsClick, isMobile }: HeaderPr
         </button>
 
         <div className="flex-1 min-w-0">
-          <ModelSelector fullWidth />
+          <ModelSelector fullWidth onOpenChange={onModelSelectorOpenChange} />
         </div>
 
         {/* Кнопка настроек */}
@@ -41,7 +42,7 @@ export const Header = memo(({ onMenuClick, onSettingsClick, isMobile }: HeaderPr
   // ✅ ИЗМЕНЕНИЕ: Убираем 'absolute' и 'z-10', добавляем отступы и flex-shrink
   return (
     <header className="flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-2">
-      <ModelSelector />
+      <ModelSelector onOpenChange={onModelSelectorOpenChange} />
 
       <div className="flex gap-2 items-center">
         <button 
