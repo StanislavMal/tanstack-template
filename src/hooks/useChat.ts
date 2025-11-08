@@ -7,7 +7,7 @@ import { useConversations, useSettings, usePrompts } from '../store/hooks';
 import { selectors, store } from '../store/store';
 
 interface UseChatOptions {
-  onResponseStart?: () => void; // ✅ Убедимся, что опция есть
+  onResponseStart?: () => void;
   onResponseComplete?: (message: Message) => void;
   onError?: (error: string) => void;
 }
@@ -144,6 +144,12 @@ export function useChat(options: UseChatOptions = {}) {
           const chunks = parseNDJSON(rawText);
           
           for (const chunk of chunks) {
+            // ✅ ИЗМЕНЕНИЕ: Игнорируем heartbeat сообщения
+            if (chunk.type === 'heartbeat') {
+              console.log('Heartbeat received');
+              continue;
+            }
+            
             if (chunk.error) throw new Error(chunk.error);
             if (chunk.text) {
               if (!animationStarted) {
@@ -155,7 +161,7 @@ export function useChat(options: UseChatOptions = {}) {
                 isStreamActiveRef.current = true;
                 startTypingAnimation();
                 setIsLoading(false);
-                options.onResponseStart?.(); // ✅ ВЫЗЫВАЕМ КОЛБЭК ЗДЕСЬ
+                options.onResponseStart?.();
                 animationStarted = true;
               }
               textQueueRef.current += chunk.text;
