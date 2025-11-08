@@ -18,7 +18,7 @@ export interface ChatRequest {
 type StreamPayload = StreamChunk | { type: 'heartbeat' };
 
 // ✅ ИЗМЕНЕНИЕ: Добавляем константу для таймаута неактивности AI
-const AI_STREAM_INACTIVITY_TIMEOUT = 40000; // 40 секунд
+const AI_STREAM_INACTIVITY_TIMEOUT = 120000; // 120 секунд
 
 export const streamChat = createServerFn({
   method: 'POST',
