@@ -311,15 +311,35 @@ code {
 .prose > p:last-child { margin-bottom: 0; }
 
 /* Математика (KaTeX) */
-.prose .katex { font-size: 1.15em; user-select: text; color: #fbbf24; }
-.prose .katex-display { margin: 1.5em 0; overflow-x: auto; overflow-y: hidden; user-select: text; padding: 0.5em 0; }
-.prose .katex * { color: #fbbf24 !important; }
-.prose .katex .mord, .prose .katex .mbin, .prose .katex .mrel, .prose .katex .mop, .prose .katex .mpunct, .prose .katex .minner, .prose .katex .mopen, .prose .katex .mclose { color: #fbbf24 !important; }
-.prose .katex .delim-size1, .prose .katex .delim-size2, .prose .katex .delim-size3, .prose .katex .delim-size4 { color: #fbbf24 !important; }
-.prose .katex .mord.mathdefault, .prose .katex .mord.mathnormal { color: #fbbf24 !important; }
-.prose .katex .mop { color: #fbbf24 !important; }
-.prose .katex .vlist-t, .prose .katex .sqrt, .prose .katex .frac-line { color: #fbbf24 !important; }
-.prose .katex-display:hover { background-color: rgba(251, 191, 36, 0.08); border-radius: 0.5rem; transition: background-color 0.2s ease; }
+
+.prose {  
+  --katex-text-color: #ffffff;
+  --katex-font-size: 1.25rem;
+}
+
+/* 2. Базовые стили для ВСЕХ KaTeX элементов. */
+.prose .katex {
+  font-size: var(--katex-font-size);
+  color: var(--katex-text-color);
+  user-select: text;
+  font-weight: normal; 
+  font-style: normal;
+}
+
+/* 3. Добавляем "воздух" для ВСТРОЕННЫХ формул. */
+.prose .katex:not(.katex-display) {
+  margin-left: 0.15em;
+  margin-right: 0.15em;
+  vertical-align: middle;
+}
+
+/* 4. Стили для БЛОЧНЫХ формул (на отдельной строке). */
+.prose .katex-display {
+  display: block;
+  margin: 2em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
 
 /* Анимации */
 .message-enter { opacity: 0; transform: translateY(10px); }
