@@ -129,12 +129,13 @@ function Home() {
   const handleSend = useCallback(
     async (message: string) => {
       if (!message.trim() || isLoading) return;
+      lockToBottom();      
       footerRef.current?.resetInput();
       const words = message.trim().split(/\s+/);
       const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
       await sendMessage(message, title);
     },
-    [isLoading, sendMessage]
+    [isLoading, sendMessage, lockToBottom]
   );
 
   const handleLogout = useCallback(async () => {
@@ -267,7 +268,6 @@ function Home() {
             <ChatArea {...chatAreaProps} ref={contentRef} />
           </div>
         </main>
-        {/* ✅ ИЗМЕНЕНИЕ: Используем новую переменную */}
         {shouldShowScrollDownButton && <ScrollDownButton onClick={scrollToBottom} className="bottom-24 right-4" />}
         <Footer 
           ref={footerRef} 
