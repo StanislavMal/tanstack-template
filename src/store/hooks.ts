@@ -298,9 +298,6 @@ export function useConversations() {
   const currentConversation = useStore(store, s => selectors.getCurrentConversation(s));
   const currentMessages = useStore(store, s => selectors.getCurrentMessages(s));
 
-  // ✅ ШАГ 2: Удаляем весь useEffect, который загружал сообщения.
-  // Теперь этот хук просто предоставляет данные из store.
-
   const setCurrentConversationId = useCallback((id: string | null) => {
       actions.setCurrentConversationId(id);
       if (id) {
@@ -511,7 +508,8 @@ export function useConversations() {
         async () => {
           return await supabase
             .from('messages')
-            .select('role, content, user_id')
+            // ✅ ИЗМЕНЕНИЕ: Добавляем `created_at` в выборку
+            .select('role, content, user_id, created_at')
             .eq('conversation_id', id)
             .order('created_at', { ascending: true })
             .order('id', { ascending: true });
@@ -555,6 +553,7 @@ export function useConversations() {
 
       const newConversation = newConvData as Conversation;
 
+      // ✅ ИЗМЕНЕНИЕ: Теперь `created_at` будет автоматически включено в объект
       const newMessages = messagesToCopy.map((msg: any) => ({
         ...msg,
         conversation_id: newConversation.id,
