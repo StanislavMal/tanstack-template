@@ -1,4 +1,4 @@
-// 📄 src/lib/ai/providers/deepseek-openai.ts
+// 📄 src/lib/ai/providers/deepseek-openai.ts (Продолжение)
 
 import OpenAI from 'openai';
 import type { AIProvider, Message, AIModel, AIProviderConfig, StreamChunk } from '../types';
@@ -41,7 +41,6 @@ export class DeepSeekOpenAIProvider implements AIProvider {
   private getNextApiKey(): string {
     const now = Date.now();
     
-    // Сбрасываем disabled ключи, у которых истекло время блокировки
     this.keys.forEach(keyStatus => {
       if (keyStatus.isDisabled && keyStatus.lastFailure) {
         if (now - keyStatus.lastFailure > this.DISABLE_DURATION) {
@@ -53,7 +52,6 @@ export class DeepSeekOpenAIProvider implements AIProvider {
       }
     });
 
-    // Находим активные ключи
     const activeKeys = this.keys.filter(k => !k.isDisabled);
     
     if (activeKeys.length === 0) {
@@ -135,18 +133,11 @@ export class DeepSeekOpenAIProvider implements AIProvider {
       apiKey,
       baseURL: 'https://api.deepseek.com',
     });
-
+    
     const openAIMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,
     }));
-
-    if (config.systemInstruction) {
-      openAIMessages.unshift({
-        role: 'system',
-        content: config.systemInstruction,
-      });
-    }
 
     const requestOptions: any = {
       model: config.model || 'deepseek-chat',

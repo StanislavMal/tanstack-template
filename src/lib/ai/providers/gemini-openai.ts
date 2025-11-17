@@ -16,7 +16,6 @@ export class GeminiOpenAIProvider implements AIProvider {
   private keys: KeyStatus[];
   private currentKeyIndex = 0;
   
-  // ✅ ИСПРАВЛЕНИЕ: Конфигурация для управления "мёртвыми" ключами
   private readonly MAX_FAILURES = 3;
   private readonly DISABLE_DURATION = 5 * 60 * 1000; // 5 минут
 
@@ -29,7 +28,6 @@ export class GeminiOpenAIProvider implements AIProvider {
       throw new Error('No GEMINI_API_KEY_* environment variables found');
     }
 
-    // ✅ ИСПРАВЛЕНИЕ: Инициализируем ключи со статусами
     this.keys = apiKeys.map(key => ({
       key,
       failureCount: 0,
@@ -40,11 +38,9 @@ export class GeminiOpenAIProvider implements AIProvider {
     console.log(`[GeminiProvider] Initialized with ${this.keys.length} API keys`);
   }
 
-  // ✅ ИСПРАВЛЕНИЕ: Умный выбор ключа с учётом статусов
   private getNextApiKey(): string {
     const now = Date.now();
     
-    // Сбрасываем disabled ключи, у которых истекло время блокировки
     this.keys.forEach(keyStatus => {
       if (keyStatus.isDisabled && keyStatus.lastFailure) {
         if (now - keyStatus.lastFailure > this.DISABLE_DURATION) {
@@ -56,11 +52,9 @@ export class GeminiOpenAIProvider implements AIProvider {
       }
     });
 
-    // Находим активные ключи
     const activeKeys = this.keys.filter(k => !k.isDisabled);
     
     if (activeKeys.length === 0) {
-      // Все ключи отключены - форсируем сброс самого старого
       const oldestDisabled = this.keys.reduce((oldest, current) => {
         if (!current.lastFailure) return oldest;
         if (!oldest.lastFailure) return current;
@@ -75,7 +69,6 @@ export class GeminiOpenAIProvider implements AIProvider {
       return oldestDisabled.key;
     }
 
-    // Выбираем следующий активный ключ по round-robin
     let attempts = 0;
     while (attempts < this.keys.length) {
       const keyStatus = this.keys[this.currentKeyIndex];
@@ -88,18 +81,15 @@ export class GeminiOpenAIProvider implements AIProvider {
       attempts++;
     }
 
-    // Fallback на первый ключ (не должно произойти)
     return this.keys[0].key;
   }
 
-  // ✅ ИСПРАВЛЕНИЕ: Отмечаем ключ как проблемный
   private markKeyAsFailed(apiKey: string, error: Error): void {
     const keyStatus = this.keys.find(k => k.key === apiKey);
     if (!keyStatus) return;
 
     const errorMessage = error.message.toLowerCase();
     
-    // Проверяем, является ли ошибка rate limit или quota exceeded
     const isRateLimitError = 
       errorMessage.includes('429') ||
       errorMessage.includes('rate limit') ||
@@ -125,12 +115,10 @@ export class GeminiOpenAIProvider implements AIProvider {
     }
   }
 
-  // ✅ ИСПРАВЛЕНИЕ: Отмечаем ключ как успешный
   private markKeyAsSuccess(apiKey: string): void {
     const keyStatus = this.keys.find(k => k.key === apiKey);
     if (!keyStatus) return;
 
-    // Сбрасываем счётчик ошибок при успешном запросе
     if (keyStatus.failureCount > 0) {
       console.log(`[GeminiProvider] Key recovered, resetting failure count`);
       keyStatus.failureCount = 0;
@@ -145,18 +133,11 @@ export class GeminiOpenAIProvider implements AIProvider {
       apiKey,
       baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     });
-
+    
     const openAIMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,
     }));
-
-    if (config.systemInstruction) {
-      openAIMessages.unshift({
-        role: 'system',
-        content: config.systemInstruction,
-      });
-    }
 
     const requestOptions: any = {
       model: config.model || 'gemini-2.5-flash',
@@ -180,7 +161,6 @@ export class GeminiOpenAIProvider implements AIProvider {
       console.log(`[GeminiProvider] Using model: ${requestOptions.model}`);
       const response = await openai.chat.completions.create(requestOptions);
 
-      // ✅ ИСПРАВЛЕНИЕ: Отмечаем ключ как успешный
       this.markKeyAsSuccess(apiKey);
 
       return new ReadableStream({
@@ -223,7 +203,6 @@ export class GeminiOpenAIProvider implements AIProvider {
     } catch (error) {
       console.error('[GeminiProvider] Error in streamChat:', error);
       
-      // ✅ ИСПРАВЛЕНИЕ: Отмечаем ключ как проблемный
       if (error instanceof Error) {
         this.markKeyAsFailed(apiKey, error);
       }
