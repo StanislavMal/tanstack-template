@@ -9,11 +9,13 @@ import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { Pencil, Copy, Check, X, RefreshCw } from 'lucide-react';
+import type { Pluggable } from 'unified';
 
 import type { Message } from '../lib/ai/types';
 import { CodeBlock } from './CodeBlock';
 import { TableBlock } from './TableBlock';
 import { InlineCode } from './InlineCode';
+import { TypingDots } from './TypingDots';
 import { useCopyToClipboard } from '../hooks';
 import { 
   htmlToPlainText, 
@@ -30,12 +32,9 @@ interface ChatMessageProps {
   showRegenerateButton?: boolean;
   onRegenerate?: () => void;
   isLoading?: boolean;
+  isStreaming?: boolean;
 }
 
-/**
- * Компонент отображения одного сообщения в чате
- * Поддерживает: Markdown, таблицы (GFM), математику (LaTeX), редактирование, копирование, регенерацию
- */
 export const ChatMessage = memo(function ChatMessage({ 
   message,
   isEditing,
@@ -43,7 +42,8 @@ export const ChatMessage = memo(function ChatMessage({
   onCancelEdit,
   showRegenerateButton = false,
   onRegenerate,
-  isLoading = false
+  isLoading = false,
+  isStreaming = false,
 }: ChatMessageProps) {
   const isAssistant = message.role === 'assistant';
   const [editedContent, setEditedContent] = useState(message.content);
@@ -72,16 +72,13 @@ export const ChatMessage = memo(function ChatMessage({
         ta.removeEventListener('input', setHeight);
       };
     }
-  }, [isEditing]);
+  }, [isEditing]);  
 
-  // === Умная обработка копирования ===
   useEffect(() => {
     const componentRoot = messageContentRef.current?.parentElement?.parentElement;
     if (!componentRoot) return;
 
     const handleCopyEvent = (e: ClipboardEvent) => {
-      // ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Если мы в режиме редактирования, ничего не делаем.
-      // Позволяем браузеру выполнить стандартное копирование из textarea.
       if (isEditing) {
         return;
       }
@@ -146,16 +143,13 @@ export const ChatMessage = memo(function ChatMessage({
       }
     };
 
-    // Вешаем слушатель на более высокий уровень, чтобы он всегда был активен
     componentRoot.addEventListener('copy', handleCopyEvent);
     
     return () => {
       componentRoot.removeEventListener('copy', handleCopyEvent);
     };
-    // ✅ Добавляем isEditing в зависимости, чтобы useEffect мог "видеть" актуальное состояние
   }, [isEditing]);
 
-  // === Обработчики событий ===
   const handleSave = () => {
     const contentToSave = editedContent.trim() || message.content;
     onSaveEdit(message.id, contentToSave);
@@ -175,30 +169,25 @@ export const ChatMessage = memo(function ChatMessage({
     }
   };
 
-  const [remarkPluginsList, rehypePluginsList] = useMemo(() => {
-    const remarkPlugins = [
-      remarkGfm,
-      remarkMath
-    ];
+  const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
 
-    let rehypePlugins: any[] = [];
-
+  const rehypePlugins: Pluggable[] = useMemo(() => {
     if (isAssistant) {
-      rehypePlugins = [
+      return [
         rehypeRaw,
         [rehypeSanitize, markdownSanitizeSchema],
         rehypeHighlight,
-        rehypeKatex
-      ];
-    } else {
-      rehypePlugins = [
-        rehypeHighlight,
-        rehypeKatex
+        rehypeKatex,
       ];
     }
-
-    return [remarkPlugins, rehypePlugins];
+    return [rehypeHighlight, rehypeKatex];
   }, [isAssistant]);
+
+  const markdownComponents = useMemo(() => ({
+    pre: CodeBlock,
+    table: TableBlock,
+    code: InlineCode,
+  }), []);
 
 
   return (
@@ -230,77 +219,108 @@ export const ChatMessage = memo(function ChatMessage({
           </div>
         ) : (
           <div ref={messageContentRef}>
-            <ReactMarkdown
-              className="prose dark:prose-invert max-w-none select-text"
-              remarkPlugins={remarkPluginsList}
-              rehypePlugins={rehypePluginsList}
-              components={{ 
-                pre: CodeBlock,
-                table: TableBlock,
-                code: InlineCode
-              }}
-            >
-              {message.content}
-            </ReactMarkdown>
+            {message.attachments && message.attachments.length > 0 && (
+              <div className="my-2 flex flex-wrap gap-2">
+                {message.attachments.map((att, index) =>
+                  att.type === 'image' ? (
+                    <div key={index} className="relative">
+                      <a href={att.url} target="_blank" rel="noopener noreferrer" className="block">
+                        <img
+                          src={att.url}
+                          alt={`Attachment ${index + 1}`}
+                          className="max-w-xs max-h-64 rounded-lg object-cover cursor-pointer transition-opacity hover:opacity-80"
+                          loading="lazy"
+                        />
+                      </a>
+                      {att.isLoading && (
+                        <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                          <div className="w-8 h-8 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
+                        </div>
+                      )}
+                    </div>
+                  ) : null
+                )}
+              </div>
+            )}
+            
+            {isStreaming && !message.content ? (
+              <TypingDots />
+            ) : (
+              <>
+                {message.content && (
+                  <ReactMarkdown
+                    className="prose dark:prose-invert max-w-none select-text"
+                    remarkPlugins={remarkPlugins}
+                    rehypePlugins={rehypePlugins}
+                    components={markdownComponents}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                )}
+                {isStreaming && <TypingDots />}
+              </>
+            )}
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-1.5 mt-1.5 px-2 h-6 transition-opacity md:opacity-0 group-hover:opacity-100">
-        {isEditing ? (
-          <>
-            <button 
-              onClick={handleSave} 
-              className="p-1.5 rounded-full text-green-400 bg-gray-800/50 hover:bg-gray-700" 
-              title="Save changes"
-            >
-              <Check className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={onCancelEdit} 
-              className="p-1.5 rounded-full text-red-400 bg-gray-800/50 hover:bg-gray-700" 
-              title="Cancel editing"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </>
-        ) : (
-          <>
-            {!isAssistant && (
+      {!isStreaming && (
+        <div className="flex items-center justify-end gap-1.5 mt-1.5 px-2 h-6 transition-opacity md:opacity-0 group-hover:opacity-100">
+          {isEditing ? (
+            <>
               <button 
-                data-action="start-edit"
-                className="p-1.5 rounded-full text-gray-400 hover:text-white" 
-                title="Edit message"
+                onClick={handleSave} 
+                className="p-1.5 rounded-full text-green-400 bg-gray-800/50 hover:bg-gray-700" 
+                title="Save changes"
               >
-                <Pencil className="w-3.5 h-3.5" />
+                <Check className="w-4 h-4" />
               </button>
-            )}
-            
-            {isAssistant && showRegenerateButton && onRegenerate && (
               <button 
-                onClick={onRegenerate}
-                className="p-1.5 rounded-full text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" 
-                title="Regenerate response"
-                disabled={isLoading}
+                onClick={onCancelEdit} 
+                className="p-1.5 rounded-full text-red-400 bg-gray-800/50 hover:bg-gray-700" 
+                title="Cancel editing"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <X className="w-4 h-4" />
               </button>
-            )}
-            
-            <button 
-              onClick={handleCopy} 
-              className="p-1.5 rounded-full text-gray-400 hover:text-white" 
-              title="Copy message"
-            >
-              {isCopied ? (
-                <Check className="w-3.5 h-3.5 text-green-500" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
+            </>
+          ) : (
+            <>
+              {!isAssistant && (
+                <button 
+                  data-action="start-edit"
+                  className="p-1.5 rounded-full text-gray-400 hover:text-white" 
+                  title="Edit message"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
               )}
-            </button>
-          </>
-        )}
-      </div>
+              
+              {isAssistant && showRegenerateButton && onRegenerate && (
+                <button 
+                  onClick={onRegenerate}
+                  className="p-1.5 rounded-full text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" 
+                  title="Regenerate response"
+                  disabled={isLoading}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+              
+              <button 
+                onClick={handleCopy} 
+                className="p-1.5 rounded-full text-gray-400 hover:text-white" 
+                title="Copy message"
+              >
+                {isCopied ? (
+                  <Check className="w-3.5 h-3.5 text-green-500" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }, (prevProps, nextProps) => {
@@ -309,6 +329,8 @@ export const ChatMessage = memo(function ChatMessage({
     prevProps.message.content === nextProps.message.content &&
     prevProps.isEditing === nextProps.isEditing &&
     prevProps.isLoading === nextProps.isLoading &&
-    prevProps.showRegenerateButton === nextProps.showRegenerateButton
+    prevProps.showRegenerateButton === nextProps.showRegenerateButton &&
+    prevProps.isStreaming === nextProps.isStreaming &&
+    JSON.stringify(prevProps.message.attachments) === JSON.stringify(nextProps.message.attachments)
   );
 });
