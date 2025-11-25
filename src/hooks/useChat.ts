@@ -9,6 +9,31 @@ import { useAuth } from '../providers/AuthProvider';
 import * as api from '../services/supabase';
 import { compressImage } from '../utils/image-compression';
 
+const urlToBase64 = async (url: string): Promise<{ mimeType: string; data: string }> => {
+  if (url.startsWith('data:')) {
+    const [header, data] = url.split(',');
+    const mimeType = header.match(/:(.*?);/)?.[1] || 'application/octet-stream';
+    return { mimeType, data };
+  }
+  
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image from URL: ${url}`);
+  }
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
+    reader.onload = () => {
+      const result = reader.result as string;
+      const [header, data] = result.split(',');
+      const mimeType = header.match(/:(.*?);/)?.[1] || blob.type;
+      resolve({ mimeType, data });
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 interface UseChatOptions {
   onResponseStart?: () => void;
   onResponseComplete?: (message: Message) => void;
@@ -30,6 +55,8 @@ export function useChat(options: UseChatOptions = {}) {
     createNewConversation,
     editMessageAndUpdate 
   } = useConversations();
+  
+  const base64Cache = useRef(new Map<string, { mimeType: string; data: string }>());
 
   const textQueueRef = useRef<string>('');
   const displayedTextRef = useRef<string>('');
@@ -37,6 +64,10 @@ export function useChat(options: UseChatOptions = {}) {
   const bufferRef = useRef<string>('');
   const activeRequestIdRef = useRef<string | null>(null);
   const isStreamActiveRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    base64Cache.current.clear();
+  }, [currentConversationId]);
 
   useEffect(() => {
     return () => {
@@ -168,35 +199,44 @@ export function useChat(options: UseChatOptions = {}) {
     },
     [settings, activePrompt, startTypingAnimation, stopTypingAnimation, options, parseNDJSON]
   );
-  
+
   const prepareHistoryForAI = async (messages: Message[]): Promise<{ role: 'user' | 'assistant', content: MessageContent }[]> => {
     const historyForAI: { role: 'user' | 'assistant', content: MessageContent }[] = [];
 
     for (const msg of messages) {
       if (msg.role === 'system') continue;
 
-      // Если есть вложения, формируем мультимодальный контент
       if (msg.attachments && msg.attachments.length > 0) {
         const contentParts: ({ type: 'text', text: string } | { type: 'image_url', image_url: { url: string } })[] = [];
         
-        // Добавляем текст, если он есть
         if (msg.content) {
           contentParts.push({ type: 'text', text: msg.content });
         }
 
-        // Добавляем изображения, просто передавая подписанный URL
         for (const attachment of msg.attachments) {
           if (attachment.type === 'image' && attachment.url) {
-            contentParts.push({
-              type: 'image_url',
-              // Просто используем URL из Supabase, без конвертации в base64
-              image_url: { url: attachment.url },
-            });
+            try {
+              let base64Data: { mimeType: string; data: string };
+              if (base64Cache.current.has(attachment.path)) {
+                base64Data = base64Cache.current.get(attachment.path)!;
+              } else {
+                base64Data = await urlToBase64(attachment.url);
+                if (attachment.path) {
+                  base64Cache.current.set(attachment.path, base64Data);
+                }
+              }
+              
+              contentParts.push({
+                type: 'image_url',
+                image_url: { url: `data:${base64Data.mimeType};base64,${base64Data.data}` },
+              });
+            } catch (e) {
+              console.error(`Failed to convert attachment URL to base64 for message ${msg.id}`, e);
+            }
           }
         }
         historyForAI.push({ role: msg.role, content: contentParts });
       } else {
-        // Если вложений нет, просто отправляем текст
         historyForAI.push({ role: msg.role, content: msg.content });
       }
     }
@@ -234,6 +274,7 @@ export function useChat(options: UseChatOptions = {}) {
           type: 'image',
           url: blobUrl,
           path: '',
+          // ✅ ИЗМЕНЕНИЕ: Убираем индикатор загрузки с самого изображения
           isLoading: false, 
         });
       }
@@ -264,14 +305,12 @@ export function useChat(options: UseChatOptions = {}) {
               
               if (blobUrl) URL.revokeObjectURL(blobUrl);
               
-              // Обновляем временное сообщение в UI, заменяя blobUrl на постоянный signedUrl
               await updateMessage(convId, tempMessageId, { attachments: finalAttachments });
             } else {
               throw new Error("Не удалось получить URL для загруженного файла.");
             }
           }
 
-          // Сохраняем сообщение с постоянными данными в БД
           await api.createMessage(user.id, convId, { ...userMessage, attachments: finalAttachments });
           
           const currentMessages = selectors.getCurrentMessages(store.state);
