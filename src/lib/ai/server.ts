@@ -5,7 +5,6 @@ import { AIProviderFactory } from './provider-factory';
 import type { AIProviderConfig, StreamChunk, MessageContent } from './types';
 
 export interface ChatRequest {
-  // ✅ ИЗМЕНЕНИЕ: Теперь `messages` сразу содержит мультимодальный контент
   messages: { role: 'user' | 'assistant' | 'system', content: MessageContent }[];
   provider: string;
   model: string;
@@ -19,6 +18,53 @@ export interface ChatRequest {
 type StreamPayload = StreamChunk | { type: 'heartbeat' };
 
 const AI_STREAM_INACTIVITY_TIMEOUT = 120000;
+
+// ✅ НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ
+/**
+ * Преобразует http(s) URL изображений в data URI (base64).
+ * Это необходимо для API, которые не поддерживают загрузку по URL (например, Gemini OpenAI-совместимый эндпоинт).
+ */
+async function transformImageUrls(messages: { role: 'user' | 'assistant' | 'system', content: MessageContent }[]): Promise<{ role: 'user' | 'assistant' | 'system', content: MessageContent }[]> {
+  return Promise.all(
+    messages.map(async (msg) => {
+      if (!Array.isArray(msg.content)) {
+        return msg;
+      }
+
+      const newContent = await Promise.all(
+        msg.content.map(async (part) => {
+          if (part.type === 'image_url' && part.image_url?.url.startsWith('http')) {
+            try {
+              console.log(`[Server] Transforming image URL to base64: ${part.image_url.url.substring(0, 80)}...`);
+              const response = await fetch(part.image_url.url);
+              if (!response.ok) {
+                throw new Error(`Failed to fetch image: ${response.statusText}`);
+              }
+              const contentType = response.headers.get('content-type') || 'image/jpeg';
+              const arrayBuffer = await response.arrayBuffer();
+              const base64 = Buffer.from(arrayBuffer).toString('base64');
+              
+              return {
+                ...part,
+                image_url: {
+                  url: `data:${contentType};base64,${base64}`,
+                },
+              };
+            } catch (error) {
+              console.error(`[Server] Failed to transform image URL:`, error);
+              // Возвращаем часть как есть, чтобы не сломать запрос, если загрузка не удалась
+              return part; 
+            }
+          }
+          return part;
+        })
+      );
+
+      return { ...msg, content: newContent };
+    })
+  );
+}
+
 
 export const streamChat = createServerFn({
   method: 'POST',
@@ -38,16 +84,18 @@ export const streamChat = createServerFn({
         data.activePromptContent
       ].filter(Boolean).join('\n\n');
       
-      const finalMessages: { role: 'user' | 'assistant' | 'system', content: MessageContent }[] = [];
+      const initialMessages: { role: 'user' | 'assistant' | 'system', content: MessageContent }[] = [];
       if (fullSystemInstruction) {
-        finalMessages.push({
+        initialMessages.push({
           role: 'system',
           content: fullSystemInstruction,
         });
       }
       
-      // ✅ ИЗМЕНЕНИЕ: Просто добавляем уже готовую историю от клиента
-      finalMessages.push(...data.messages.filter(m => m.role !== 'system'));
+      initialMessages.push(...data.messages.filter(m => m.role !== 'system'));
+
+      // ✅ ИЗМЕНЕНИЕ: Преобразуем URL-ы в base64 перед отправкой в AI
+      const finalMessages = await transformImageUrls(initialMessages);
 
       const config: Partial<AIProviderConfig> = {
         model: data.model,
